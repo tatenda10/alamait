@@ -1,0 +1,31 @@
+
+
+@import url('https://fonts.googleapis.com/css2?family=Italianno&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500&family=Italianno&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+body {
+
+  overflow-y: scroll;
+  /* Enable vertical scrolling */
+  overflow-x: hidden;
+  /* Hide horizontal scrollbar */
+  font-family: inter;
+  /* Hide the vertical scrollbar */
+  scrollbar-width: none;
+  /* For Firefox */
+  -ms-overflow-style: none;
+  /* For IE and Edge */
+  font-size: small;
+}
+
+/* Hide webkit scrollbar */
+body::-webkit-scrollbar {
+  display: none;
+  /* For Chrome, Safari, and Opera */
+}

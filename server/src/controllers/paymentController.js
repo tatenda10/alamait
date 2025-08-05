@@ -1,0 +1,987 @@
+const db = require('../services/db');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for receipt uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '../uploads/payment-receipts/'));
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'receipt-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG and PDF files are allowed.'));
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+}).single('receipt');
+
+// Record a payment
+exports.recordPayment = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const {
+      student_id,
+      schedule_id,
+      amount,
+      payment_method,
+      fee_type,
+      payment_date,
+      reference_number,
+      notes
+    } = req.body;
+
+    console.log('Received payment request:', {
+      student_id,
+      schedule_id,
+      amount,
+      payment_method,
+      fee_type,
+      payment_date,
+      reference_number,
+      notes
+    });
+
+    // Validate required fields
+    if (!student_id) {
+      return res.status(400).json({ message: 'Student ID is required' });
+    }
+    if (!amount) {
+      return res.status(400).json({ message: 'Payment amount is required' });
+    }
+    if (!payment_method) {
+      return res.status(400).json({ message: 'Payment method is required' });
+    }
+    if (!fee_type) {
+      return res.status(400).json({ message: 'Fee type is required' });
+    }
+    if (!payment_date) {
+      return res.status(400).json({ message: 'Payment date is required' });
+    }
+
+    // Parse amount as float
+    const paymentAmount = parseFloat(amount);
+    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid payment amount' });
+    }
+
+    // Determine debit and credit account codes based on payment_method and fee_type
+    let debitAccountCode, creditAccountCode;
+
+    // First determine which cash/bank account to use based on payment_method
+    switch (payment_method) {
+      case 'cash':
+        debitAccountCode = '10002'; // Cash
+        break;
+      case 'bank_transfer':
+        debitAccountCode = '10003'; // Bank
+        break;
+      case 'petty_cash':
+        debitAccountCode = '10001'; // Petty Cash
+        break;
+      default:
+        debitAccountCode = '10002'; // Default to Cash
+    }
+
+    // Then determine which income/liability account to credit based on fee_type
+    switch (fee_type) {
+      case 'monthly_rent':
+      case 'admin_fee':
+      case 'security_deposit':
+        creditAccountCode = '40001'; // Rentals Income
+        break;
+      case 'penalty':
+        creditAccountCode = '40002'; // Penalty Fees
+        break;
+      default:
+        return res.status(400).json({ message: 'Invalid fee type' });
+    }
+
+    console.log('Selected account codes:', { debitAccountCode, creditAccountCode });
+
+    // Get account details from the database
+    const [accounts] = await connection.query(
+      `SELECT 
+        debit.id as debit_account_id,
+        debit.name as debit_name,
+        debit.code as debit_code,
+        credit.id as credit_account_id,
+        credit.name as credit_name,
+        credit.code as credit_code
+       FROM chart_of_accounts_branch debit
+       JOIN chart_of_accounts_branch credit ON credit.branch_id = debit.branch_id
+       WHERE debit.code = ? 
+         AND credit.code = ?
+         AND debit.branch_id = ?
+         AND debit.deleted_at IS NULL
+         AND credit.deleted_at IS NULL`,
+      [debitAccountCode, creditAccountCode, req.user.boarding_house_id]
+    );
+
+    if (accounts.length === 0) {
+      return res.status(400).json({ 
+        message: 'Required accounts not found in chart of accounts',
+        details: {
+          debit_account: debitAccountCode,
+          credit_account: creditAccountCode
+        }
+      });
+    }
+
+    const accountDetails = accounts[0];
+    console.log('Using accounts:', {
+      debit: {
+        code: accountDetails.debit_code,
+        name: accountDetails.debit_name,
+        id: accountDetails.debit_account_id
+      },
+      credit: {
+        code: accountDetails.credit_code,
+        name: accountDetails.credit_name,
+        id: accountDetails.credit_account_id
+      }
+    });
+
+    // Validate that student belongs to the same boarding house
+    const [students] = await connection.query(
+      `SELECT s.* 
+       FROM students s
+       JOIN student_enrollments se ON s.id = se.student_id
+       WHERE s.id = ? 
+         AND se.boarding_house_id = ?
+         AND s.deleted_at IS NULL
+         AND se.deleted_at IS NULL`,
+      [student_id, req.user.boarding_house_id]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'Student not found or not associated with your boarding house' });
+    }
+
+    // Get active enrollment
+    const [enrollments] = await connection.query(
+      `SELECT * FROM student_enrollments 
+       WHERE student_id = ? 
+         AND deleted_at IS NULL 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [student_id]
+    );
+
+    if (enrollments.length === 0) {
+      return res.status(404).json({ message: 'No active enrollment found for student' });
+    }
+
+    const enrollment = enrollments[0];
+    let schedule = null;
+
+    // If it's a monthly rent payment, validate the schedule
+    if (fee_type === 'monthly_rent') {
+      if (!schedule_id) {
+        return res.status(400).json({ message: 'Payment schedule is required for monthly rent payments' });
+      }
+
+      const [schedules] = await connection.query(
+        `SELECT ps.* 
+         FROM student_payment_schedules ps
+         JOIN student_enrollments se ON ps.enrollment_id = se.id
+         WHERE ps.id = ? 
+           AND ps.student_id = ? 
+           AND se.boarding_house_id = ?
+           AND ps.deleted_at IS NULL`,
+        [schedule_id, student_id, req.user.boarding_house_id]
+      );
+
+      if (schedules.length === 0) {
+        return res.status(404).json({ message: 'Payment schedule not found' });
+      }
+
+      schedule = schedules[0];
+
+      // Parse existing amounts as floats
+      const currentAmountPaid = parseFloat(schedule.amount_paid) || 0;
+      const amountDue = parseFloat(schedule.amount_due);
+
+      // Validate payment amount
+      const remainingAmount = amountDue - currentAmountPaid;
+      if (paymentAmount > remainingAmount) {
+        return res.status(400).json({ 
+          message: 'Payment amount exceeds remaining balance',
+          remaining_balance: remainingAmount
+        });
+      }
+    }
+
+    // Create transaction record
+    const transactionRef = reference_number || `PMT-${Date.now()}`;
+    const [transactionResult] = await connection.query(
+      `INSERT INTO transactions (
+        transaction_type,
+        student_id,
+        reference,
+        amount,
+        currency,
+        description,
+        transaction_date,
+        boarding_house_id,
+        created_by,
+        created_at,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)`,
+      [
+        fee_type,
+        student_id,
+        transactionRef,
+        paymentAmount,
+        enrollment.currency,
+        `${fee_type.replace('_', ' ')} payment - ${accountDetails.debit_name} to ${accountDetails.credit_name}`,
+        payment_date,
+        req.user.boarding_house_id,
+        req.user.id,
+        'posted'
+      ]
+    );
+
+    // Create journal entries
+    // Debit entry
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+        entry_type,
+        amount,
+          description,
+        boarding_house_id,
+        created_by,
+          created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          transactionResult.insertId,
+        accountDetails.debit_account_id,
+        'debit',
+          paymentAmount,
+        `${fee_type.replace('_', ' ')} payment - Debit ${accountDetails.debit_name}`,
+        req.user.boarding_house_id,
+        req.user.id
+        ]
+      );
+
+    // Credit entry
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+        entry_type,
+        amount,
+          description,
+        boarding_house_id,
+        created_by,
+          created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          transactionResult.insertId,
+        accountDetails.credit_account_id,
+        'credit',
+          paymentAmount,
+        `${fee_type.replace('_', ' ')} payment - Credit ${accountDetails.credit_name}`,
+        req.user.boarding_house_id,
+        req.user.id
+      ]
+    );
+
+    // Create payment record
+    const [result] = await connection.query(
+      `INSERT INTO student_payments (
+        student_id,
+        enrollment_id,
+        schedule_id,
+          transaction_id,
+        amount,
+        payment_date,
+        payment_method,
+        payment_type,
+        reference_number,
+        notes,
+        created_by,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+        student_id,
+        enrollment.id,
+        fee_type === 'monthly_rent' ? schedule.id : null,
+          transactionResult.insertId,
+          paymentAmount,
+        payment_date,
+        payment_method,
+        fee_type,
+        transactionRef,
+        notes,
+        req.user.id,
+        'completed'
+      ]
+    );
+
+    // If it's a monthly rent payment, update the schedule
+    if (schedule) {
+      const currentAmountPaid = parseFloat(schedule.amount_paid) || 0;
+      const amountDue = parseFloat(schedule.amount_due);
+      const newAmountPaid = currentAmountPaid + paymentAmount;
+      const newStatus = newAmountPaid >= amountDue ? 'paid' : 'partial';
+
+      await connection.query(
+        `UPDATE student_payment_schedules 
+         SET status = ?,
+             amount_paid = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [newStatus, newAmountPaid.toFixed(2), schedule_id]
+      );
+    }
+
+    await connection.commit();
+    res.status(201).json({
+      message: 'Payment recorded successfully',
+      payment_id: result.insertId,
+      transaction_id: transactionResult.insertId,
+      transaction_reference: transactionRef,
+      transaction_details: {
+        debit_account: {
+          code: accountDetails.debit_code,
+          name: accountDetails.debit_name
+        },
+        credit_account: {
+          code: accountDetails.credit_code,
+          name: accountDetails.credit_name
+        },
+        amount: paymentAmount,
+        currency: enrollment.currency
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in recordPayment:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+// Upload payment receipt
+exports.uploadReceipt = async (req, res) => {
+  upload(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ message: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    const connection = await db.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+      
+      const { payment_id } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      // Verify payment exists and belongs to the same boarding house
+      const [payments] = await connection.query(
+        `SELECT p.* 
+         FROM student_payments p
+         JOIN student_enrollments se ON p.enrollment_id = se.id
+         WHERE p.id = ? 
+           AND se.boarding_house_id = ?
+           AND p.deleted_at IS NULL`,
+        [payment_id, req.user.boarding_house_id]
+      );
+
+      if (payments.length === 0) {
+        return res.status(404).json({ message: 'Payment not found or not associated with your boarding house' });
+      }
+
+      // Save receipt record with relative path
+      const relativePath = req.file.filename;
+      const [result] = await connection.query(
+        `INSERT INTO payment_receipts (
+          payment_id,
+          file_path,
+          file_name
+        ) VALUES (?, ?, ?)`,
+        [payment_id, relativePath, req.file.filename]
+      );
+
+      const [receipt] = await connection.query(
+        'SELECT * FROM payment_receipts WHERE id = ?',
+        [result.insertId]
+      );
+
+      await connection.commit();
+      res.status(201).json(receipt[0]);
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error in uploadReceipt:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    } finally {
+      connection.release();
+    }
+  });
+};
+
+// Create a payment schedule
+exports.createPaymentSchedule = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { student_id } = req.params;
+    const { 
+      startDate,
+      endDate,
+      amount,
+      currency = 'USD',
+      notes,
+      enrollment_id
+    } = req.body;
+
+    // Validate required fields
+    if (!startDate || !endDate || !amount || !enrollment_id) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Validate dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (start > end) {
+      return res.status(400).json({ message: 'Start date must be before end date' });
+    }
+
+    // Check if student exists and has active enrollment
+    const [enrollments] = await connection.query(
+      `SELECT se.*, r.name as room_name
+       FROM student_enrollments se
+       JOIN rooms r ON se.room_id = r.id
+       WHERE se.id = ? 
+         AND se.student_id = ? 
+         AND se.boarding_house_id = ?
+         AND se.deleted_at IS NULL`,
+      [enrollment_id, student_id, req.user.boarding_house_id]
+    );
+
+    if (enrollments.length === 0) {
+      return res.status(404).json({ message: 'Student enrollment not found or not associated with your boarding house' });
+    }
+
+    // Create payment schedule
+    const [result] = await connection.query(
+      `INSERT INTO student_payment_schedules (
+        enrollment_id,
+        student_id,
+        period_start_date,
+        period_end_date,
+        amount_due,
+        currency,
+        notes,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        enrollment_id,
+        student_id,
+        startDate,
+        endDate,
+        amount,
+        currency,
+        notes || null
+      ]
+    );
+
+    // Get created schedule
+    const [schedule] = await connection.query(
+      `SELECT 
+        ps.*,
+        COALESCE(
+          (SELECT SUM(amount) 
+           FROM student_payments 
+           WHERE schedule_id = ps.id AND deleted_at IS NULL
+          ), 0
+        ) as amount_paid
+       FROM student_payment_schedules ps
+       WHERE ps.id = ?`,
+      [result.insertId]
+    );
+
+    await connection.commit();
+    res.status(201).json(schedule[0]);
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in createPaymentSchedule:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get student payment schedule
+exports.getStudentSchedule = async (req, res) => {
+  try {
+    const { student_id } = req.params;
+    const { enrollment_id } = req.query;
+
+    // Validate that student belongs to the same boarding house
+    const [students] = await db.query(
+      `SELECT s.* 
+       FROM students s
+       JOIN student_enrollments se ON s.id = se.student_id
+       WHERE s.id = ? 
+         AND se.boarding_house_id = ?
+         AND s.deleted_at IS NULL
+         AND se.deleted_at IS NULL`,
+      [student_id, req.user.boarding_house_id]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'Student not found or not associated with your boarding house' });
+    }
+
+    let query = `
+      SELECT 
+        ps.*,
+        s.full_name as student_name,
+        r.name as room_name,
+        se.start_date as enrollment_start,
+        se.expected_end_date as enrollment_end
+      FROM student_payment_schedules ps
+      JOIN students s ON ps.student_id = s.id
+      JOIN student_enrollments se ON ps.enrollment_id = se.id
+      JOIN rooms r ON se.room_id = r.id
+      WHERE ps.student_id = ? 
+        AND se.boarding_house_id = ?
+        AND ps.deleted_at IS NULL
+    `;
+    
+    const params = [student_id, req.user.boarding_house_id];
+
+    if (enrollment_id) {
+      query += ' AND ps.enrollment_id = ?';
+      params.push(enrollment_id);
+    }
+
+    query += ' ORDER BY ps.period_start_date';
+
+    const [schedules] = await db.query(query, params);
+
+    // Get payment history for each schedule
+    for (let schedule of schedules) {
+      const [payments] = await db.query(
+        `SELECT p.*, pr.file_path as receipt_path
+         FROM student_payments p
+         LEFT JOIN payment_receipts pr ON p.id = pr.payment_id
+         JOIN student_enrollments se ON p.enrollment_id = se.id
+         WHERE p.schedule_id = ? 
+           AND se.boarding_house_id = ?
+           AND p.deleted_at IS NULL
+         ORDER BY p.payment_date`,
+        [schedule.id, req.user.boarding_house_id]
+      );
+      schedule.payments = payments;
+    }
+
+    res.json(schedules);
+  } catch (error) {
+    console.error('Error in getStudentSchedule:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Update a payment
+exports.updatePayment = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { id } = req.params;
+    const {
+      amount,
+      payment_date,
+      payment_method,
+      reference_number,
+      notes
+    } = req.body;
+
+    // Parse amount as float to ensure numeric value
+    const paymentAmount = parseFloat(amount);
+    if (isNaN(paymentAmount)) {
+      return res.status(400).json({ message: 'Invalid payment amount' });
+    }
+
+    // Get current payment to check if it exists and belongs to the boarding house
+    const [payments] = await connection.query(
+      `SELECT sp.*, se.boarding_house_id 
+       FROM student_payments sp
+       JOIN student_enrollments se ON sp.enrollment_id = se.id
+       WHERE sp.id = ? 
+         AND sp.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+
+    const payment = payments[0];
+
+    // Check if payment belongs to the user's boarding house
+    if (payment.boarding_house_id !== req.user.boarding_house_id) {
+      return res.status(403).json({ message: 'Not authorized to update this payment' });
+    }
+
+    // Update payment record
+    await connection.query(
+      `UPDATE student_payments 
+       SET amount = ?,
+           payment_date = ?,
+           payment_method = ?,
+           reference_number = ?,
+           notes = ?,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [
+        paymentAmount,
+        payment_date,
+        payment_method,
+        reference_number,
+        notes,
+        id
+      ]
+    );
+
+    // Get updated payment details
+    const [updatedPayment] = await connection.query(
+      `SELECT 
+        sp.*,
+        s.full_name as student_name,
+        r.name as room_name
+       FROM student_payments sp
+       JOIN students s ON sp.student_id = s.id
+       JOIN student_enrollments se ON sp.enrollment_id = se.id
+       JOIN rooms r ON se.room_id = r.id
+       WHERE sp.id = ?`,
+      [id]
+    );
+
+    await connection.commit();
+    res.json(updatedPayment[0]);
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in updatePayment:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+// Delete a payment
+exports.deletePayment = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { id } = req.params;
+
+    // Get current payment to check if it exists and belongs to the boarding house
+    const [payments] = await connection.query(
+      `SELECT sp.*, se.boarding_house_id, ps.id as schedule_id, ps.amount_paid
+       FROM student_payments sp
+       JOIN student_enrollments se ON sp.enrollment_id = se.id
+       LEFT JOIN student_payment_schedules ps ON sp.schedule_id = ps.id
+       WHERE sp.id = ? 
+         AND sp.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+
+    const payment = payments[0];
+
+    // Check if payment belongs to the user's boarding house
+    if (payment.boarding_house_id !== req.user.boarding_house_id) {
+      return res.status(403).json({ message: 'Not authorized to delete this payment' });
+    }
+
+    // If payment is linked to a schedule, update the schedule's amount_paid
+    if (payment.schedule_id) {
+      const newAmountPaid = parseFloat(payment.amount_paid) - parseFloat(payment.amount);
+      const status = newAmountPaid <= 0 ? 'pending' : 'partial';
+
+      await connection.query(
+        `UPDATE student_payment_schedules 
+         SET amount_paid = ?,
+             status = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [Math.max(0, newAmountPaid), status, payment.schedule_id]
+      );
+    }
+
+    // Soft delete the payment
+    await connection.query(
+      `UPDATE student_payments 
+       SET deleted_at = NOW(),
+           updated_at = NOW()
+       WHERE id = ?`,
+      [id]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Payment deleted successfully' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in deletePayment:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get payment details
+exports.getPaymentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [payments] = await db.query(
+      `SELECT 
+        sp.*,
+        s.full_name as student_name,
+        r.name as room_name,
+        se.boarding_house_id
+       FROM student_payments sp
+       JOIN students s ON sp.student_id = s.id
+       JOIN student_enrollments se ON sp.enrollment_id = se.id
+       JOIN rooms r ON se.room_id = r.id
+       WHERE sp.id = ? 
+         AND sp.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (payments.length === 0) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+
+    const payment = payments[0];
+
+    // Check if payment belongs to the user's boarding house
+    if (payment.boarding_house_id !== req.user.boarding_house_id) {
+      return res.status(403).json({ message: 'Not authorized to view this payment' });
+    }
+
+    res.json(payment);
+  } catch (error) {
+    console.error('Error in getPaymentById:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}; 
+
+// Get student's payments
+exports.getStudentPayments = async (req, res) => {
+  try {
+    const { student_id } = req.params;
+
+    // Validate that student belongs to the same boarding house
+    const [students] = await db.query(
+      `SELECT s.* 
+       FROM students s
+       JOIN student_enrollments se ON s.id = se.student_id
+       WHERE s.id = ? 
+         AND se.boarding_house_id = ?
+         AND s.deleted_at IS NULL
+         AND se.deleted_at IS NULL`,
+      [student_id, req.user.boarding_house_id]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'Student not found or not associated with your boarding house' });
+    }
+
+    const [payments] = await db.query(
+      `SELECT 
+        p.*,
+        pr.file_path as receipt_path,
+        ps.period_start_date,
+        ps.period_end_date,
+        ps.amount_due
+      FROM student_payments p
+      LEFT JOIN payment_receipts pr ON p.id = pr.payment_id
+      LEFT JOIN student_payment_schedules ps ON p.schedule_id = ps.id
+      JOIN student_enrollments se ON p.enrollment_id = se.id
+      WHERE p.student_id = ? 
+        AND se.boarding_house_id = ?
+        AND p.deleted_at IS NULL
+      ORDER BY p.payment_date DESC`,
+      [student_id, req.user.boarding_house_id]
+    );
+
+    res.json(payments);
+  } catch (error) {
+    console.error('Error in getStudentPayments:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}; 
+
+// Get all payments for a boarding house
+exports.getBoardingHousePayments = async (req, res) => {
+  try {
+    const [payments] = await db.query(
+      `SELECT 
+        sp.*,
+        s.full_name as student_name,
+        se.room_id,
+        r.name as room_name,
+        sps.period_start_date,
+        sps.period_end_date
+      FROM student_payments sp
+      JOIN students s ON sp.student_id = s.id
+      JOIN student_enrollments se ON sp.enrollment_id = se.id
+      JOIN rooms r ON se.room_id = r.id
+      LEFT JOIN student_payment_schedules sps ON sp.schedule_id = sps.id
+      WHERE se.boarding_house_id = ?
+        AND sp.deleted_at IS NULL
+      ORDER BY sp.payment_date DESC, sp.created_at DESC`,
+      [req.user.boarding_house_id]
+    );
+
+    // Transform the data for frontend display
+    const transformedPayments = payments.map(payment => ({
+      id: payment.id,
+      student_id: payment.student_id,
+      student_name: payment.student_name,
+      room_name: payment.room_name,
+      amount: payment.amount,
+      payment_date: payment.payment_date,
+      payment_method: payment.payment_method,
+      payment_type: payment.payment_type,
+      reference_number: payment.reference_number,
+      status: payment.status,
+      period: payment.period_start_date && payment.period_end_date ? {
+        start: payment.period_start_date,
+        end: payment.period_end_date
+      } : null,
+      notes: payment.notes,
+      created_at: payment.created_at
+    }));
+
+    res.json(transformedPayments);
+  } catch (error) {
+    console.error('Error in getBoardingHousePayments:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}; 
+
+// Get overdue payments for a boarding house
+exports.getOverduePayments = async (req, res) => {
+  try {
+    const [payments] = await db.query(
+      `SELECT 
+        sps.*,
+        s.full_name as student_name,
+        se.room_id,
+        r.name as room_name,
+        se.currency
+      FROM student_payment_schedules sps
+      JOIN students s ON sps.student_id = s.id
+      JOIN student_enrollments se ON sps.enrollment_id = se.id
+      JOIN rooms r ON se.room_id = r.id
+      WHERE se.boarding_house_id = ?
+        AND sps.deleted_at IS NULL
+        AND sps.period_end_date < CURRENT_DATE
+        AND (sps.status = 'pending' OR sps.status = 'partial')
+      ORDER BY sps.period_end_date ASC`,
+      [req.user.boarding_house_id]
+    );
+
+    res.json(payments);
+  } catch (error) {
+    console.error('Error in getOverduePayments:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}; 
+
+// Get rent ledger for a student
+exports.getStudentLedger = async (req, res) => {
+  try {
+    const { student_id } = req.params;
+
+    // Get all charges (payment schedules)
+    const [charges] = await db.query(
+      `SELECT 
+        sps.id,
+        sps.period_start_date as date,
+        CONCAT('Rent for ', DATE_FORMAT(sps.period_start_date, '%M %Y')) as description,
+        'charge' as type,
+        sps.amount_due as amount,
+        sps.amount_paid,
+        sps.currency,
+        sps.status,
+        sps.payment_type
+      FROM student_payment_schedules sps
+      JOIN student_enrollments se ON sps.enrollment_id = se.id
+      WHERE sps.student_id = ? 
+        AND se.boarding_house_id = ?
+        AND sps.deleted_at IS NULL
+      ORDER BY sps.period_start_date ASC`,
+      [student_id, req.user.boarding_house_id]
+    );
+
+    // Get all payments
+    const [payments] = await db.query(
+      `SELECT 
+        sp.id,
+        sp.payment_date as date,
+        CONCAT('Payment - ', sp.payment_method, COALESCE(CONCAT(' (', sp.reference_number, ')'), '')) as description,
+        'payment' as type,
+        sp.amount,
+        sp.currency,
+        sp.status,
+        sp.payment_type,
+        sp.notes
+      FROM student_payments sp
+      JOIN student_enrollments se ON sp.enrollment_id = se.id
+      WHERE sp.student_id = ? 
+        AND se.boarding_house_id = ?
+        AND sp.deleted_at IS NULL
+      ORDER BY sp.payment_date ASC`,
+      [student_id, req.user.boarding_house_id]
+    );
+
+    // Combine and sort all entries by date
+    const allEntries = [...charges, ...payments].sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    );
+
+    res.json(allEntries);
+  } catch (error) {
+    console.error('Error in getStudentLedger:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}; 

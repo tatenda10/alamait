@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Italianno&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+html, body {
+  overflow-x: hidden;
+}
+
+body {
+  overflow-y: scroll;
+  /* Enable vertical scrolling */
+  font-family: 'Inter', Helvetica;  /* Updated to use Inter with Helvetica as fallback */
+  /* Hide the vertical scrollbar */
+  scrollbar-width: none;
+  /* For Firefox */
+  -ms-overflow-style: none;
+  /* For IE and Edge */
+  font-size: small;
+}
+
+body::-webkit-scrollbar {
+  display: none;
+  /* For Chrome, Safari, and Opera */
+}
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-fade-in-right {
+  animation: fadeInRight 0.3s both;
+}
