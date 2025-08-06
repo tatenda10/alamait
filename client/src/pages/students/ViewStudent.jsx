@@ -891,20 +891,25 @@ export default function ViewStudent() {
           <div className="mt-8">
             <div className="border-t border-gray-200 pt-6">
               <h4 className="text-xs font-medium text-gray-900 mb-4">Add New Payment</h4>
-              <AddPayment 
-                studentId={student.id}
-                studentName={student.full_name}
-                paymentSchedules={student.payment_schedules || []}
-                feeTypes={[
-                  { id: 'monthly_rent', label: 'Monthly Rent' },
-                  { id: 'admin_fee', label: 'Admin Fee', amount: student.admin_fee },
-                  { id: 'security_deposit', label: 'Security Deposit', amount: student.security_deposit },
-                  { id: 'additional_charges', label: 'Additional Charges' }
-                ]}
-                adminFee={student.admin_fee}
-                securityDeposit={student.security_deposit}
-                currency={student.currency}
-              />
+              {student && student.id ? (
+                <AddPayment 
+                  studentId={student.id}
+                  studentName={student.full_name}
+                  paymentSchedules={student.payment_schedules || []}
+                  feeTypes={[
+                    { id: 'monthly_rent', label: 'Monthly Rent' },
+                    { id: 'admin_fee', label: 'Admin Fee', amount: student.admin_fee },
+                    { id: 'security_deposit', label: 'Security Deposit', amount: student.security_deposit },
+                    { id: 'additional_charges', label: 'Additional Charges' }
+                  ]}
+                  adminFee={student.admin_fee}
+                  securityDeposit={student.security_deposit}
+                  currency={student.currency}
+                  boardingHouseId={student.boarding_house_id || student.enrollment?.boarding_house_id}
+                />
+              ) : (
+                <div className="text-sm text-gray-500">Loading payment form...</div>
+              )}
             </div>
           </div>
         </div>

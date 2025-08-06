@@ -89,18 +89,60 @@ export default function AddRoom() {
 
     setLoading(true);
     try {
-      await axios.post(`${BASE_URL}/rooms`, formData, {
+      // Transform form data to match backend expectations
+      const roomData = {
+        name: formData.room_name.trim(),
+        capacity: parseInt(formData.capacity),
+        rent: parseFloat(formData.monthly_rent),
+        description: formData.description?.trim() || '',
+        boarding_house_id: parseInt(formData.boarding_house_id)
+      };
+
+      // Additional validation for transformed data
+      if (isNaN(roomData.capacity) || roomData.capacity < 1) {
+        throw new Error('Invalid capacity value');
+      }
+
+      if (isNaN(roomData.rent) || roomData.rent <= 0) {
+        throw new Error('Invalid rent value');
+      }
+
+      if (isNaN(roomData.boarding_house_id) || roomData.boarding_house_id <= 0) {
+        throw new Error('Invalid boarding house selection');
+      }
+
+      console.log('Submitting room data:', roomData);
+      
+      const response = await axios.post(`${BASE_URL}/rooms`, roomData, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
       });
       
+      console.log('Room created successfully:', response.data);
       navigate('/dashboard/rooms');
     } catch (err) {
       console.error('Error creating room:', err);
+      console.error('Error details:', {
+        message: err.message,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        config: {
+          url: err.config?.url,
+          method: err.config?.method,
+          headers: err.config?.headers,
+          data: err.config?.data
+        }
+      });
+      
       if (err.response?.data?.errors) {
         setErrors(err.response.data.errors);
+      } else if (err.response?.data?.message) {
+        alert(`Failed to create room: ${err.response.data.message}`);
+      } else if (err.message) {
+        alert(`Failed to create room: ${err.message}`);
       } else {
         alert('Failed to create room. Please try again.');
       }

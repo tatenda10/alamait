@@ -126,17 +126,21 @@ exports.createTransaction = async (req, res) => {
         `INSERT INTO journal_entries (
           transaction_id,
           account_id,
-          debit,
-          credit,
+          entry_type,
+          amount,
           description,
+          boarding_house_id,
+          created_by,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           transactionId,
           entry.account_id,
-          entry.debit || 0,
-          entry.credit || 0,
-          entry.description
+          entry.entry_type || (entry.debit > 0 ? 'debit' : 'credit'),
+          entry.amount || entry.debit || entry.credit || 0,
+          entry.description,
+          req.user.boarding_house_id,
+          req.user.id
         ]
       );
     }
@@ -236,7 +240,7 @@ exports.postTransaction = async (req, res) => {
 
     // Update transaction status to posted
     await connection.query(
-      'UPDATE transactions SET status = "posted", updated_at = NOW() WHERE id = ?',
+      'UPDATE transactions SET status = "posted" WHERE id = ?',
       [id]
     );
 
@@ -272,7 +276,7 @@ exports.voidTransaction = async (req, res) => {
 
     // Update transaction status to voided
     await connection.query(
-      'UPDATE transactions SET status = "voided", updated_at = NOW() WHERE id = ?',
+      'UPDATE transactions SET status = "voided" WHERE id = ?',
       [id]
     );
 
@@ -337,6 +341,7 @@ exports.getAccountTransactions = async (req, res) => {
         t.description as transaction_description,
         t.status,
         t.transaction_type,
+        t.student_id,
         je.id as journal_entry_id,
         je.entry_type,
         je.amount,
@@ -403,6 +408,191 @@ exports.getAccountTransactions = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getAccountTransactions:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Update a transaction
+exports.updateTransaction = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { id } = req.params;
+    const { 
+      transaction_date,
+      reference_no,
+      description,
+      journal_entries
+    } = req.body;
+
+    // Validate required fields
+    if (!transaction_date || !reference_no || !journal_entries) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // Validate journal entries
+    if (!Array.isArray(journal_entries) || journal_entries.length < 2) {
+      return res.status(400).json({ message: 'At least two journal entries are required' });
+    }
+
+    // Calculate and validate debits and credits
+    const totalDebits = journal_entries.reduce((sum, entry) => {
+      if (entry.entry_type === 'debit') return sum + (entry.amount || 0);
+      return sum;
+    }, 0);
+    const totalCredits = journal_entries.reduce((sum, entry) => {
+      if (entry.entry_type === 'credit') return sum + (entry.amount || 0);
+      return sum;
+    }, 0);
+
+    if (Math.abs(totalDebits - totalCredits) > 0.01) { // Allow for small rounding differences
+      return res.status(400).json({ message: 'Debits must equal credits' });
+    }
+
+    // Check if transaction exists and is in draft or posted status
+    const [existingTransaction] = await connection.query(
+      'SELECT * FROM transactions WHERE id = ? AND status IN ("draft", "posted") AND deleted_at IS NULL',
+      [id]
+    );
+
+    if (existingTransaction.length === 0) {
+      return res.status(404).json({ message: 'Transaction not found or not in editable status' });
+    }
+
+    const transaction = existingTransaction[0];
+
+    // Update transaction header
+    await connection.query(
+      `UPDATE transactions SET
+        transaction_date = ?,
+        reference = ?,
+        description = ?
+       WHERE id = ?`,
+      [transaction_date, reference_no, description, id]
+    );
+
+    // Check if this transaction is associated with an expense and update it
+    const [expenses] = await connection.query(
+      `SELECT * FROM expenses WHERE transaction_id = ? AND deleted_at IS NULL`,
+      [id]
+    );
+
+    if (expenses.length > 0) {
+      const expense = expenses[0];
+      
+      // Calculate the total amount from debit journal entries (expenses are typically debits)
+      const debitEntries = journal_entries.filter(entry => entry.entry_type === 'debit');
+      const totalAmount = debitEntries.reduce((sum, entry) => sum + (entry.amount || 0), 0);
+      
+      // Get the expense account ID from the first debit entry (expense accounts are typically debited)
+      const expenseAccountId = debitEntries.length > 0 ? debitEntries[0].account_id : expense.expense_account_id;
+      
+      // Update the expense record
+      await connection.query(
+        `UPDATE expenses SET
+          expense_date = ?,
+          amount = ?,
+          total_amount = ?,
+          description = ?,
+          reference_number = ?,
+          expense_account_id = ?,
+          updated_at = NOW()
+         WHERE transaction_id = ?`,
+        [transaction_date, totalAmount, totalAmount, description, reference_no, expenseAccountId, id]
+      );
+    }
+
+    // Delete existing journal entries
+    await connection.query(
+      'DELETE FROM journal_entries WHERE transaction_id = ?',
+      [id]
+    );
+
+    // Create new journal entries
+    for (const entry of journal_entries) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          id,
+          entry.account_id,
+          entry.entry_type,
+          entry.amount || 0,
+          entry.description,
+          transaction.boarding_house_id || req.user.boarding_house_id,
+          req.user.id
+        ]
+      );
+    }
+
+    // Fetch the updated transaction with its entries
+    const [updatedTransaction] = await connection.query(
+      `SELECT 
+        t.*,
+        JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'id', je.id,
+            'account_id', je.account_id,
+            'entry_type', je.entry_type,
+            'amount', je.amount,
+            'description', je.description
+          )
+        ) as entries
+      FROM transactions t
+      LEFT JOIN journal_entries je ON t.id = je.transaction_id
+      WHERE t.id = ?
+      GROUP BY t.id`,
+      [id]
+    );
+
+    await connection.commit();
+    res.json(updatedTransaction[0]);
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in updateTransaction:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get journal entries for a transaction
+exports.getTransactionJournalEntries = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get all journal entries for the transaction
+    const [journalEntries] = await db.query(
+      `SELECT 
+        je.id,
+        je.account_id,
+        je.entry_type,
+        je.amount,
+        je.description,
+        coa.code as account_code,
+        coa.name as account_name,
+        coa.type as account_type
+      FROM journal_entries je
+      LEFT JOIN chart_of_accounts_branch coa ON je.account_id = coa.id
+      WHERE je.transaction_id = ? 
+        AND je.deleted_at IS NULL
+      ORDER BY je.id`,
+      [id]
+    );
+
+    res.json(journalEntries);
+  } catch (error) {
+    console.error('Error in getTransactionJournalEntries:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

@@ -201,12 +201,18 @@ const Sidebar = () => {
               >
                 <FaTruck className="h-4 w-4 mr-2" /> Creditors Report
               </NavLink>
+              {/* <NavLink 
+                to="/dashboard/reports/expenses" 
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+              >
+                <FaReceipt className="h-4 w-4 mr-2" /> Expenses Report
+              </NavLink>
               <NavLink 
                 to="/dashboard/reports/cashflow" 
                 className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
               >
                 <FaExchangeAlt className="h-4 w-4 mr-2" /> Cashflow Report
-              </NavLink>
+              </NavLink> */}
             </div>
           )}
         </div>

@@ -43,8 +43,12 @@ exports.recordPayment = async (req, res) => {
       fee_type,
       payment_date,
       reference_number,
-      notes
+      notes,
+      boarding_house_id
     } = req.body;
+
+    // Use boarding_house_id from request body if provided, otherwise use req.user.boarding_house_id
+    const targetBoardingHouseId = boarding_house_id || req.user.boarding_house_id;
 
     console.log('Received payment request:', {
       student_id,
@@ -54,7 +58,8 @@ exports.recordPayment = async (req, res) => {
       fee_type,
       payment_date,
       reference_number,
-      notes
+      notes,
+      boarding_house_id: targetBoardingHouseId
     });
 
     // Validate required fields
@@ -72,6 +77,9 @@ exports.recordPayment = async (req, res) => {
     }
     if (!payment_date) {
       return res.status(400).json({ message: 'Payment date is required' });
+    }
+    if (!targetBoardingHouseId) {
+      return res.status(400).json({ message: 'Boarding house ID is required' });
     }
 
     // Parse amount as float
@@ -130,7 +138,7 @@ exports.recordPayment = async (req, res) => {
          AND debit.branch_id = ?
          AND debit.deleted_at IS NULL
          AND credit.deleted_at IS NULL`,
-      [debitAccountCode, creditAccountCode, req.user.boarding_house_id]
+      [debitAccountCode, creditAccountCode, targetBoardingHouseId]
     );
 
     if (accounts.length === 0) {
@@ -166,7 +174,7 @@ exports.recordPayment = async (req, res) => {
          AND se.boarding_house_id = ?
          AND s.deleted_at IS NULL
          AND se.deleted_at IS NULL`,
-      [student_id, req.user.boarding_house_id]
+      [student_id, targetBoardingHouseId]
     );
 
     if (students.length === 0) {
@@ -204,7 +212,7 @@ exports.recordPayment = async (req, res) => {
            AND ps.student_id = ? 
            AND se.boarding_house_id = ?
            AND ps.deleted_at IS NULL`,
-        [schedule_id, student_id, req.user.boarding_house_id]
+        [schedule_id, student_id, targetBoardingHouseId]
       );
 
       if (schedules.length === 0) {
@@ -251,7 +259,7 @@ exports.recordPayment = async (req, res) => {
         enrollment.currency,
         `${fee_type.replace('_', ' ')} payment - ${accountDetails.debit_name} to ${accountDetails.credit_name}`,
         payment_date,
-        req.user.boarding_house_id,
+        targetBoardingHouseId,
         req.user.id,
         'posted'
       ]
@@ -276,7 +284,7 @@ exports.recordPayment = async (req, res) => {
         'debit',
           paymentAmount,
         `${fee_type.replace('_', ' ')} payment - Debit ${accountDetails.debit_name}`,
-        req.user.boarding_house_id,
+        targetBoardingHouseId,
         req.user.id
         ]
       );
@@ -299,7 +307,7 @@ exports.recordPayment = async (req, res) => {
         'credit',
           paymentAmount,
         `${fee_type.replace('_', ' ')} payment - Credit ${accountDetails.credit_name}`,
-        req.user.boarding_house_id,
+        targetBoardingHouseId,
         req.user.id
       ]
     );
@@ -808,22 +816,54 @@ exports.getStudentPayments = async (req, res) => {
   try {
     const { student_id } = req.params;
 
-    // Validate that student belongs to the same boarding house
+    console.log('getStudentPayments called with:', {
+      student_id,
+      user_id: req.user?.id,
+      user_boarding_house_id: req.user?.boarding_house_id
+    });
+
+    // First, check if the student exists
     const [students] = await db.query(
       `SELECT s.* 
        FROM students s
-       JOIN student_enrollments se ON s.id = se.student_id
        WHERE s.id = ? 
-         AND se.boarding_house_id = ?
-         AND s.deleted_at IS NULL
-         AND se.deleted_at IS NULL`,
-      [student_id, req.user.boarding_house_id]
+         AND s.deleted_at IS NULL`,
+      [student_id]
     );
 
     if (students.length === 0) {
-      return res.status(404).json({ message: 'Student not found or not associated with your boarding house' });
+      console.log('Student not found:', student_id);
+      return res.status(404).json({ message: 'Student not found' });
     }
 
+    console.log('Student found:', students[0]);
+
+    // Get the student's boarding house from their enrollment
+    const [enrollments] = await db.query(
+      `SELECT se.boarding_house_id
+       FROM student_enrollments se
+       WHERE se.student_id = ? 
+         AND se.deleted_at IS NULL
+       ORDER BY se.created_at DESC
+       LIMIT 1`,
+      [student_id]
+    );
+
+    if (enrollments.length === 0) {
+      console.log('No enrollment found for student:', student_id);
+      return res.status(404).json({ message: 'No enrollment found for student' });
+    }
+
+    const studentBoardingHouseId = enrollments[0].boarding_house_id;
+    console.log('Student boarding house ID:', studentBoardingHouseId);
+
+    // If user has a boarding_house_id, validate that the student belongs to that boarding house
+    if (req.user.boarding_house_id && req.user.boarding_house_id !== studentBoardingHouseId) {
+      console.log('Authorization failed: user boarding house ID:', req.user.boarding_house_id, 'student boarding house ID:', studentBoardingHouseId);
+      return res.status(403).json({ message: 'Not authorized to view payments for this student' });
+    }
+
+    // Get the student's payments
     const [payments] = await db.query(
       `SELECT 
         p.*,
@@ -839,9 +879,10 @@ exports.getStudentPayments = async (req, res) => {
         AND se.boarding_house_id = ?
         AND p.deleted_at IS NULL
       ORDER BY p.payment_date DESC`,
-      [student_id, req.user.boarding_house_id]
+      [student_id, studentBoardingHouseId]
     );
 
+    console.log('Found payments:', payments.length);
     res.json(payments);
   } catch (error) {
     console.error('Error in getStudentPayments:', error);

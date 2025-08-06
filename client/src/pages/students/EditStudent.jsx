@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 import { useAuth } from '../../context/AuthContext';
 
-export default function AddStudent() {
+export default function EditStudent() {
+  const { studentId } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(null);
   const [boardingHouses, setBoardingHouses] = useState([]);
   
@@ -19,10 +21,38 @@ export default function AddStudent() {
     gender: 'Female',
     address: '',
     phoneNumber: '',
-    boardingHouseId: ''
+    boardingHouseId: '',
+    status: 'Active'
   });
 
-  // Fetch boarding houses
+  // Fetch student data and boarding houses
+  const fetchStudent = async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/students/${studentId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const student = response.data;
+      setFormData({
+        fullName: student.full_name || '',
+        nationalId: student.national_id || '',
+        university: student.university || '',
+        gender: student.gender || 'Female',
+        address: student.address || '',
+        phoneNumber: student.phone_number || '',
+        boardingHouseId: student.boarding_house_id || '',
+        status: student.status || 'Active'
+      });
+      setInitialLoading(false);
+    } catch (error) {
+      console.error('Error fetching student:', error);
+      setError('Failed to fetch student details');
+      setInitialLoading(false);
+    }
+  };
+
   const fetchBoardingHouses = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/boarding-houses`, {
@@ -38,10 +68,11 @@ export default function AddStudent() {
   };
 
   useEffect(() => {
-    if (token) {
+    if (token && studentId) {
+      fetchStudent();
       fetchBoardingHouses();
     }
-  }, [token]);
+  }, [token, studentId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -57,14 +88,15 @@ export default function AddStudent() {
     setError(null);
 
     try {
-      await axios.post(`${BASE_URL}/students`, {
+      await axios.put(`${BASE_URL}/students/${studentId}`, {
         fullName: formData.fullName,
         nationalId: formData.nationalId,
         university: formData.university || null,
         gender: formData.gender || 'Female',
         address: formData.address || null,
         phoneNumber: formData.phoneNumber || null,
-        boardingHouseId: formData.boardingHouseId || null
+        boardingHouseId: formData.boardingHouseId || null,
+        status: formData.status
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -73,20 +105,30 @@ export default function AddStudent() {
 
       navigate('/dashboard/students');
     } catch (err) {
-      console.error('Error creating student:', err);
-      setError(err.response?.data?.message || 'Failed to create student');
+      console.error('Error updating student:', err);
+      setError(err.response?.data?.message || 'Failed to update student');
     } finally {
       setLoading(false);
     }
   };
+
+  if (initialLoading) {
+    return (
+      <div className="bg-gray-50 min-h-screen p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-sm text-gray-500">Loading student details...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen p-6">
       {/* Header Section */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-xl font-semibold text-gray-800 mb-2">Add New Student</h1>
-          <p className="text-xs text-gray-500">Enter student information to create a new record</p>
+          <h1 className="text-xl font-semibold text-gray-800 mb-2">Edit Student</h1>
+          <p className="text-xs text-gray-500">Update student information</p>
         </div>
         <button
           onClick={() => navigate('/dashboard/students')}
@@ -182,12 +224,11 @@ export default function AddStudent() {
               </div>
               <div>
                 <label htmlFor="boardingHouseId" className="block text-xs font-medium text-gray-700 mb-1">
-                  Boarding House <span className="text-red-500">*</span>
+                  Boarding House
                 </label>
                 <select
                   name="boardingHouseId"
                   id="boardingHouseId"
-                  required
                   value={formData.boardingHouseId}
                   onChange={handleChange}
                   className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -198,6 +239,22 @@ export default function AddStudent() {
                       {bh.name} - {bh.location}
                     </option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="status" className="block text-xs font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  name="status"
+                  id="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Inactive">Inactive</option>
                 </select>
               </div>
               <div className="md:col-span-2 lg:col-span-3">
@@ -231,7 +288,7 @@ export default function AddStudent() {
               className="px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50"
               style={{ backgroundColor: '#E78D69' }}
             >
-              {loading ? 'Creating...' : 'Create Student'}
+              {loading ? 'Updating...' : 'Update Student'}
             </button>
           </div>
         </form>

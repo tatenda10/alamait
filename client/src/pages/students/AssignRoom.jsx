@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, DocumentArrowUpIcon, CheckCircleIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
-import BASE_URL from '../../utils/api';
+import BASE_URL from '../../context/Api';
 
 // Success Modal Component
 const SuccessModal = ({ isOpen, onClose, isUpdate }) => {
@@ -214,9 +214,8 @@ export default function AssignRoom() {
 
   const calculateTotalInitialPayment = () => {
     const monthlyRent = parseFloat(monthlyRate) || 0;
-    const adminFeeAmount = parseFloat(adminFee) || 0;
     const securityDepositAmount = parseFloat(securityDeposit) || 0;
-    return (monthlyRent + adminFeeAmount + securityDepositAmount).toFixed(2);
+    return (monthlyRent + securityDepositAmount).toFixed(2);
   };
 
   const handleSubmit = async (e) => {
@@ -507,7 +506,7 @@ export default function AssignRoom() {
                 </div>
                 <div>
                   <label htmlFor="adminFee" className="block text-sm font-medium text-gray-700 mb-1">
-                    Admin Fee (USD)
+                    Admin Fee (USD) <span className="text-xs text-gray-500">- Set during enrollment, paid separately</span>
                   </label>
                   <input
                     type="number"
@@ -516,6 +515,7 @@ export default function AssignRoom() {
                     value={adminFee}
                     onChange={(e) => setAdminFee(e.target.value)}
                     className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
+                    placeholder="0.00"
                   />
                 </div>
                 <div>
@@ -539,6 +539,14 @@ export default function AssignRoom() {
                     USD {calculateTotalInitialPayment()}
                   </span>
                 </div>
+                {parseFloat(adminFee) > 0 && (
+                  <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t border-gray-200">
+                    <span className="font-medium text-gray-500">Admin Fee (paid separately):</span>
+                    <span className="font-medium text-gray-500">
+                      USD {parseFloat(adminFee || 0).toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

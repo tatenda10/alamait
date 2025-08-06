@@ -590,10 +590,21 @@ exports.getExpensesWithoutSupplier = async (req, res) => {
 exports.getExpenseById = async (req, res) => {
   try {
     const { id } = req.params;
-    const boardingHouseId = req.user.boarding_house_id;
+    let boardingHouseId = req.user?.boarding_house_id;
     
+    // If boarding_house_id is not available in user object, try to get it from the expense itself
     if (!boardingHouseId) {
-      return res.status(400).json({ message: 'Boarding house ID is required' });
+      // First, try to get the expense without boarding house filter to get the boarding_house_id
+      const [expenseCheck] = await db.query(
+        `SELECT boarding_house_id FROM expenses WHERE id = ? AND deleted_at IS NULL`,
+        [id]
+      );
+      
+      if (expenseCheck.length === 0) {
+        return res.status(404).json({ message: 'Expense not found' });
+      }
+      
+      boardingHouseId = expenseCheck[0].boarding_house_id;
     }
 
     const [expenses] = await db.query(
@@ -863,6 +874,120 @@ exports.getAllExpenses = async (req, res) => {
     if (error.sql) {
       console.log('SQL Query:', error.sql);
     }
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Get expenses report by month and year
+exports.getExpensesReport = async (req, res) => {
+  try {
+    const { month, year, boarding_house_id } = req.query;
+    
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Month and year are required' });
+    }
+
+    // Build the date range for the specified month and year
+    const startDate = `${year}-${month.padStart(2, '0')}-01`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // Last day of the month
+
+    let query = `
+      SELECT 
+        coa.id as account_id,
+        coa.code as account_code,
+        coa.name as account_name,
+        coa.type as account_type,
+        bh.id as boarding_house_id,
+        bh.name as boarding_house_name,
+        bh.location as boarding_house_location,
+        SUM(je.amount) as total_amount,
+        COUNT(DISTINCT t.id) as transaction_count
+      FROM journal_entries je
+      JOIN transactions t ON je.transaction_id = t.id
+      JOIN chart_of_accounts_branch coa ON je.account_id = coa.id
+      JOIN boarding_houses bh ON je.boarding_house_id = bh.id
+      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+        AND t.status = 'posted'
+        AND je.entry_type = 'debit'
+        AND coa.type = 'Expense'
+        AND je.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND coa.deleted_at IS NULL
+        AND bh.deleted_at IS NULL
+    `;
+
+    let params = [startDate, endDate];
+
+    // Add boarding house filter if provided
+    if (boarding_house_id) {
+      query += ' AND je.boarding_house_id = ?';
+      params.push(boarding_house_id);
+    }
+
+    query += `
+      GROUP BY coa.id, coa.code, coa.name, coa.type, bh.id, bh.name, bh.location
+      ORDER BY bh.name, coa.code
+    `;
+
+    const [expenses] = await db.query(query, params);
+
+    // Group by boarding house and then by account
+    const groupedExpenses = expenses.reduce((acc, expense) => {
+      const boardingHouseKey = expense.boarding_house_id;
+      
+      if (!acc[boardingHouseKey]) {
+        acc[boardingHouseKey] = {
+          boarding_house_id: expense.boarding_house_id,
+          boarding_house_name: expense.boarding_house_name,
+          boarding_house_location: expense.boarding_house_location,
+          total_amount: 0,
+          total_transactions: 0,
+          accounts: []
+        };
+      }
+
+      acc[boardingHouseKey].accounts.push({
+        account_id: expense.account_id,
+        account_code: expense.account_code,
+        account_name: expense.account_name,
+        account_type: expense.account_type,
+        total_amount: expense.total_amount,
+        transaction_count: expense.transaction_count
+      });
+
+      acc[boardingHouseKey].total_amount += expense.total_amount;
+      acc[boardingHouseKey].total_transactions += expense.transaction_count;
+
+      return acc;
+    }, {});
+
+    // Convert to array format
+    const result = Object.values(groupedExpenses);
+
+    // Calculate overall totals
+    const overallTotals = result.reduce((totals, boardingHouse) => {
+      totals.total_amount += boardingHouse.total_amount;
+      totals.total_transactions += boardingHouse.total_transactions;
+      return totals;
+    }, { total_amount: 0, total_transactions: 0 });
+
+    res.json({
+      period: {
+        month: parseInt(month),
+        year: parseInt(year),
+        start_date: startDate,
+        end_date: endDate
+      },
+      boarding_houses: result,
+      summary: {
+        total_amount: overallTotals.total_amount,
+        total_transactions: overallTotals.total_transactions,
+        boarding_house_count: result.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getExpensesReport:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

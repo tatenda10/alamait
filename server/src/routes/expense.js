@@ -43,6 +43,9 @@ router.get('/', expenseController.getAllExpenses);
 // Get all expenses for a specific boarding house
 router.get('/boarding-house', expenseController.getBoardingHouseExpenses);
 
+// Get expenses report by month and year
+router.get('/report/expenses', expenseController.getExpensesReport);
+
 // Get expense by ID
 router.get('/:id', expenseController.getExpenseById);
 

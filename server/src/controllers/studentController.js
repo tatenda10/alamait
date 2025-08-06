@@ -206,7 +206,7 @@ const createStudent = async (req, res) => {
       address || null,
       phoneNumber || null,
       boardingHouseId || null,
-      'Pending'
+      'Active'
     ]);
 
     const [result] = await connection.query(
@@ -230,7 +230,7 @@ const createStudent = async (req, res) => {
         address || null,
         phoneNumber || null,
         boardingHouseId || null,
-        'Pending'
+        'Active'
       ]
     );
 
@@ -346,8 +346,7 @@ const updateStudent = async (req, res) => {
            address = COALESCE(?, address),
            phone_number = COALESCE(?, phone_number),
            boarding_house_id = COALESCE(?, boarding_house_id),
-           status = COALESCE(?, status),
-           updated_at = NOW()
+           status = COALESCE(?, status)
        WHERE id = ? AND deleted_at IS NULL`,
       [
         fullName,
@@ -601,8 +600,8 @@ const assignRoom = async (req, res) => {
       const transactionRef = `ADMIN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const [adminFeeTransaction] = await connection.query(
         `INSERT INTO transactions (
-          transaction_type, transaction_date, reference_number, description, 
-          total_amount, currency, status, boarding_house_id, created_by
+          transaction_type, transaction_date, reference, description, 
+          amount, currency, status, boarding_house_id, created_by
         ) VALUES (?, CURDATE(), ?, ?, ?, ?, 'posted', ?, ?)`,
         [
           'admin_fee',
@@ -652,8 +651,8 @@ const assignRoom = async (req, res) => {
       const transactionRef = `DEPOSIT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const [depositTransaction] = await connection.query(
         `INSERT INTO transactions (
-          transaction_type, transaction_date, reference_number, description, 
-          total_amount, currency, status, boarding_house_id, created_by
+          transaction_type, transaction_date, reference, description, 
+          amount, currency, status, boarding_house_id, created_by
         ) VALUES (?, CURDATE(), ?, ?, ?, ?, 'posted', ?, ?)`,
         [
           'security_deposit',
