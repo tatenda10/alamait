@@ -1,7 +1,7 @@
 const db = require('../services/db');
 
-// Helper function to generate next available code for a given type and branch
-const generateNextCode = async (connection, type, branch_id) => {
+// Helper function to generate next available code for a given type
+const generateNextCode = async (connection, type) => {
   // Define prefix based on account type
   const prefixMap = {
     'Asset': '1',
@@ -16,15 +16,14 @@ const generateNextCode = async (connection, type, branch_id) => {
     throw new Error('Invalid account type');
   }
 
-  // Get the highest code for this type in this branch
+  // Get the highest code for this type
   const [maxCodes] = await connection.query(
-    `SELECT code FROM chart_of_accounts_branch 
-     WHERE branch_id = ? 
-     AND code LIKE ? 
+    `SELECT code FROM chart_of_accounts 
+     WHERE code LIKE ? 
      AND deleted_at IS NULL 
      ORDER BY code DESC 
      LIMIT 1`,
-    [branch_id, `${prefix}%`]
+    [`${prefix}%`]
   );
 
   if (maxCodes.length === 0) {
@@ -41,31 +40,16 @@ const generateNextCode = async (connection, type, branch_id) => {
   return `${prefix}${String(nextNumber).padStart(4, '0')}`;
 };
 
-// Create a new account for a branch
-exports.createBranchAccount = async (req, res) => {
+// Create a new account (global chart of accounts)
+exports.createAccount = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
     await connection.beginTransaction();
     
     console.log('Received request body:', req.body);
-    console.log('Received request headers:', req.headers);
     
     const { name, type, is_category, parent_id } = req.body;
-    const branch_id = req.headers['boarding-house-id'];
-    
-    console.log('Parsed COA data:', {
-      name,
-      type,
-      is_category,
-      parent_id,
-      branch_id
-    });
-
-    if (!branch_id) {
-      console.log('Missing boarding house ID in headers');
-      return res.status(400).json({ message: 'Boarding house ID is required' });
-    }
 
     // Validate required fields
     if (!name || !type) {
@@ -79,15 +63,15 @@ exports.createBranchAccount = async (req, res) => {
     }
 
     // Generate the next available code for this type
-    const code = await generateNextCode(connection, type, branch_id);
+    const code = await generateNextCode(connection, type);
     console.log('Generated code:', code);
 
     // Create the account
     const [result] = await connection.query(
-      `INSERT INTO chart_of_accounts_branch 
-       (code, name, type, is_category, parent_id, branch_id, created_at, updated_at)
+      `INSERT INTO chart_of_accounts 
+       (code, name, type, is_category, parent_id, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [code, name, type, is_category || false, parent_id || null, branch_id]
+      [code, name, type, is_category || false, parent_id || null, req.user.id]
     );
 
     await connection.commit();
@@ -99,13 +83,12 @@ exports.createBranchAccount = async (req, res) => {
         name,
         type,
         is_category: is_category || false,
-        parent_id: parent_id || null,
-        branch_id
+        parent_id: parent_id || null
       }
     });
 
   } catch (error) {
-    console.log('Error in createBranchAccount:', error);
+    console.log('Error in createAccount:', error);
     await connection.rollback();
     res.status(500).json({ message: 'Error creating account' });
   } finally {
@@ -113,20 +96,14 @@ exports.createBranchAccount = async (req, res) => {
   }
 };
 
-// Get all accounts for a branch in a hierarchical structure
-exports.getBranchAccounts = async (req, res) => {
+// Get all accounts in a hierarchical structure (global chart of accounts)
+exports.getAccounts = async (req, res) => {
   try {
-    const branch_id = req.headers['boarding-house-id'];
-    if (!branch_id) {
-      return res.status(400).json({ message: 'Boarding house ID is required' });
-    }
-
     const [accounts] = await db.query(
       `WITH RECURSIVE account_tree AS (
-        -- Base case: get all root accounts (no parent) for this branch
+        -- Base case: get all root accounts (no parent)
         SELECT 
           id,
-          branch_id,
           code,
           name,
           type,
@@ -134,9 +111,8 @@ exports.getBranchAccounts = async (req, res) => {
           parent_id,
           1 as level,
           CAST(code AS CHAR(255)) as path
-        FROM chart_of_accounts_branch
+        FROM chart_of_accounts
         WHERE parent_id IS NULL 
-          AND branch_id = ?
           AND deleted_at IS NULL
         
         UNION ALL
@@ -144,7 +120,6 @@ exports.getBranchAccounts = async (req, res) => {
         -- Recursive case: get children
         SELECT 
           c.id,
-          c.branch_id,
           c.code,
           c.name,
           c.type,
@@ -152,13 +127,12 @@ exports.getBranchAccounts = async (req, res) => {
           c.parent_id,
           p.level + 1,
           CONCAT(p.path, ',', c.code)
-        FROM chart_of_accounts_branch c
+        FROM chart_of_accounts c
         INNER JOIN account_tree p ON c.parent_id = p.id
-        WHERE c.deleted_at IS NULL AND c.branch_id = ?
+        WHERE c.deleted_at IS NULL
       )
       SELECT * FROM account_tree
-      ORDER BY path;`,
-      [branch_id, branch_id]
+      ORDER BY path;`
     );
 
     // Transform flat list into hierarchical structure
@@ -168,7 +142,9 @@ exports.getBranchAccounts = async (req, res) => {
     accounts.forEach(account => {
       account.children = [];
       accountMap.set(account.id, account);
-      
+    });
+
+    accounts.forEach(account => {
       if (account.parent_id === null) {
         rootAccounts.push(account);
       } else {
@@ -179,248 +155,177 @@ exports.getBranchAccounts = async (req, res) => {
       }
     });
 
-    res.json({ data: rootAccounts });
+    res.json({
+      data: rootAccounts
+    });
+
   } catch (error) {
-    console.error('Error in getBranchAccounts:', error);
+    console.error('Error in getAccounts:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
 
-// Update a branch account
-exports.updateBranchAccount = async (req, res) => {
+// Update an account
+exports.updateAccount = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
     await connection.beginTransaction();
     
     const { id } = req.params;
-    const { code, name, type, is_category, parent_id } = req.body;
-    const branch_id = req.headers['boarding-house-id'];
-    
-    if (!branch_id) {
-      return res.status(400).json({ message: 'Boarding house ID is required' });
+    const { name, type, is_category, parent_id } = req.body;
+
+    // Validate required fields
+    if (!name || !type) {
+      return res.status(400).json({ message: 'Name and type are required' });
     }
 
-    // Check if account exists and belongs to the branch
-    const [accounts] = await connection.query(
-      'SELECT * FROM chart_of_accounts_branch WHERE id = ? AND branch_id = ? AND deleted_at IS NULL',
-      [id, branch_id]
-    );
-
-    if (accounts.length === 0) {
-      return res.status(404).json({ message: 'Account not found in this branch' });
+    // Validate account type
+    const validTypes = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ message: 'Invalid account type' });
     }
 
-    // Check if new code is unique within the branch (if changed)
-    if (code !== accounts[0].code) {
-      const [existingAccounts] = await connection.query(
-        'SELECT id FROM chart_of_accounts_branch WHERE code = ? AND id != ? AND branch_id = ? AND deleted_at IS NULL',
-        [code, id, branch_id]
-      );
-
-      if (existingAccounts.length > 0) {
-        return res.status(400).json({ message: 'Account code already exists in this branch' });
-      }
-    }
-
-    // If parent_id is provided and changed, verify it exists in the same branch and prevent circular reference
-    if (parent_id && parent_id !== accounts[0].parent_id) {
-      const [parents] = await connection.query(
-        'SELECT id FROM chart_of_accounts_branch WHERE id = ? AND branch_id = ? AND deleted_at IS NULL',
-        [parent_id, branch_id]
-      );
-
-      if (parents.length === 0) {
-        return res.status(400).json({ message: 'Parent account not found in this branch' });
-      }
-
-      // Prevent circular reference
-      let currentParentId = parent_id;
-      while (currentParentId) {
-        if (currentParentId === id) {
-          return res.status(400).json({ message: 'Circular reference detected' });
-        }
-        const [parent] = await connection.query(
-          'SELECT parent_id FROM chart_of_accounts_branch WHERE id = ? AND branch_id = ?',
-          [currentParentId, branch_id]
-        );
-        currentParentId = parent[0]?.parent_id;
-      }
-    }
-
-    // Update account
-    await connection.query(
-      `UPDATE chart_of_accounts_branch 
-       SET code = ?,
-           name = ?,
-           type = ?,
-           is_category = ?,
-           parent_id = ?,
-           updated_at = NOW()
-       WHERE id = ? AND branch_id = ?`,
-      [code, name, type, is_category, parent_id, id, branch_id]
-    );
-
-    const [updatedAccount] = await connection.query(
-      'SELECT * FROM chart_of_accounts_branch WHERE id = ?',
+    // Check if account exists
+    const [existingAccount] = await connection.query(
+      'SELECT id FROM chart_of_accounts WHERE id = ? AND deleted_at IS NULL',
       [id]
     );
 
+    if (existingAccount.length === 0) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
+
+    // Update the account
+    await connection.query(
+      `UPDATE chart_of_accounts 
+       SET name = ?, type = ?, is_category = ?, parent_id = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [name, type, is_category || false, parent_id || null, id]
+    );
+
     await connection.commit();
-    res.json({ data: updatedAccount[0] });
+
+    res.json({
+      message: 'Account updated successfully',
+      data: {
+        id: parseInt(id),
+        name,
+        type,
+        is_category: is_category || false,
+        parent_id: parent_id || null
+      }
+    });
+
   } catch (error) {
+    console.error('Error in updateAccount:', error);
     await connection.rollback();
-    console.error('Error in updateBranchAccount:', error);
     res.status(500).json({ message: 'Internal server error' });
   } finally {
     connection.release();
   }
 };
 
-// Delete a branch account
-exports.deleteBranchAccount = async (req, res) => {
+// Delete an account (soft delete)
+exports.deleteAccount = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
     await connection.beginTransaction();
     
     const { id } = req.params;
-    const branch_id = req.headers['boarding-house-id'];
-    
-    if (!branch_id) {
-      return res.status(400).json({ message: 'Boarding house ID is required' });
-    }
 
-    // Check if account exists and belongs to the branch
-    const [accounts] = await connection.query(
-      'SELECT * FROM chart_of_accounts_branch WHERE id = ? AND branch_id = ? AND deleted_at IS NULL',
-      [id, branch_id]
+    // Check if account exists
+    const [existingAccount] = await connection.query(
+      'SELECT id FROM chart_of_accounts WHERE id = ? AND deleted_at IS NULL',
+      [id]
     );
 
-    if (accounts.length === 0) {
-      return res.status(404).json({ message: 'Account not found in this branch' });
+    if (existingAccount.length === 0) {
+      return res.status(404).json({ message: 'Account not found' });
     }
 
     // Check if account has children
     const [children] = await connection.query(
-      'SELECT id FROM chart_of_accounts_branch WHERE parent_id = ? AND branch_id = ? AND deleted_at IS NULL',
-      [id, branch_id]
+      'SELECT id FROM chart_of_accounts WHERE parent_id = ? AND deleted_at IS NULL',
+      [id]
     );
 
     if (children.length > 0) {
       return res.status(400).json({ message: 'Cannot delete account with child accounts' });
     }
 
+    // Check if account is used in journal entries
+    const [journalEntries] = await connection.query(
+      'SELECT id FROM journal_entries WHERE account_id = ? AND deleted_at IS NULL',
+      [id]
+    );
+
+    if (journalEntries.length > 0) {
+      return res.status(400).json({ message: 'Cannot delete account that has journal entries' });
+    }
+
     // Soft delete the account
     await connection.query(
-      'UPDATE chart_of_accounts_branch SET deleted_at = NOW() WHERE id = ? AND branch_id = ?',
-      [id, branch_id]
+      'UPDATE chart_of_accounts SET deleted_at = NOW() WHERE id = ?',
+      [id]
     );
 
     await connection.commit();
-    res.json({ message: 'Account deleted successfully' });
+
+    res.json({
+      message: 'Account deleted successfully'
+    });
+
   } catch (error) {
+    console.error('Error in deleteAccount:', error);
     await connection.rollback();
-    console.error('Error in deleteBranchAccount:', error);
     res.status(500).json({ message: 'Internal server error' });
   } finally {
     connection.release();
   }
-}; 
+};
 
-// Get all accounts across all boarding houses
-exports.getAllAccounts = async (req, res) => {
+// Get account by ID
+exports.getAccountById = async (req, res) => {
   try {
+    const { id } = req.params;
+
     const [accounts] = await db.query(
-      `WITH RECURSIVE account_tree AS (
-        -- Base case: get all root accounts across all branches
-        SELECT 
-          coa.id,
-          coa.branch_id,
-          coa.code,
-          coa.name,
-          coa.type,
-          coa.is_category,
-          coa.parent_id,
-          1 as level,
-          CAST(coa.code AS CHAR(255)) as path,
-          bh.name as boarding_house_name,
-          bh.location as boarding_house_location
-        FROM chart_of_accounts_branch coa
-        JOIN boarding_houses bh ON coa.branch_id = bh.id
-        WHERE coa.parent_id IS NULL 
-          AND coa.deleted_at IS NULL
-          AND bh.deleted_at IS NULL
-        
-        UNION ALL
-        
-        -- Recursive case: get children
-        SELECT 
-          c.id,
-          c.branch_id,
-          c.code,
-          c.name,
-          c.type,
-          c.is_category,
-          c.parent_id,
-          p.level + 1,
-          CONCAT(p.path, ',', c.code),
-          p.boarding_house_name,
-          p.boarding_house_location
-        FROM chart_of_accounts_branch c
-        INNER JOIN account_tree p ON c.parent_id = p.id
-        WHERE c.deleted_at IS NULL
-      )
-      SELECT * FROM account_tree
-      ORDER BY branch_id, path;`
+      'SELECT * FROM chart_of_accounts WHERE id = ? AND deleted_at IS NULL',
+      [id]
     );
 
-    // Transform flat list into hierarchical structure grouped by boarding house
-    const boardingHouseMap = new Map();
+    if (accounts.length === 0) {
+      return res.status(404).json({ message: 'Account not found' });
+    }
 
-    accounts.forEach(account => {
-      const boardingHouseId = account.branch_id;
-      
-      // Initialize boarding house entry if it doesn't exist
-      if (!boardingHouseMap.has(boardingHouseId)) {
-        boardingHouseMap.set(boardingHouseId, {
-          id: boardingHouseId,
-          name: account.boarding_house_name,
-          location: account.boarding_house_location,
-          accounts: new Map(),
-          rootAccounts: []
-        });
-      }
-
-      const boardingHouse = boardingHouseMap.get(boardingHouseId);
-      
-      // Add children array to account
-      account.children = [];
-      
-      // Add account to the boarding house's account map
-      boardingHouse.accounts.set(account.id, account);
-      
-      if (account.parent_id === null) {
-        boardingHouse.rootAccounts.push(account);
-      } else {
-        const parent = boardingHouse.accounts.get(account.parent_id);
-        if (parent) {
-          parent.children.push(account);
-        }
-      }
+    res.json({
+      data: accounts[0]
     });
 
-    // Convert the map to an array and format the response
-    const result = Array.from(boardingHouseMap.values()).map(bh => ({
-      id: bh.id,
-      name: bh.name,
-      location: bh.location,
-      accounts: bh.rootAccounts
-    }));
-
-    res.json({ data: result });
   } catch (error) {
-    console.error('Error in getAllAccounts:', error);
+    console.error('Error in getAccountById:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Get accounts by type
+exports.getAccountsByType = async (req, res) => {
+  try {
+    const { type } = req.params;
+
+    const [accounts] = await db.query(
+      'SELECT * FROM chart_of_accounts WHERE type = ? AND deleted_at IS NULL ORDER BY code',
+      [type]
+    );
+
+    res.json({
+      data: accounts
+    });
+
+  } catch (error) {
+    console.error('Error in getAccountsByType:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 }; 

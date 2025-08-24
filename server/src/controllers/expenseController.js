@@ -57,11 +57,11 @@ exports.recordExpense = async (req, res) => {
 
     // Verify expense account exists and is of type 'Expense'
     const [accounts] = await connection.query(
-      `SELECT * FROM chart_of_accounts_branch 
+      `SELECT * FROM chart_of_accounts 
        WHERE id = ? 
          AND type = 'Expense'
-         AND branch_id = ?`,
-      [expense_account_id, boardingHouseId]
+         AND deleted_at IS NULL`,
+      [expense_account_id]
     );
 
     if (accounts.length === 0) {
@@ -107,7 +107,7 @@ exports.recordExpense = async (req, res) => {
         creditAccountCode = '10002'; // Cash on Hand
         break;
       case 'bank_transfer':
-        creditAccountCode = '10003'; // Bank Account
+        creditAccountCode = '10003'; // CBZ Bank Account
         break;
       case 'petty_cash':
         creditAccountCode = '10001'; // Petty Cash
@@ -122,11 +122,10 @@ exports.recordExpense = async (req, res) => {
 
     // Get credit account ID
     const [creditAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts_branch 
+      `SELECT id FROM chart_of_accounts 
        WHERE code = ? 
-         AND branch_id = ?
          AND deleted_at IS NULL`,
-      [creditAccountCode, boardingHouseId]
+      [creditAccountCode]
     );
 
     if (creditAccounts.length === 0) {
@@ -251,6 +250,28 @@ exports.recordExpense = async (req, res) => {
       ]
     );
 
+    // If payment is made from petty cash, update petty cash account
+    if (payment_method === 'petty_cash') {
+      // Create petty cash transaction record
+      await connection.query(
+        `INSERT INTO petty_cash_transactions 
+         (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+         VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, NOW())`,
+        [boardingHouseId, expenseAmount, description, reference_number || `EXP-${Date.now()}`, notes, expense_date, userId]
+      );
+      
+      // Update petty cash account balance
+      await connection.query(
+        `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_outflows, created_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance - ?,
+         total_outflows = total_outflows + ?,
+         updated_at = NOW()`,
+        [boardingHouseId, expenseAmount, expenseAmount, expenseAmount, expenseAmount]
+      );
+    }
+
     await connection.commit();
     res.status(201).json({ 
       message: 'Expense recorded successfully',
@@ -332,11 +353,11 @@ exports.updateExpense = async (req, res) => {
 
     // Verify expense account exists and is of type 'Expense'
     const [accounts] = await connection.query(
-      `SELECT * FROM chart_of_accounts_branch 
+      `SELECT * FROM chart_of_accounts 
        WHERE id = ? 
          AND type = 'Expense'
-         AND branch_id = ?`,
-      [expense_account_id, boardingHouseId]
+         AND deleted_at IS NULL`,
+      [expense_account_id]
     );
 
     if (accounts.length === 0) {
@@ -361,11 +382,10 @@ exports.updateExpense = async (req, res) => {
 
     // Get credit account ID
     const [creditAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts_branch 
+      `SELECT id FROM chart_of_accounts 
        WHERE code = ? 
-         AND branch_id = ?
          AND deleted_at IS NULL`,
-      [creditAccountCode, boardingHouseId]
+      [creditAccountCode]
     );
 
     if (creditAccounts.length === 0) {
@@ -470,6 +490,96 @@ exports.updateExpense = async (req, res) => {
         userId
       ]
     );
+
+    // Handle petty cash integration for expense updates
+    const oldPaymentMethod = expense.payment_method;
+    const oldAmount = parseFloat(expense.amount);
+    
+    // If payment method changed to petty cash, add to petty cash transactions
+    if (payment_method === 'petty_cash' && oldPaymentMethod !== 'petty_cash') {
+      // Create petty cash transaction record
+      await connection.query(
+        `INSERT INTO petty_cash_transactions 
+         (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+         VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, NOW())`,
+        [boardingHouseId, expenseAmount, description, reference_number || `EXP-${Date.now()}`, notes, expense_date, userId]
+      );
+      
+      // Update petty cash account balance
+      await connection.query(
+        `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_outflows, created_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance - ?,
+         total_outflows = total_outflows + ?,
+         updated_at = NOW()`,
+        [boardingHouseId, expenseAmount, expenseAmount, expenseAmount, expenseAmount]
+      );
+    }
+    // If payment method changed from petty cash to something else, reverse the petty cash transaction
+    else if (oldPaymentMethod === 'petty_cash' && payment_method !== 'petty_cash') {
+      // Create reversal petty cash transaction record
+      await connection.query(
+        `INSERT INTO petty_cash_transactions 
+         (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+         VALUES (?, 'cash_inflow', ?, ?, ?, ?, ?, ?, NOW())`,
+        [boardingHouseId, oldAmount, `Reversal - ${description}`, reference_number || `EXP-${Date.now()}`, `Reversal of expense payment method change`, expense_date, userId]
+      );
+      
+      // Update petty cash account balance (add back the amount)
+      await connection.query(
+        `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance + ?,
+         total_inflows = total_inflows + ?,
+         updated_at = NOW()`,
+        [boardingHouseId, oldAmount, oldAmount, oldAmount, oldAmount]
+      );
+    }
+    // If payment method is still petty cash but amount changed
+    else if (payment_method === 'petty_cash' && oldPaymentMethod === 'petty_cash' && oldAmount !== expenseAmount) {
+      const amountDifference = expenseAmount - oldAmount;
+      
+      if (amountDifference > 0) {
+        // Additional amount needed from petty cash
+        await connection.query(
+          `INSERT INTO petty_cash_transactions 
+           (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+           VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, NOW())`,
+          [boardingHouseId, amountDifference, `Additional - ${description}`, reference_number || `EXP-${Date.now()}`, `Additional expense amount`, expense_date, userId]
+        );
+        
+        await connection.query(
+          `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_outflows, created_at)
+           VALUES (?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE 
+           current_balance = current_balance - ?,
+           total_outflows = total_outflows + ?,
+           updated_at = NOW()`,
+          [boardingHouseId, amountDifference, amountDifference, amountDifference, amountDifference]
+        );
+      } else if (amountDifference < 0) {
+        // Amount reduced, add back to petty cash
+        const refundAmount = Math.abs(amountDifference);
+        await connection.query(
+          `INSERT INTO petty_cash_transactions 
+           (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+           VALUES (?, 'cash_inflow', ?, ?, ?, ?, ?, ?, NOW())`,
+          [boardingHouseId, refundAmount, `Refund - ${description}`, reference_number || `EXP-${Date.now()}`, `Refund of reduced expense amount`, expense_date, userId]
+        );
+        
+        await connection.query(
+          `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
+           VALUES (?, ?, ?, NOW())
+           ON DUPLICATE KEY UPDATE 
+           current_balance = current_balance + ?,
+           total_inflows = total_inflows + ?,
+           updated_at = NOW()`,
+          [boardingHouseId, refundAmount, refundAmount, refundAmount, refundAmount]
+        );
+      }
+    }
 
     await connection.commit();
     res.json({ message: 'Expense updated successfully' });

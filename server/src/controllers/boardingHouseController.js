@@ -177,66 +177,11 @@ exports.getAvailableAdmins = async (req, res) => {
 };
 
 // Helper function to create predefined chart of accounts for a boarding house
-const createPredefinedChartOfAccounts = async (connection, boarding_house_id, created_by) => {
-  const predefinedAccounts = [
-    // Assets
-    { code: '10001', name: 'Petty Cash', type: 'Asset' },
-    { code: '10002', name: 'Cash', type: 'Asset' },
-    { code: '10003', name: 'Bank', type: 'Asset' },
-    { code: '10004', name: 'Account Receivables', type: 'Asset' },
-    
-    // Liabilities
-    { code: '20001', name: 'Account Payables', type: 'Liability' },
-    
-    // Revenue
-    { code: '40001', name: 'Rentals Income', type: 'Revenue' },
-    { code: '40002', name: 'Other income', type: 'Revenue' },
-    
-    // Expenses
-    { code: '5000', name: 'Repairs and Maintenance', type: 'Expense' },
-    { code: '5001', name: 'Utilities - Water', type: 'Expense' },
-    { code: '5002', name: 'Utilities - Electricity', type: 'Expense' },
-    { code: '5004', name: 'Bulk water', type: 'Expense' },
-    { code: '5005', name: 'Car running', type: 'Expense' },
-    { code: '5006', name: 'Car maintance and repair', type: 'Expense' },
-    { code: '5007', name: 'Gas filling', type: 'Expense' },
-    { code: '5008', name: 'Communication cost', type: 'Expense' },
-    { code: '5009', name: 'Sanitary', type: 'Expense' },
-    { code: '5010', name: 'House keeping', type: 'Expense' },
-    { code: '5011', name: 'Security Costs', type: 'Expense' },
-    { code: '5012', name: 'Property Management Salaries', type: 'Expense' },
-    { code: '5013', name: 'Administrative Expenses', type: 'Expense' },
-    { code: '5014', name: 'Marketing Expenses', type: 'Expense' },
-    { code: '5015', name: 'Staff Salaries & Wages', type: 'Expense' },
-    { code: '5016', name: 'Staff Welfare', type: 'Expense' },
-    { code: '5017', name: 'Depreciation - Buildings', type: 'Expense' },
-    { code: '5018', name: 'Professional Fees (Legal, Audit)', type: 'Expense' },
-    { code: '5019', name: 'Waste management', type: 'Expense' },
-    { code: '5020', name: 'Medical aid', type: 'Expense' },
-    { code: '5021', name: 'Advertising', type: 'Expense' },
-    { code: '5022', name: 'Family expenses', type: 'Expense' },
-    { code: '5023', name: 'House association fees', type: 'Expense' },
-    { code: '5024', name: 'Licenses', type: 'Expense' },
-    { code: '5025', name: 'Depreciation - Motor Vehicles', type: 'Expense' }
-  ];
-
-  for (const account of predefinedAccounts) {
-    // Check if account already exists for this boarding house
-    const [existing] = await connection.query(
-      'SELECT id FROM chart_of_accounts_branch WHERE code = ? AND branch_id = ? AND deleted_at IS NULL',
-      [account.code, boarding_house_id]
-    );
-
-    if (existing.length === 0) {
-      await connection.query(
-        `INSERT INTO chart_of_accounts_branch 
-         (code, name, type, is_category, branch_id, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, false, ?, ?, NOW(), NOW())`,
-        [account.code, account.name, account.type, boarding_house_id, created_by]
-      );
-    }
-  }
-};
+// Note: This function is no longer needed since we now use a global chart of accounts
+// const createPredefinedChartOfAccounts = async (connection, boarding_house_id, created_by) => {
+//   // This function has been removed since we now use a global chart of accounts
+//   // The chart of accounts is created once and shared across all boarding houses
+// };
 
 // Function to update existing boarding houses with predefined chart of accounts
 exports.updateExistingBoardingHouses = async (req, res) => {

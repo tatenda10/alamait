@@ -8,7 +8,10 @@ import {
   FiDownload,
   FiRefreshCw,
   FiEdit2,
-  FiX
+  FiX,
+  FiDollarSign,
+  FiTrendingUp,
+  FiTrendingDown
 } from 'react-icons/fi';
 import BASE_URL from '../../context/Api';
 
@@ -39,6 +42,8 @@ const AccountTransactions = () => {
   });
   const [editLoading, setEditLoading] = useState(false);
   const [accounts, setAccounts] = useState([]);
+  const [accountBalance, setAccountBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   // Parse URL parameters on component mount
   useEffect(() => {
@@ -54,6 +59,34 @@ const AccountTransactions = () => {
       }));
     }
   }, [location.search]);
+
+  // Fetch account balance
+  const fetchAccountBalance = async () => {
+    if (!accountId || !token) return;
+    
+    setBalanceLoading(true);
+    try {
+      const response = await axios.get(`${BASE_URL}/reconciliation/balances`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const currentAccount = response.data.data.find(acc => acc.account_id == accountId);
+      if (currentAccount) {
+        setAccountBalance({
+          current_balance: currentAccount.current_balance,
+          total_debits: currentAccount.total_debits,
+          total_credits: currentAccount.total_credits,
+          last_transaction_date: currentAccount.last_transaction_date
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching account balance:', error);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
 
   // Fetch accounts for dropdown
   const fetchAccounts = async () => {
@@ -86,7 +119,7 @@ const AccountTransactions = () => {
       console.error('Error fetching accounts:', error);
       // Try alternative endpoint
       try {
-        const response = await axios.get(`${BASE_URL}/coa/all`, {
+        const response = await axios.get(`${BASE_URL}/coa`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -159,6 +192,7 @@ const AccountTransactions = () => {
 
   useEffect(() => {
     fetchTransactions();
+    fetchAccountBalance();
   }, [accountId, filters]);
 
   const handleFilterChange = (field, value) => {
@@ -488,6 +522,35 @@ const AccountTransactions = () => {
         </div>
       </div>
 
+      {/* Account Balance Summary */}
+      {account && (
+        <div className="bg-white border-b border-gray-200">
+          <div className="px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-gray-700">Current Balance:</span>
+                {balanceLoading ? (
+                  <span className="text-lg font-bold text-blue-600">Loading...</span>
+                ) : (
+                  <span className="text-lg font-bold text-blue-600">
+                    {accountBalance ? formatCurrency(accountBalance.current_balance) : 'N/A'}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={fetchAccountBalance}
+                disabled={balanceLoading}
+                className="flex items-center gap-2 px-3 py-1 text-xs text-white border border-gray-200 disabled:opacity-50"
+                style={{ backgroundColor: balanceLoading ? '#9CA3AF' : '#E78D69' }}
+              >
+                <FiRefreshCw size={12} className={balanceLoading ? 'animate-spin' : ''} />
+                Refresh Balance
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <div className="p-6">
         {error && (
@@ -512,6 +575,7 @@ const AccountTransactions = () => {
                       <th className="px-6 py-3 text-left">Description</th>
                       <th className="px-6 py-3 text-right">Debit</th>
                       <th className="px-6 py-3 text-right">Credit</th>
+                      <th className="px-6 py-3 text-right">Running Balance</th>
                       <th className="px-6 py-3 text-center">Status</th>
                       <th className="px-6 py-3 text-center">Actions</th>
                     </tr>
@@ -519,7 +583,7 @@ const AccountTransactions = () => {
                   <tbody className="divide-y divide-gray-200">
                     {transactions.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500 text-xs">
+                        <td colSpan="8" className="px-6 py-12 text-center text-gray-500 text-xs">
                           No transactions found for this account
                         </td>
                       </tr>
@@ -541,6 +605,13 @@ const AccountTransactions = () => {
                           </td>
                           <td className="px-6 py-3 text-right">
                             {transaction.credit > 0 ? formatCurrency(transaction.credit) : '-'}
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            <span className={`font-medium ${
+                              transaction.running_balance >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {formatCurrency(transaction.running_balance)}
+                            </span>
                           </td>
                           <td className="px-6 py-3 text-center">
                             <span className={`inline-flex px-2 py-1 text-xs ${

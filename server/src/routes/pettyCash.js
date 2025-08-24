@@ -1,31 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const pettyCashController = require('../controllers/pettyCashController');
 const { authenticate } = require('../middleware/auth');
+const pettyCashController = require('../controllers/pettyCashController');
 
-// Apply authentication middleware to all routes
-router.use(authenticate);
+// Get petty cash account data
+router.get('/account', authenticate, pettyCashController.getPettyCashAccount);
 
-// Petty Cash Account Management
-router.post('/accounts', pettyCashController.createPettyCashAccount);
-router.get('/accounts', pettyCashController.getPettyCashAccounts);
-router.get('/accounts/:accountId', pettyCashController.getPettyCashAccountById);
-router.get('/accounts/:accountId/transactions', pettyCashController.getPettyCashAccountTransactions);
+// Add cash to petty cash account
+router.post('/add-cash', authenticate, pettyCashController.addCash);
 
-// Cash Issuance
-router.post('/issuance', pettyCashController.issueCash);
+// Withdraw cash from petty cash account
+router.post('/withdraw-cash', authenticate, pettyCashController.withdrawCash);
 
-// Expense Recording
-router.post('/expenses', 
-  pettyCashController.uploadReceipt, 
-  pettyCashController.recordExpense
-);
+// Add expense from petty cash account
+router.post('/add-expense', authenticate, pettyCashController.addExpense);
 
-// Ledger and Reports
-router.get('/ledger/:accountId', pettyCashController.getPettyCashLedger);
-
-// Reconciliation
-router.post('/reconciliation', pettyCashController.createReconciliation);
-router.get('/reconciliation/reports', pettyCashController.getReconciliationReports);
+// Set beginning balance for petty cash account
+router.post('/set-beginning-balance', authenticate, pettyCashController.setBeginningBalance);
 
 module.exports = router;

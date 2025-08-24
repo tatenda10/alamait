@@ -154,28 +154,23 @@ const COA = () => {
   const { token } = useAuth();
   const navigate = useNavigate();
   
-  const [boardingHouses, setBoardingHouses] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [openModal, setOpenModal] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedBoardingHouse, setSelectedBoardingHouse] = useState(null);
 
   // Fetch accounts
   const fetchAccounts = async () => {
     try {
-      const response = await axios.get(`${BASE_URL}/coa/all`, {
+      const response = await axios.get(`${BASE_URL}/coa`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      setBoardingHouses(response.data.data);
-      // Set first boarding house as selected by default
-      if (response.data.data.length > 0 && !selectedBoardingHouse) {
-        setSelectedBoardingHouse(response.data.data[0].id);
-      }
+      setAccounts(response.data.data);
       setError('');
     } catch (error) {
       console.error('Error fetching accounts:', error);
@@ -321,49 +316,20 @@ const COA = () => {
     });
   };
 
-  // Get current boarding house data
-  const currentBoardingHouse = boardingHouses.find(bh => bh.id === selectedBoardingHouse);
-  const currentAccounts = currentBoardingHouse?.accounts || [];
-  const filteredAccounts = filterAccounts(currentAccounts, searchTerm);
+  // Filter accounts based on search term
+  const filteredAccounts = filterAccounts(accounts, searchTerm);
 
   return (
     <div className="bg-gray-50 min-h-screen p-6">
       {/* Header Section */}
       <div className="mb-8">
         <h1 className="text-xl font-semibold text-gray-800 mb-2">Chart of Accounts</h1>
-        <p className="text-xs text-gray-500">Manage your organization's chart of accounts</p>
+        <p className="text-xs text-gray-500">Manage your organization's global chart of accounts</p>
       </div>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm">
           {error}
-        </div>
-      )}
-
-      {/* Boarding House Selection */}
-      {boardingHouses.length > 0 && (
-        <div className="bg-white p-4 mb-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-medium text-gray-700">
-                {currentBoardingHouse?.name}
-              </h2>
-              <p className="text-xs text-gray-500">
-                Location: {currentBoardingHouse?.location}
-              </p>
-            </div>
-            <select
-              className="text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              value={selectedBoardingHouse || ''}
-              onChange={(e) => setSelectedBoardingHouse(Number(e.target.value))}
-            >
-              {boardingHouses.map(bh => (
-                <option key={bh.id} value={bh.id}>
-                  {bh.name} - {bh.location}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       )}
 
@@ -453,7 +419,7 @@ const COA = () => {
         }}
         onSubmit={handleSubmit}
         selectedAccount={selectedAccount}
-        accounts={currentAccounts}
+        accounts={accounts}
       />
 
 

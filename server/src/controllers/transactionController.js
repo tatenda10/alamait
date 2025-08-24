@@ -305,9 +305,8 @@ exports.getAccountTransactions = async (req, res) => {
 
     // Verify account exists
     const [accountCheck] = await db.query(
-      `SELECT coa.*, b.name as boarding_house_name 
-       FROM chart_of_accounts_branch coa
-       LEFT JOIN boarding_houses b ON coa.branch_id = b.id
+      `SELECT coa.*
+       FROM chart_of_accounts coa
        WHERE coa.id = ? AND coa.deleted_at IS NULL`,
       [accountId]
     );
@@ -319,7 +318,7 @@ exports.getAccountTransactions = async (req, res) => {
     const account = accountCheck[0];
 
     // Build query conditions
-    let whereConditions = ['je.account_id = ?', 't.deleted_at IS NULL'];
+    let whereConditions = ['je.account_id = ?', 't.deleted_at IS NULL', 't.status = "posted"'];
     let queryParams = [accountId];
 
     if (boarding_house_id) {
@@ -332,7 +331,7 @@ exports.getAccountTransactions = async (req, res) => {
       queryParams.push(start_date, end_date);
     }
 
-    // Get transactions with journal entries
+    // Get transactions with journal entries (ordered by date ASC for proper balance calculation)
     const [transactions] = await db.query(
       `SELECT 
         t.id as transaction_id,
@@ -353,10 +352,12 @@ exports.getAccountTransactions = async (req, res) => {
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN boarding_houses bh ON t.boarding_house_id = bh.id
       WHERE ${whereConditions.join(' AND ')}
-      ORDER BY t.transaction_date DESC, t.id DESC
+      ORDER BY t.transaction_date ASC, t.id ASC
       LIMIT ? OFFSET ?`,
       [...queryParams, parseInt(limit), parseInt(offset)]
     );
+
+    console.log('Raw transactions data:', transactions);
 
     // Get total count for pagination
     const [countResult] = await db.query(
@@ -367,11 +368,17 @@ exports.getAccountTransactions = async (req, res) => {
       queryParams
     );
 
-    // Calculate running balance
+    console.log('Account type:', account.type);
+    console.log('Total transactions found:', countResult[0].total);
+
+    // Calculate running balance from oldest to newest
     let runningBalance = 0;
     const transactionsWithBalance = transactions.map(transaction => {
-      const amount = transaction.amount || 0;
+      // Ensure amount is a valid number
+      const amount = parseFloat(transaction.amount) || 0;
       const isDebit = transaction.entry_type === 'debit';
+      
+      console.log(`Transaction ${transaction.transaction_id}: amount=${transaction.amount}, parsed=${amount}, entry_type=${transaction.entry_type}, isDebit=${isDebit}`);
       
       // For Asset and Expense accounts: debit increases, credit decreases
       // For Liability, Equity, Revenue accounts: credit increases, debit decreases
@@ -381,6 +388,11 @@ exports.getAccountTransactions = async (req, res) => {
         runningBalance += isDebit ? -amount : amount;
       }
 
+      // Ensure running balance is a valid number
+      runningBalance = parseFloat(runningBalance.toFixed(2));
+      
+      console.log(`Running balance after transaction ${transaction.transaction_id}: ${runningBalance}`);
+
       return {
         ...transaction,
         debit: isDebit ? amount : 0,
@@ -388,6 +400,9 @@ exports.getAccountTransactions = async (req, res) => {
         running_balance: runningBalance
       };
     });
+
+    // Reverse the order back to newest first for display
+    const reversedTransactions = transactionsWithBalance.reverse();
 
     res.json({
       account: {
@@ -397,7 +412,7 @@ exports.getAccountTransactions = async (req, res) => {
         type: account.type,
         boarding_house_name: account.boarding_house_name
       },
-      transactions: transactionsWithBalance,
+      transactions: reversedTransactions,
       pagination: {
         total: countResult[0].total,
         limit: parseInt(limit),

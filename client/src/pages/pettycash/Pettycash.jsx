@@ -2,14 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FaPlus, 
-  FaEdit,
-  FaTrash,
-  FaEye,
-  FaUser,
-  FaTimes,
-  FaCheck,
-  FaFileAlt,
-  FaDollarSign
+  FaDollarSign,
+  FaCalendarAlt,
+  FaArrowUp,
+  FaArrowDown
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -17,245 +13,212 @@ import BASE_URL from '../../context/Api';
 
 const PettyCash = () => {
   const navigate = useNavigate();
-  const [pettyCashUsers, setPettyCashUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showIssueCashModal, setShowIssueCashModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-
-  // Form state for creating/editing petty cash users
-  const [userForm, setUserForm] = useState({
-    username: '',
-    full_name: '',
-    email: '',
-    password: '',
-    phone: '',
-    initial_balance: 0,
-    monthly_limit: 1000,
-    status: 'active'
+  const [showAddCashModal, setShowAddCashModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedBoardingHouse, setSelectedBoardingHouse] = useState('');
+  const [boardingHouses, setBoardingHouses] = useState([]);
+  
+  // Petty cash data
+  const [pettyCashData, setPettyCashData] = useState({
+    current_balance: 0,
+    beginning_balance: 0,
+    total_inflows: 0,
+    total_outflows: 0,
+    transactions: []
   });
 
-  // Form state for cash issuance
-  const [issuanceForm, setIssuanceForm] = useState({
+  // Form states
+  const [addCashForm, setAddCashForm] = useState({
     amount: '',
-    description: 'Cash replenishment',
+    description: '',
+    reference_number: '',
+    notes: ''
+  });
+
+  const [withdrawForm, setWithdrawForm] = useState({
+    amount: '',
+    purpose: '',
     reference_number: '',
     notes: ''
   });
 
   useEffect(() => {
-    fetchPettyCashUsers();
+    fetchBoardingHouses();
   }, []);
 
-  const fetchPettyCashUsers = async () => {
+  useEffect(() => {
+    if (selectedBoardingHouse) {
+      fetchPettyCashData();
+    }
+  }, [selectedBoardingHouse]);
+
+  const fetchBoardingHouses = async () => {
     try {
       const token = localStorage.getItem('token');
-      
-      const response = await axios.get(`${BASE_URL}/petty-cash-admin/users`, {
+      const response = await axios.get(`${BASE_URL}/boarding-houses`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
-      const usersData = response.data?.users || response.data || [];
-      setPettyCashUsers(Array.isArray(usersData) ? usersData : []);
+      setBoardingHouses(response.data);
+      // Set the first boarding house as default if available
+      if (response.data.length > 0) {
+        setSelectedBoardingHouse(response.data[0].id);
+      }
     } catch (error) {
-      console.error('Error fetching petty cash users:', error);
-      toast.error('Failed to fetch petty cash users');
-      setPettyCashUsers([]);
+      console.error('Error fetching boarding houses:', error);
+      toast.error('Failed to fetch boarding houses');
+    }
+  };
+
+  const fetchPettyCashData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`${BASE_URL}/petty-cash/account`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'boarding-house-id': selectedBoardingHouse
+        }
+      });
+      
+      setPettyCashData(response.data || {
+        current_balance: 0,
+        beginning_balance: 0,
+        total_inflows: 0,
+        total_outflows: 0,
+        transactions: []
+      });
+    } catch (error) {
+      console.error('Error fetching petty cash data:', error);
+      toast.error('Failed to fetch petty cash data');
     } finally {
       setLoading(false);
     }
   };
 
-  // Generate random 6-digit employee ID
-  const generateEmployeeId = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
-  // Generate random department
-  const generateDepartment = () => {
-    const departments = ['Finance', 'HR', 'IT', 'Operations', 'Marketing', 'Sales', 'Admin', 'Maintenance'];
-    return departments[Math.floor(Math.random() * departments.length)];
-  };
-
-  const handleCreateUser = async (e) => {
+  const handleAddCash = async (e) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
       
-      // Add random employee ID to the form data
-      const userData = {
-        ...userForm,
-        employee_id: generateEmployeeId(),
-        department: generateDepartment(),
-        boarding_house_id: localStorage.getItem('boarding_house_id')
+      const cashData = {
+        amount: parseFloat(addCashForm.amount),
+        description: addCashForm.description,
+        reference_number: addCashForm.reference_number,
+        notes: addCashForm.notes
       };
       
-      await axios.post(`${BASE_URL}/petty-cash-admin/register`, userData, {
+      await axios.post(`${BASE_URL}/petty-cash/add-cash`, cashData, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'boarding-house-id': selectedBoardingHouse,
           'Content-Type': 'application/json'
         }
       });
       
-      toast.success('Petty cash user created successfully');
-      setShowCreateModal(false);
-      resetForm();
-      fetchPettyCashUsers();
+      toast.success('Cash added successfully');
+      setShowAddCashModal(false);
+      resetAddCashForm();
+      fetchPettyCashData();
     } catch (error) {
-      console.error('Error creating user:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to create petty cash user';
+      console.error('Error adding cash:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to add cash';
       toast.error(errorMessage);
     }
   };
 
-  const handleEditUser = async (e) => {
+  const handleWithdrawCash = async (e) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
       
-      // Add employee ID if not present (for existing users)
-      const userData = {
-        ...userForm,
-        employee_id: userForm.employee_id || generateEmployeeId(),
-        department: userForm.department || generateDepartment()
+      const withdrawData = {
+        amount: parseFloat(withdrawForm.amount),
+        purpose: withdrawForm.purpose,
+        reference_number: withdrawForm.reference_number,
+        notes: withdrawForm.notes
       };
       
-      await axios.put(`${BASE_URL}/petty-cash-admin/users/${selectedUser.id}`, userData, {
+      await axios.post(`${BASE_URL}/petty-cash/withdraw-cash`, withdrawData, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'boarding-house-id': selectedBoardingHouse,
           'Content-Type': 'application/json'
         }
       });
       
-      toast.success('Petty cash user updated successfully');
-      setShowEditModal(false);
-      resetForm();
-      fetchPettyCashUsers();
+      toast.success('Cash withdrawn successfully');
+      setShowWithdrawModal(false);
+      resetWithdrawForm();
+      fetchPettyCashData();
     } catch (error) {
-      console.error('Error updating user:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to update petty cash user';
+      console.error('Error withdrawing cash:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to withdraw cash';
       toast.error(errorMessage);
     }
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this petty cash user?')) {
-      return;
-    }
 
-    try {
-      const token = localStorage.getItem('token');
-      
-      await axios.delete(`${BASE_URL}/petty-cash-admin/users/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      toast.success('Petty cash user deleted successfully');
-      fetchPettyCashUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to delete petty cash user';
-      toast.error(errorMessage);
-    }
-  };
 
-  const handleIssueCash = async (e) => {
-    e.preventDefault();
-    try {
-      const token = localStorage.getItem('token');
-      
-      const issuanceData = {
-        amount: parseFloat(issuanceForm.amount),
-        purpose: issuanceForm.description,
-        reference_number: issuanceForm.reference_number,
-        notes: issuanceForm.notes
-      };
-      
-      // Create replenishment transaction for the selected user
-      await axios.post(`${BASE_URL}/petty-cash-admin/users/${selectedUser.id}/issue-cash`, issuanceData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      toast.success('Cash issued successfully');
-      setShowIssueCashModal(false);
-      resetIssuanceForm();
-      fetchPettyCashUsers();
-    } catch (error) {
-      console.error('Error issuing cash:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to issue cash';
-      toast.error(errorMessage);
-    }
-  };
-
-  const resetForm = () => {
-    setUserForm({
-      username: '',
-      full_name: '',
-      email: '',
-      password: '',
-      department: '',
-      phone: '',
-      initial_balance: 0,
-      monthly_limit: 1000,
-      status: 'active'
-    });
-    setSelectedUser(null);
-  };
-
-  const resetIssuanceForm = () => {
-    setIssuanceForm({
+  const resetAddCashForm = () => {
+    setAddCashForm({
       amount: '',
-      description: 'Cash replenishment',
+      description: '',
       reference_number: '',
       notes: ''
     });
   };
 
-  const openIssueCashModal = (user) => {
-    setSelectedUser(user);
-    resetIssuanceForm();
-    setShowIssueCashModal(true);
-  };
-
-  const openEditModal = (user) => {
-    setSelectedUser(user);
-    setUserForm({
-      username: user.username,
-      full_name: user.full_name,
-      email: user.email,
-      password: '',
-      department: user.department,
-      phone: user.phone,
-      initial_balance: user.current_balance || 0,
-      monthly_limit: user.monthly_limit || 1000,
-      status: user.status || 'active'
+  const resetWithdrawForm = () => {
+    setWithdrawForm({
+      amount: '',
+      purpose: '',
+      reference_number: '',
+      notes: ''
     });
-    setShowEditModal(true);
   };
 
-  const getStatusBadge = (status) => {
-    const statusColors = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-red-100 text-red-800',
-      suspended: 'bg-yellow-100 text-yellow-800'
-    };
-    
-    return (
-      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusColors[status] || 'bg-gray-100 text-gray-800'}`}>
-        {status || 'active'}
-      </span>
-    );
+
+
+  const getTransactionIcon = (type) => {
+    switch (type) {
+      case 'cash_inflow':
+      case 'student_payment':
+        return <FaArrowUp className="text-green-500" />;
+      case 'cash_outflow':
+      case 'withdrawal':
+      case 'expense':
+        return <FaArrowDown className="text-red-500" />;
+      default:
+        return <FaDollarSign className="text-gray-500" />;
+    }
   };
 
-  if (loading) {
+  const getTransactionColor = (type) => {
+    switch (type) {
+      case 'cash_inflow':
+      case 'student_payment':
+        return 'text-green-600';
+      case 'cash_outflow':
+      case 'withdrawal':
+      case 'expense':
+        return 'text-red-600';
+      default:
+        return 'text-gray-600';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  if (loading || !selectedBoardingHouse) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500"></div>
@@ -268,562 +231,297 @@ const PettyCash = () => {
       {/* Header Section */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-xl font-semibold text-gray-800 mb-2">Petty Cash Users</h1>
-          <p className="text-xs text-gray-500">Manage petty cash user accounts and permissions</p>
+          <h1 className="text-xl font-semibold text-gray-800 mb-2">Petty Cash Management</h1>
+          <p className="text-xs text-gray-500">Track cash inflows and outflows for this boarding house</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center px-4 py-2 text-xs text-white transition-colors"
-          style={{ backgroundColor: '#E78D69' }}
-        >
-          <FaPlus size={14} className="mr-2" />
-          Create User
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setShowAddCashModal(true)}
+            className="flex items-center px-4 py-2 text-xs text-white transition-colors"
+            style={{ backgroundColor: '#E78D69' }}
+          >
+            <FaPlus size={14} className="mr-2" />
+            Add Cash
+          </button>
+          <button
+            onClick={() => setShowWithdrawModal(true)}
+            className="flex items-center px-4 py-2 text-xs bg-red-600 text-white transition-colors hover:bg-red-700"
+          >
+            <FaArrowDown size={14} className="mr-2" />
+            Withdraw
+          </button>
+        </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white border border-gray-200">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-               <tr className="text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-200">
-                 <th className="px-6 py-3 text-left">Name</th>
-                 <th className="px-6 py-3 text-right">Current Balance</th>
-                 <th className="px-6 py-3 text-center">Status</th>
-                 <th className="px-6 py-3 text-right">Actions</th>
-               </tr>
-             </thead>
-            <tbody>
-              {pettyCashUsers.map((user) => (
-                <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="text-xs font-medium text-gray-800">{user.full_name}</div>
-                  </td>
+      {/* Boarding House Filter */}
+      <div className="bg-white border border-gray-200 p-4 mb-6">
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Select Boarding House
+            </label>
+            <select
+              value={selectedBoardingHouse}
+              onChange={(e) => setSelectedBoardingHouse(e.target.value)}
+              className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Select Boarding House</option>
+              {boardingHouses.map(house => (
+                <option key={house.id} value={house.id}>
+                  {house.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
-                   <td className="px-6 py-4 text-right">
-                    <div className="text-xs font-medium text-gray-800">
-                      ${parseFloat(user.current_balance || 0).toFixed(2)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {getStatusBadge(user.status)}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openIssueCashModal(user)}
-                        className="text-xs text-orange-600 hover:text-orange-800 px-2 py-1"
-                        title="Issue Cash"
-                      >
-                        <FaDollarSign size={12} />
-                      </button>
-                      <button
-                        onClick={() => navigate(`/dashboard/petty-cash/reconciliation/${user.id}`)}
-                        className="text-xs text-purple-600 hover:text-purple-800 px-2 py-1"
-                        title="View Reconciliation"
-                      >
-                        <FaFileAlt size={12} />
-                      </button>
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1"
-                        title="Edit User"
-                      >
-                        <FaEdit size={12} />
-                      </button>
-                      <button
-                        onClick={() => navigate(`/dashboard/petty-cash/user/${user.id}`)}
-                        className="text-xs text-green-600 hover:text-green-800 px-2 py-1"
-                        title="View Details"
-                      >
-                        <FaEye size={12} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="text-xs text-red-600 hover:text-red-800 px-2 py-1"
-                        title="Delete User"
-                      >
-                        <FaTrash size={12} />
-                      </button>
-                    </div>
+      {/* Balance Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-600">Current Balance</p>
+              <p className="text-lg font-bold text-gray-900">${pettyCashData.current_balance?.toFixed(2) || '0.00'}</p>
+            </div>
+            <FaDollarSign className="h-5 w-5 text-green-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-600">Beginning Balance (BD)</p>
+              <p className="text-lg font-bold text-gray-900">${pettyCashData.beginning_balance?.toFixed(2) || '0.00'}</p>
+            </div>
+            <FaCalendarAlt className="h-5 w-5 text-blue-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-600">Total Inflows</p>
+              <p className="text-lg font-bold text-green-600">${pettyCashData.total_inflows?.toFixed(2) || '0.00'}</p>
+            </div>
+            <FaArrowUp className="h-5 w-5 text-green-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-600">Total Outflows</p>
+              <p className="text-lg font-bold text-red-600">${pettyCashData.total_outflows?.toFixed(2) || '0.00'}</p>
+            </div>
+            <FaArrowDown className="h-5 w-5 text-red-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* Transactions Table */}
+      <div className="bg-white border border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-800">Recent Transactions</h2>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {pettyCashData.transactions?.length > 0 ? (
+                pettyCashData.transactions.map((transaction, index) => (
+                  <tr key={transaction.id || index} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        {getTransactionIcon(transaction.transaction_type)}
+                        <span className="ml-2 text-sm font-medium text-gray-900 capitalize">
+                          {transaction.transaction_type?.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(transaction.transaction_date)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {transaction.description}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {transaction.reference_number}
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${getTransactionColor(transaction.transaction_type)}`}>
+                      ${Math.abs(transaction.amount).toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                      ${transaction.running_balance?.toFixed(2) || '0.00'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
+                    No transactions found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
-
-        {pettyCashUsers.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-xs text-gray-500 mb-4">No petty cash users found</div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="text-xs text-white px-4 py-2 transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
-            >
-              Create Your First User
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Create User Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-2xl p-6 max-h-screen overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">Create Petty Cash User</h2>
-              <button 
-                onClick={() => {
-                  setShowCreateModal(false);
-                  resetForm();
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <FaTimes size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Username*</label>
-                  <input
-                    type="text"
-                    value={userForm.username}
-                    onChange={(e) => setUserForm({...userForm, username: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter username"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Full Name*</label>
-                  <input
-                    type="text"
-                    value={userForm.full_name}
-                    onChange={(e) => setUserForm({...userForm, full_name: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Email*</label>
-                  <input
-                    type="email"
-                    value={userForm.email}
-                    onChange={(e) => setUserForm({...userForm, email: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter email address"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Password*</label>
-                  <input
-                    type="password"
-                    value={userForm.password}
-                    onChange={(e) => setUserForm({...userForm, password: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter password"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={userForm.phone}
-                    onChange={(e) => setUserForm({...userForm, phone: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter phone number"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Initial Balance</label>
+      {/* Add Cash Modal */}
+      {showAddCashModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg bg-white">
+            <div className="mt-3">
+              <h3 className="text-sm font-medium text-gray-900 mb-4">Add Cash to Petty Cash</h3>
+              <form onSubmit={handleAddCash}>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                   <input
                     type="number"
                     step="0.01"
-                    value={userForm.initial_balance}
-                    onChange={(e) => setUserForm({...userForm, initial_balance: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="0.00"
+                    required
+                    value={addCashForm.amount}
+                    onChange={(e) => setAddCashForm({...addCashForm, amount: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Enter amount"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Monthly Limit</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={userForm.monthly_limit}
-                    onChange={(e) => setUserForm({...userForm, monthly_limit: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="1000.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    value={userForm.status}
-                    onChange={(e) => setUserForm({...userForm, status: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 text-xs text-gray-600 bg-gray-50 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs text-white transition-colors"
-                  style={{ backgroundColor: '#E78D69' }}
-                >
-                  Create User
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {showEditModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-2xl p-6 max-h-screen overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">Edit Petty Cash User</h2>
-              <button 
-                onClick={() => {
-                  setShowEditModal(false);
-                  resetForm();
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <FaTimes size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleEditUser} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Username*</label>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
                   <input
                     type="text"
-                    value={userForm.username}
-                    onChange={(e) => setUserForm({...userForm, username: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter username"
                     required
+                    value={addCashForm.description}
+                    onChange={(e) => setAddCashForm({...addCashForm, description: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g., Student cash payment"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Full Name*</label>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number</label>
                   <input
                     type="text"
-                    value={userForm.full_name}
-                    onChange={(e) => setUserForm({...userForm, full_name: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Email*</label>
-                  <input
-                    type="email"
-                    value={userForm.email}
-                    onChange={(e) => setUserForm({...userForm, email: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter email address"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">New Password (leave blank to keep current)</label>
-                  <input
-                    type="password"
-                    value={userForm.password}
-                    onChange={(e) => setUserForm({...userForm, password: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter new password"
-                  />
-                </div>
-
-                <div>
-                   <label className="block text-xs font-medium text-gray-700 mb-1">Department</label>
-                   <input
-                     type="text"
-                     value={userForm.department}
-                     onChange={(e) => setUserForm({...userForm, department: e.target.value})}
-                     className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                     placeholder="Enter department"
-                   />
-                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={userForm.phone}
-                    onChange={(e) => setUserForm({...userForm, phone: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="Enter phone number"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Current Balance</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={userForm.initial_balance}
-                    onChange={(e) => setUserForm({...userForm, initial_balance: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Monthly Limit</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={userForm.monthly_limit}
-                    onChange={(e) => setUserForm({...userForm, monthly_limit: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="1000.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    value={userForm.status}
-                    onChange={(e) => setUserForm({...userForm, status: e.target.value})}
-                    className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEditModal(false);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 text-xs text-gray-600 bg-gray-50 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs text-white transition-colors"
-                  style={{ backgroundColor: '#E78D69' }}
-                >
-                  Update User
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Issue Cash Modal */}
-      {showIssueCashModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white w-full max-w-md p-6 max-h-screen overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-800">
-                Issue Cash to {selectedUser.full_name}
-              </h2>
-              <button 
-                onClick={() => {
-                  setShowIssueCashModal(false);
-                  resetIssuanceForm();
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <FaTimes size={20} />
-              </button>
-            </div>
-
-            <div className="mb-4 p-3 bg-gray-50 rounded">
-              <div className="text-xs text-gray-600">Current Balance</div>
-              <div className="text-lg font-semibold text-gray-800">
-                ${parseFloat(selectedUser.current_balance || 0).toFixed(2)}
-              </div>
-            </div>
-
-            <form onSubmit={handleIssueCash} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Amount*</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={issuanceForm.amount}
-                  onChange={(e) => setIssuanceForm({...issuanceForm, amount: e.target.value})}
-                  className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Description*</label>
-                <input
-                  type="text"
-                  value={issuanceForm.description}
-                  onChange={(e) => setIssuanceForm({...issuanceForm, description: e.target.value})}
-                  className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Cash replenishment"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number</label>
-                <input
-                  type="text"
-                  value={issuanceForm.reference_number}
-                  onChange={(e) => setIssuanceForm({...issuanceForm, reference_number: e.target.value})}
-                  className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Optional reference number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={issuanceForm.notes}
-                  onChange={(e) => setIssuanceForm({...issuanceForm, notes: e.target.value})}
-                  className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Additional notes (optional)"
-                  rows="3"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowIssueCashModal(false);
-                    resetIssuanceForm();
-                  }}
-                  className="px-4 py-2 text-xs text-gray-600 bg-gray-50 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs text-white transition-colors"
-                  style={{ backgroundColor: '#E78D69' }}
-                >
-                  Issue Cash
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Issue Cash Modal */}
-      {showIssueCashModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-4">Issue Cash to {selectedUser?.full_name || selectedUser?.username}</h2>
-            <form onSubmit={handleIssueCash}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={issuanceForm.amount}
-                    onChange={(e) => setIssuanceForm(prev => ({ ...prev, amount: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input
-                    type="text"
-                    value={issuanceForm.description}
-                    onChange={(e) => setIssuanceForm(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., Cash replenishment"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Reference Number</label>
-                  <input
-                    type="text"
-                    value={issuanceForm.reference_number}
-                    onChange={(e) => setIssuanceForm(prev => ({ ...prev, reference_number: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={addCashForm.reference_number}
+                    onChange={(e) => setAddCashForm({...addCashForm, reference_number: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="Optional reference number"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
                   <textarea
-                    value={issuanceForm.notes}
-                    onChange={(e) => setIssuanceForm(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={addCashForm.notes}
+                    onChange={(e) => setAddCashForm({...addCashForm, notes: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     rows="3"
-                    placeholder="Optional notes"
+                    placeholder="Additional notes"
                   />
                 </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowIssueCashModal(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  Issue Cash
-                </button>
-              </div>
-            </form>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCashModal(false)}
+                    className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-xs font-medium text-white transition-colors"
+                    style={{ backgroundColor: '#E78D69' }}
+                  >
+                    Add Cash
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Withdraw Cash Modal */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg bg-white">
+            <div className="mt-3">
+              <h3 className="text-sm font-medium text-gray-900 mb-4">Withdraw Cash from Petty Cash</h3>
+              <form onSubmit={handleWithdrawCash}>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={withdrawForm.amount}
+                    onChange={(e) => setWithdrawForm({...withdrawForm, amount: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Enter amount"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Purpose</label>
+                  <input
+                    type="text"
+                    required
+                    value={withdrawForm.purpose}
+                    onChange={(e) => setWithdrawForm({...withdrawForm, purpose: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g., Bank deposit"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number</label>
+                  <input
+                    type="text"
+                    value={withdrawForm.reference_number}
+                    onChange={(e) => setWithdrawForm({...withdrawForm, reference_number: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Optional reference number"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={withdrawForm.notes}
+                    onChange={(e) => setWithdrawForm({...withdrawForm, notes: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Additional notes"
+                  />
+                </div>
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowWithdrawModal(false)}
+                    className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+                  >
+                    Withdraw
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 };

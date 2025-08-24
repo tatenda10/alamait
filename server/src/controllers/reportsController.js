@@ -8,11 +8,9 @@ const getCashflowReport = async (req, res) => {
  
     // First, get the cash/bank account IDs for this boarding house
     const [cashAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts_branch 
-       WHERE branch_id = (SELECT branch_id FROM boarding_houses WHERE id = ?)
-       AND code IN ('10001', '10002', '10003')  -- Petty Cash, Cash, Bank
-       AND deleted_at IS NULL`,
-      [boarding_house_id]
+      `SELECT id FROM chart_of_accounts 
+       WHERE code IN ('10001', '10002', '10003')  -- Petty Cash, Cash, CBZ Bank Account
+       AND deleted_at IS NULL`
     );
 
     const cashAccountIds = cashAccounts.map(acc => acc.id);
@@ -38,8 +36,8 @@ const getCashflowReport = async (req, res) => {
       FROM transactions t
       JOIN journal_entries je_debit ON t.id = je_debit.transaction_id AND je_debit.entry_type = 'debit'
       JOIN journal_entries je_credit ON t.id = je_credit.transaction_id AND je_credit.entry_type = 'credit'
-      JOIN chart_of_accounts_branch coa_debit ON je_debit.account_id = coa_debit.id
-      JOIN chart_of_accounts_branch coa_credit ON je_credit.account_id = coa_credit.id
+      JOIN chart_of_accounts coa_debit ON je_debit.account_id = coa_debit.id
+      JOIN chart_of_accounts coa_credit ON je_credit.account_id = coa_credit.id
       WHERE t.boarding_house_id = ?
         AND DATE(t.transaction_date) BETWEEN ? AND ?
         AND t.deleted_at IS NULL
@@ -145,11 +143,9 @@ const exportCashflowReport = async (req, res) => {
 
     // Get cash account IDs
     const [cashAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts_branch 
-       WHERE branch_id = (SELECT branch_id FROM boarding_houses WHERE id = ?)
-       AND code IN ('10001', '10002', '10003')  -- Petty Cash, Cash, Bank
-       AND deleted_at IS NULL`,
-      [boarding_house_id]
+      `SELECT id FROM chart_of_accounts 
+       WHERE code IN ('10001', '10002', '10003')  -- Petty Cash, Cash, CBZ Bank Account
+       AND deleted_at IS NULL`
     );
 
     const cashAccountIds = cashAccounts.map(acc => acc.id);
@@ -172,8 +168,8 @@ const exportCashflowReport = async (req, res) => {
       FROM transactions t
       JOIN journal_entries je_debit ON t.id = je_debit.transaction_id AND je_debit.entry_type = 'debit'
       JOIN journal_entries je_credit ON t.id = je_credit.transaction_id AND je_credit.entry_type = 'credit'
-      JOIN chart_of_accounts_branch coa_debit ON je_debit.account_id = coa_debit.id
-      JOIN chart_of_accounts_branch coa_credit ON je_credit.account_id = coa_credit.id
+      JOIN chart_of_accounts coa_debit ON je_debit.account_id = coa_debit.id
+      JOIN chart_of_accounts coa_credit ON je_credit.account_id = coa_credit.id
       WHERE t.boarding_house_id = ?
         AND DATE(t.transaction_date) BETWEEN ? AND ?
         AND t.deleted_at IS NULL
@@ -266,9 +262,8 @@ const getIncomeStatement = async (req, res) => {
           type,
           CAST(code AS CHAR(255)) as path,
           1 as level
-        FROM chart_of_accounts_branch
-        WHERE branch_id = ?
-          AND type IN ('Revenue', 'Expense')
+        FROM chart_of_accounts
+        WHERE type IN ('Revenue', 'Expense')
           AND parent_id IS NULL
           AND deleted_at IS NULL
         
@@ -282,7 +277,7 @@ const getIncomeStatement = async (req, res) => {
           c.type,
           CONCAT(ah.path, ' > ', c.code),
           ah.level + 1
-        FROM chart_of_accounts_branch c
+        FROM chart_of_accounts c
         JOIN AccountHierarchy ah ON c.parent_id = ah.id
         WHERE c.deleted_at IS NULL
       )
@@ -311,9 +306,10 @@ const getIncomeStatement = async (req, res) => {
       WHERE (t.transaction_date BETWEEN ? AND ? OR t.id IS NULL)
         AND (t.deleted_at IS NULL OR t.id IS NULL)
         AND (t.status = 'posted' OR t.id IS NULL)
+        AND (t.boarding_house_id = ? OR t.id IS NULL)
       GROUP BY ah.id, ah.parent_id, ah.code, ah.name, ah.type, ah.path, ah.level
       ORDER BY ah.path`,
-      [boarding_house_id, start_date, end_date]
+      [start_date, end_date, boarding_house_id]
     );
 
     // Process accounts into revenue and expense sections

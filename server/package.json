@@ -4,7 +4,9 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "import-july": "node scripts/import_july_data.js",
+    "test-excel": "node scripts/test_excel_structure.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -16,7 +18,8 @@
     "multer": "^2.0.1",
     "mysql2": "^3.14.1",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

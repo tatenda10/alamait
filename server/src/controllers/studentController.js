@@ -615,11 +615,11 @@ const assignRoom = async (req, res) => {
       );
 
       // Create journal entries for admin fee
-      // Debit: Accounts Receivable (12001)
+      // Debit: Accounts Receivable (10004)
       await connection.query(
         `INSERT INTO journal_entries (
           transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by
-        ) VALUES (?, (SELECT id FROM chart_of_accounts_branch WHERE code = '12001' AND branch_id = ? LIMIT 1), 'debit', ?, ?, ?, ?)`,
+        ) VALUES (?, (SELECT id FROM chart_of_accounts_branch WHERE code = '10004' AND branch_id = ? LIMIT 1), 'debit', ?, ?, ?, ?)`,
         [
           adminFeeTransaction.insertId,
           boardingHouseId,
@@ -630,7 +630,7 @@ const assignRoom = async (req, res) => {
         ]
       );
 
-      // Credit: Fee Income (40002)
+      // Credit: Other Income (40002)
       await connection.query(
         `INSERT INTO journal_entries (
           transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by
@@ -666,11 +666,11 @@ const assignRoom = async (req, res) => {
       );
 
       // Create journal entries for security deposit
-      // Debit: Accounts Receivable (12001)
+      // Debit: Accounts Receivable (10004)
       await connection.query(
         `INSERT INTO journal_entries (
           transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by
-        ) VALUES (?, (SELECT id FROM chart_of_accounts_branch WHERE code = '12001' AND branch_id = ? LIMIT 1), 'debit', ?, ?, ?, ?)`,
+        ) VALUES (?, (SELECT id FROM chart_of_accounts_branch WHERE code = '10004' AND branch_id = ? LIMIT 1), 'debit', ?, ?, ?, ?)`,
         [
           depositTransaction.insertId,
           boardingHouseId,
@@ -681,7 +681,7 @@ const assignRoom = async (req, res) => {
         ]
       );
 
-      // Credit: Security Deposits Payable (20001)
+      // Credit: Account Payables (20001)
       await connection.query(
         `INSERT INTO journal_entries (
           transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by

@@ -29,19 +29,36 @@ import ViewRoom from './pages/rooms/ViewRoom';
 import EditRoom from './pages/rooms/EditRoom';
 import Suppliers from './pages/suppliers/Suppliers';
 import ViewSupplier from './pages/suppliers/ViewSupplier';
+import Reconciliation from './pages/accounting/Reconciliation';
+
 const App = () => {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
       <Route path="/dashboard/*" element={<DashboardLayout />}>
+        {/* Configuration Routes */}
         <Route path="users" element={<UserManagement />} />
         <Route path="boarding-houses" element={<BoardingHouses />} />
         <Route path="rooms" element={<Rooms />} />
         <Route path="rooms/add" element={<AddRoom />} />
         <Route path="rooms/:id" element={<ViewRoom />} />
         <Route path="rooms/:id/edit" element={<EditRoom />} />
+        
+        {/* Students Routes */}
+        <Route path="students" element={<Students />} />
+        <Route path="students/add" element={<AddStudent />} />
+        <Route path="students/:studentId/edit" element={<EditStudent />} />
+        <Route path="students/:studentId" element={<ViewStudent />} />
+        <Route path="students/assign-room/:studentId" element={<AssignRoom />} />
+        <Route path="students/enrollments" element={<div>Enrollments Page</div>} />
+        <Route path="students/payment-schedules" element={<div>Payment Schedules Page</div>} />
+        <Route path="students/payments" element={<div>Student Payments Page</div>} />
+        
+        {/* Accounting Routes */}
+        <Route path="accounting/overview" element={<div>Accounting Overview Page</div>} />
         <Route path="chart-of-accounts" element={<COA />} />
         <Route path="account-transactions/:accountId" element={<AccountTransactions />} />
+        <Route path="accounting/reconciliation" element={<Reconciliation />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expenses/add" element={<AddExpense />} />
         <Route path="expenses/edit/:id" element={<EditExpense />} />
@@ -53,15 +70,15 @@ const App = () => {
         <Route path="petty-cash/pending-expenses" element={<PendingExpenses />} />
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="suppliers/:id" element={<ViewSupplier />} />
-        <Route path="students" element={<Students />} />
-        <Route path="students/add" element={<AddStudent />} />
-        <Route path="students/:studentId/edit" element={<EditStudent />} />
-        <Route path="students/:studentId" element={<ViewStudent />} />
-        <Route path="students/assign-room/:studentId" element={<AssignRoom />} />
+        
+        {/* Reports Routes */}
+        <Route path="reports/overview" element={<div>Reports Overview Page</div>} />
         <Route path="reports/income-statement" element={<IncomeStatement />} />
+        <Route path="reports/cashflow" element={<div>Cashflow Report Page</div>} />
         <Route path="reports/debtors" element={<DebtorsReport />} />
         <Route path="reports/creditors" element={<CreditorsReport />} />
         <Route path="reports/expenses" element={<ExpensesReport />} />
+        <Route path="reports/student-payments" element={<div>Student Payments Report Page</div>} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>

@@ -1,22 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const coaController = require('../controllers/coaController');
+const { authenticate } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
+router.use(authenticate);
 
-// Get all accounts across all boarding houses (super_admin only)
-router.get('/all',  coaController.getAllAccounts);
+// Get all accounts (global chart of accounts)
+router.get('/', coaController.getAccounts);
 
-// Get accounts for a specific branch
-router.get('/',  coaController.getBranchAccounts);
+// Get accounts by type
+router.get('/type/:type', coaController.getAccountsByType);
 
-// Create new account in a branch
-router.post('/',  coaController.createBranchAccount);
+// Get account by ID
+router.get('/:id', coaController.getAccountById);
 
-// Update account in a branch
-router.put('/:id',  coaController.updateBranchAccount);
+// Create new account (global chart of accounts)
+router.post('/', coaController.createAccount);
 
-// Delete account from a branch
-router.delete('/:id',  coaController.deleteBranchAccount);
+// Update account (global chart of accounts)
+router.put('/:id', coaController.updateAccount);
+
+// Delete account (global chart of accounts)
+router.delete('/:id', coaController.deleteAccount);
 
 module.exports = router; 

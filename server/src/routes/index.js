@@ -8,5 +8,7 @@ router.use('/rooms', require('./room'));
 router.use('/users', require('./user'));
 router.use('/coa', require('./coa'));
 router.use('/payments', require('./payment'));
+router.use('/reconciliation', require('./reconciliation'));
+router.use('/petty-cash', require('./pettyCash'));
 
 module.exports = router; 

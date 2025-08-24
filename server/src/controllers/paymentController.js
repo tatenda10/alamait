@@ -131,14 +131,13 @@ exports.recordPayment = async (req, res) => {
         credit.id as credit_account_id,
         credit.name as credit_name,
         credit.code as credit_code
-       FROM chart_of_accounts_branch debit
-       JOIN chart_of_accounts_branch credit ON credit.branch_id = debit.branch_id
+       FROM chart_of_accounts debit
+       JOIN chart_of_accounts credit ON credit.id != debit.id
        WHERE debit.code = ? 
          AND credit.code = ?
-         AND debit.branch_id = ?
          AND debit.deleted_at IS NULL
          AND credit.deleted_at IS NULL`,
-      [debitAccountCode, creditAccountCode, targetBoardingHouseId]
+      [debitAccountCode, creditAccountCode]
     );
 
     if (accounts.length === 0) {
@@ -358,6 +357,28 @@ exports.recordPayment = async (req, res) => {
              updated_at = NOW()
          WHERE id = ?`,
         [newStatus, newAmountPaid.toFixed(2), schedule_id]
+      );
+    }
+
+    // If payment is made in cash, add to petty cash account
+    if (payment_method === 'cash') {
+      // Create petty cash transaction record
+      await connection.query(
+        `INSERT INTO petty_cash_transactions 
+         (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+         VALUES (?, 'student_payment', ?, ?, ?, ?, CURDATE(), ?, NOW())`,
+        [targetBoardingHouseId, paymentAmount, `Student payment - ${fee_type.replace('_', ' ')}`, transactionRef, notes, req.user.id]
+      );
+      
+      // Update petty cash account balance
+      await connection.query(
+        `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance + ?,
+         total_inflows = total_inflows + ?,
+         updated_at = NOW()`,
+        [targetBoardingHouseId, paymentAmount, paymentAmount, paymentAmount, paymentAmount]
       );
     }
 

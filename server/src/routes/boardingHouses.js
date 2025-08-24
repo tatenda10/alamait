@@ -13,9 +13,6 @@ router.post('/', boardingHouseController.createBoardingHouse);
 // Update a boarding house (super_admin only)
 router.put('/:id',  boardingHouseController.updateBoardingHouse);
 
-// Update existing boarding houses with predefined chart of accounts (super_admin only)
-router.post('/update-chart-of-accounts', boardingHouseController.updateExistingBoardingHouses);
-
 // Get available admins for boarding houses
 router.get('/available-admins', boardingHouseController.getAvailableAdmins);
 

@@ -91,7 +91,7 @@ const generateIncomeStatement = async (req, res) => {
             {
               account_id: null, // Accounts receivable doesn't have a specific account_id
               account_name: "Accounts Receivable",
-              account_code: "12001",
+              account_code: "10004",
               amount: totalReceivables
             }
           ]
@@ -158,7 +158,7 @@ const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidate
       bh.name as boarding_house_name
     FROM journal_entries je
     JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts_branch coa ON je.account_id = coa.id
+    JOIN chart_of_accounts coa ON je.account_id = coa.id
     JOIN boarding_houses bh ON je.boarding_house_id = bh.id
     WHERE DATE(t.transaction_date) BETWEEN ? AND ?
       AND t.status = 'posted'
@@ -213,7 +213,7 @@ const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidate
       bh.name as boarding_house_name
     FROM journal_entries je
     JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts_branch coa ON je.account_id = coa.id
+    JOIN chart_of_accounts coa ON je.account_id = coa.id
     JOIN boarding_houses bh ON je.boarding_house_id = bh.id
     WHERE DATE(t.transaction_date) BETWEEN ? AND ?
       AND t.status = 'posted'
@@ -268,7 +268,7 @@ const getPettyCashExpenseData = async (startDate, endDate, boardingHouseId, isCo
       bh.name as boarding_house_name
     FROM journal_entries je
     JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts_branch coa ON je.account_id = coa.id
+    JOIN chart_of_accounts coa ON je.account_id = coa.id
     JOIN boarding_houses bh ON je.boarding_house_id = bh.id
     WHERE DATE(t.transaction_date) BETWEEN ? AND ?
       AND t.status = 'posted'
@@ -338,7 +338,7 @@ const getAccountsPayableData = async (startDate, endDate, boardingHouseId, isCon
       bh.id as boarding_house_id,
       DATEDIFF(CURDATE(), e.expense_date) as days_overdue
     FROM expenses e
-    LEFT JOIN chart_of_accounts_branch coa ON e.expense_account_id = coa.id
+    LEFT JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
     LEFT JOIN suppliers s ON e.supplier_id = s.id
     LEFT JOIN boarding_houses bh ON e.boarding_house_id = bh.id
     WHERE e.payment_method = 'credit'
@@ -458,41 +458,41 @@ const createOverduePaymentTransactions = async () => {
       const branchId = schedule.boarding_house_id;
 
       // Get or create required accounts
-      // Check for Accounts Receivable (12001)
+      // Check for Accounts Receivable (10005)
       let [receivableAccount] = await connection.query(
-        `SELECT id FROM chart_of_accounts_branch WHERE code = '12001' AND branch_id = ? AND deleted_at IS NULL LIMIT 1`,
-        [branchId]
+        `SELECT id FROM chart_of_accounts WHERE code = '10005' AND deleted_at IS NULL LIMIT 1`,
+        []
       );
 
       if (receivableAccount.length === 0) {
         // Create Accounts Receivable account if it doesn't exist
         await connection.query(
-          `INSERT INTO chart_of_accounts_branch (code, name, type, is_category, branch_id, created_by, created_at, updated_at)
-           VALUES ('12001', 'Accounts Receivable', 'Asset', false, ?, 1, NOW(), NOW())`,
-          [branchId]
+          `INSERT INTO chart_of_accounts (code, name, type, is_category, created_by, created_at, updated_at)
+           VALUES ('10005', 'Accounts Receivable', 'Asset', false, 1, NOW(), NOW())`,
+          []
         );
         [receivableAccount] = await connection.query(
-          `SELECT id FROM chart_of_accounts_branch WHERE code = '12001' AND branch_id = ? AND deleted_at IS NULL LIMIT 1`,
-          [branchId]
+          `SELECT id FROM chart_of_accounts WHERE code = '10005' AND deleted_at IS NULL LIMIT 1`,
+          []
         );
       }
 
       // Check for Rental Income (40001)
       let [incomeAccount] = await connection.query(
-        `SELECT id FROM chart_of_accounts_branch WHERE code = '40001' AND branch_id = ? AND deleted_at IS NULL LIMIT 1`,
-        [branchId]
+        `SELECT id FROM chart_of_accounts WHERE code = '40001' AND deleted_at IS NULL LIMIT 1`,
+        []
       );
 
       if (incomeAccount.length === 0) {
         // Create Rental Income account if it doesn't exist
         await connection.query(
-          `INSERT INTO chart_of_accounts_branch (code, name, type, is_category, branch_id, created_by, created_at, updated_at)
-           VALUES ('40001', 'Rental Income', 'Revenue', false, ?, 1, NOW(), NOW())`,
-          [branchId]
+          `INSERT INTO chart_of_accounts (code, name, type, is_category, created_by, created_at, updated_at)
+           VALUES ('40001', 'Rentals Income', 'Revenue', false, 1, NOW(), NOW())`,
+          []
         );
         [incomeAccount] = await connection.query(
-          `SELECT id FROM chart_of_accounts_branch WHERE code = '40001' AND branch_id = ? AND deleted_at IS NULL LIMIT 1`,
-          [branchId]
+          `SELECT id FROM chart_of_accounts WHERE code = '40001' AND deleted_at IS NULL LIMIT 1`,
+          []
         );
       }
 

@@ -106,46 +106,39 @@ const AddExpense = () => {
     }
   };
 
-  // Fetch petty cash users (accounts)
+  // Fetch petty cash account balance for the selected boarding house
   const fetchPettyCashAccounts = async () => {
     try {
-      const response = await axios.get(`${BASE_URL}/petty-cash-admin/users`, {
+      if (!formData.boarding_house_id) return;
+      
+      const response = await axios.get(`${BASE_URL}/petty-cash/account`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'boarding-house-id': formData.boarding_house_id
         }
       });
-      setPettyCashAccounts(response.data.users || []);
+      
+      const balance = Number(response.data?.current_balance || 0);
+      setSelectedPettyCashBalance(balance);
+      
+      // Check if amount exceeds balance when petty cash is selected
+      if (formData.payment_method === 'petty_cash' && formData.amount) {
+        if (parseFloat(formData.amount) > balance) {
+          setWarning(`Insufficient petty cash balance. Available: $${balance.toFixed(2)}`);
+        } else {
+          setWarning('');
+        }
+      }
     } catch (error) {
-      console.error('Error fetching petty cash users:', error);
-      setPettyCashAccounts([]);
+      console.error('Error fetching petty cash account:', error);
+      setSelectedPettyCashBalance(0);
     }
   };
 
-  // Check petty cash balance when user is selected
+  // Check petty cash balance when payment method changes
   const handlePettyCashAccountChange = async (userId) => {
-    setFormData(prev => ({ ...prev, petty_cash_account_id: userId }));
-    setWarning('');
-    
-    if (userId) {
-      try {
-        const response = await axios.get(`${BASE_URL}/petty-cash-admin/users/${userId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        const balance = Number(response.data.data?.current_balance || response.data.user?.current_balance || 0);
-        setSelectedPettyCashBalance(balance);
-        
-        // Check if amount exceeds balance
-        if (formData.amount && parseFloat(formData.amount) > balance) {
-          setWarning(`Insufficient petty cash balance. Available: $${balance.toFixed(2)}`);
-        }
-      } catch (error) {
-        console.error('Error fetching petty cash balance:', error);
-      }
-    } else {
-      setSelectedPettyCashBalance(0);
-    }
+    // This function is no longer needed for the simplified system
+    // Petty cash balance is automatically fetched when boarding house changes
   };
 
   // Check balance when amount changes
@@ -165,9 +158,11 @@ const AddExpense = () => {
     });
     setWarning('');
     
-    if (formData.payment_method === 'petty_cash' && formData.petty_cash_account_id && amount) {
+    if (formData.payment_method === 'petty_cash' && amount) {
       if (parseFloat(amount) > selectedPettyCashBalance) {
         setWarning(`Insufficient petty cash balance. Available: $${selectedPettyCashBalance.toFixed(2)}`);
+      } else {
+        setWarning('');
       }
     }
   };
@@ -229,7 +224,7 @@ const AddExpense = () => {
     }
 
     // Validate petty cash balance if using petty cash
-    if (formData.payment_method === 'petty_cash' && formData.petty_cash_account_id) {
+    if (formData.payment_method === 'petty_cash') {
       const amountToCheck = formData.payment_status === 'partial' 
         ? parseFloat(formData.partial_payment_amount) 
         : parseFloat(formData.amount);
@@ -258,57 +253,13 @@ const AddExpense = () => {
         formDataToSend.set('payment_method', 'credit');
       }
 
-      // If using petty cash, submit as pending expense for approval
-      if (formData.payment_method === 'petty_cash' && formData.petty_cash_account_id) {
-        const paymentAmount = formData.payment_status === 'partial' 
-          ? formData.partial_payment_amount 
-          : formData.amount;
-          
-        // Create FormData for pending expense submission (supports file upload)
-        const pendingExpenseData = new FormData();
-        pendingExpenseData.append('amount', paymentAmount);
-        pendingExpenseData.append('description', formData.description);
-        pendingExpenseData.append('category', formData.expense_category || 'General');
-        pendingExpenseData.append('vendor_name', formData.supplier_id ? (Array.isArray(suppliers) ? suppliers.find(s => s.id == formData.supplier_id)?.name || suppliers.find(s => s.id == formData.supplier_id)?.company : '') : '');
-        pendingExpenseData.append('receipt_number', formData.reference_number || '');
-        pendingExpenseData.append('expense_account_id', formData.expense_account_id);
-        pendingExpenseData.append('reference_number', formData.reference_number || '');
-        pendingExpenseData.append('expense_date', formData.expense_date);
-        pendingExpenseData.append('notes', formData.notes || '');
-        
-        // Add receipt file if present
-        if (formData.receipt) {
-          pendingExpenseData.append('receipt', formData.receipt);
+      // Regular expense creation (including petty cash expenses)
+      await axios.post(`${BASE_URL}/expenses`, formDataToSend, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
         }
-        
-        // Submit pending expense for approval
-        const response = await axios.post(`${BASE_URL}/pending-petty-cash/users/${formData.petty_cash_account_id}/submit-expense`, pendingExpenseData, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-        
-        // Store submitted expense data and show success modal
-        const selectedUser = pettyCashAccounts.find(user => user.id == formData.petty_cash_account_id);
-        setSubmittedExpenseData({
-          amount: paymentAmount,
-          description: formData.description,
-          user: selectedUser?.full_name || selectedUser?.username,
-          reference: formData.reference_number,
-          date: formData.expense_date
-        });
-        setShowSuccessModal(true);
-        return; // Don't navigate immediately
-      } else {
-        // Regular expense creation
-        await axios.post(`${BASE_URL}/expenses`, formDataToSend, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-      }
+      });
 
       navigate('/dashboard/expenses');
     } catch (error) {
@@ -430,20 +381,11 @@ const AddExpense = () => {
 
             {formData.payment_method === 'petty_cash' && (
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Petty Cash User*</label>
-                <select
-                  required
-                  className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  value={formData.petty_cash_account_id}
-                  onChange={(e) => handlePettyCashAccountChange(e.target.value)}
-                >
-                  <option value="">Select petty cash user</option>
-                  {pettyCashAccounts.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name || user.username} ({user.employee_id}) - Balance: ${Number(user.current_balance || 0).toFixed(2)}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Petty Cash Account</label>
+                <div className="text-xs text-gray-600 p-2 bg-gray-50 border border-gray-200">
+                  <p>Petty cash will be deducted from the boarding house's petty cash account.</p>
+                  <p className="mt-1">Current Balance: ${selectedPettyCashBalance.toFixed(2)}</p>
+                </div>
               </div>
             )}
 
