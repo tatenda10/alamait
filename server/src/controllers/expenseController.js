@@ -609,7 +609,7 @@ exports.getBoardingHouseExpenses = async (req, res) => {
     const [totalResult] = await db.query(
       `SELECT COUNT(*) as total
        FROM expenses e
-       JOIN chart_of_accounts_branch coa ON e.expense_account_id = coa.id
+       JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
        WHERE e.boarding_house_id = ?
          AND e.deleted_at IS NULL
          AND (
@@ -631,7 +631,7 @@ exports.getBoardingHouseExpenses = async (req, res) => {
         s.company as supplier_name,
         s.contact_person as supplier_contact
       FROM expenses e
-      JOIN chart_of_accounts_branch coa ON e.expense_account_id = coa.id
+      JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
       LEFT JOIN transactions t ON e.transaction_id = t.id
       LEFT JOIN suppliers s ON e.supplier_id = s.id
       WHERE e.boarding_house_id = ?
@@ -680,7 +680,7 @@ exports.getExpensesWithoutSupplier = async (req, res) => {
         e.created_at,
         e.updated_at
       FROM expenses e
-      LEFT JOIN chart_of_accounts_branch coa ON e.expense_account_id = coa.id
+      LEFT JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
       LEFT JOIN supplier_payments sp ON e.id = sp.expense_id
       WHERE e.boarding_house_id = ?
         AND e.deleted_at IS NULL
@@ -731,7 +731,7 @@ exports.getExpenseById = async (req, res) => {
         s.address as supplier_address
       FROM expenses e
       JOIN transactions t ON e.transaction_id = t.id
-      JOIN chart_of_accounts_branch coa ON e.expense_account_id = coa.id
+      JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
       LEFT JOIN suppliers s ON e.supplier_id = s.id
       WHERE e.id = ? 
         AND e.boarding_house_id = ?
@@ -850,7 +850,7 @@ exports.getAllExpenses = async (req, res) => {
         e.created_at,
         e.updated_at
       FROM expenses e
-      LEFT JOIN chart_of_accounts_branch coa ON e.expense_account_id = coa.id
+      LEFT JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
       LEFT JOIN transactions t ON e.transaction_id = t.id
       LEFT JOIN boarding_houses bh ON e.boarding_house_id = bh.id
       LEFT JOIN suppliers s ON e.supplier_id = s.id
@@ -875,31 +875,28 @@ exports.getAllExpenses = async (req, res) => {
         'petty_cash' as payment_method,
         'full' as payment_status,
         0 as remaining_balance,
-        pct.receipt_number as reference_number,
-        pct.expense_account_id,
-        coa.name as expense_account_name,
-        coa.code as expense_account_code,
-        coa.type as expense_account_type,
-        pct.status as transaction_status,
+        pct.reference_number as reference_number,
+        NULL as expense_account_id,
+        'Petty Cash Expense' as expense_account_name,
+        'PC-EXP' as expense_account_code,
+        'Expense' as expense_account_type,
+        'approved' as transaction_status,
         pct.boarding_house_id,
         bh.name as boarding_house_name,
         bh.location as boarding_house_location,
-        pct.receipt_path,
-        pct.receipt_original_name,
+        NULL as receipt_path,
+        NULL as receipt_original_name,
         NULL as supplier_id,
-        pct.vendor_name as supplier_name,
+        pct.description as supplier_name,
         NULL as supplier_contact,
         NULL as supplier_phone,
         NULL as supplier_address,
         pct.amount as total_paid,
         pct.created_at,
-        pct.updated_at
+        pct.created_at as updated_at
       FROM petty_cash_transactions pct
-      LEFT JOIN chart_of_accounts_branch coa ON pct.expense_account_id = coa.id
       LEFT JOIN boarding_houses bh ON pct.boarding_house_id = bh.id
-      WHERE pct.deleted_at IS NULL 
-        AND pct.transaction_type = 'expense' 
-        AND pct.status = 'approved'
+      WHERE pct.transaction_type = 'expense'
 
       ORDER BY expense_date DESC, created_at DESC`,
       []
@@ -1014,7 +1011,7 @@ exports.getExpensesReport = async (req, res) => {
         COUNT(DISTINCT t.id) as transaction_count
       FROM journal_entries je
       JOIN transactions t ON je.transaction_id = t.id
-      JOIN chart_of_accounts_branch coa ON je.account_id = coa.id
+      JOIN chart_of_accounts coa ON je.account_id = coa.id
       JOIN boarding_houses bh ON je.boarding_house_id = bh.id
       WHERE DATE(t.transaction_date) BETWEEN ? AND ?
         AND t.status = 'posted'

@@ -10,5 +10,7 @@ router.use('/coa', require('./coa'));
 router.use('/payments', require('./payment'));
 router.use('/reconciliation', require('./reconciliation'));
 router.use('/petty-cash', require('./pettyCash'));
+router.use('/bank-reconciliation', require('./bankReconciliation'));
+router.use('/balance', require('./balance'));
 
 module.exports = router; 

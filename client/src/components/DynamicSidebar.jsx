@@ -174,6 +174,20 @@ const DynamicSidebar = ({ currentSection }) => {
       </NavLink>
       
       <NavLink 
+        to="/dashboard/accounting/bank-reconciliation" 
+        className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10 border-b-[#E78D69]' : 'text-gray-700'}`}
+      >
+        <FaBalanceScale className="h-5 w-5 mr-3" /> Bank Reconciliation
+      </NavLink>
+      
+      <NavLink 
+        to="/dashboard/accounting/balance-bd-cd" 
+        className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10 border-b-[#E78D69]' : 'text-gray-700'}`}
+      >
+        <FaChartLine className="h-5 w-5 mr-3" /> Balance BD/CD
+      </NavLink>
+      
+      <NavLink 
         to="/dashboard/petty-cash" 
         className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10 border-b-[#E78D69]' : 'text-gray-700'}`}
       >

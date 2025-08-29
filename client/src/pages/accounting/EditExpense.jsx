@@ -22,7 +22,7 @@ const EditExpense = () => {
     receipt: null,
     supplier_id: '',
     payment_status: 'full',
-    petty_cash_account_id: '',
+    // Removed petty_cash_account_id as we use simplified petty cash system
     expense_category: '',
     partial_payment_amount: '',
     remaining_balance: '',
@@ -36,8 +36,7 @@ const EditExpense = () => {
   const [accounts, setAccounts] = useState([]);
   const [boardingHouses, setBoardingHouses] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [pettyCashAccounts, setPettyCashAccounts] = useState([]);
-  const [selectedPettyCashBalance, setSelectedPettyCashBalance] = useState(0);
+  // Removed petty cash accounts state as we use simplified petty cash system
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedExpenseData, setSubmittedExpenseData] = useState(null);
 
@@ -105,21 +104,7 @@ const EditExpense = () => {
     }
   };
 
-  // Fetch petty cash accounts
-  const fetchPettyCashAccounts = async () => {
-    try {
-      const boardingHouseId = formData.boarding_house_id || localStorage.getItem('boarding_house_id') || '1';
-      const response = await axios.get(`${BASE_URL}/petty-cash/accounts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'boarding-house-id': boardingHouseId
-        }
-      });
-      setPettyCashAccounts(response.data.data || response.data || []);
-    } catch (error) {
-      console.error('Error fetching petty cash accounts:', error);
-    }
-  };
+
 
   // Fetch expense details
   const fetchExpense = async () => {
@@ -145,7 +130,7 @@ const EditExpense = () => {
         receipt: null,
         supplier_id: expense.supplier_id || '',
         payment_status: expense.payment_status || 'full',
-        petty_cash_account_id: expense.petty_cash_account_id || '',
+        // Removed petty_cash_account_id as we use simplified petty cash system
         expense_category: expense.expense_category || '',
         partial_payment_amount: expense.partial_payment_amount || '',
         remaining_balance: expense.remaining_balance || '',
@@ -168,8 +153,7 @@ const EditExpense = () => {
             fetchExpense(),
             fetchAccounts(),
             fetchBoardingHouses(),
-            fetchSuppliers(),
-            fetchPettyCashAccounts()
+            fetchSuppliers()
           ]);
         } catch (error) {
           console.error('Error loading data:', error);

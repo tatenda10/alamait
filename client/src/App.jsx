@@ -16,7 +16,7 @@ import AddStudent from './pages/students/AddStudent';
 import EditStudent from './pages/students/EditStudent';
 import ViewStudent from './pages/students/ViewStudent';
 import AssignRoom from './pages/students/AssignRoom';
-import PettyCash from './pages/pettycash/pettycash';
+import PettyCash from './pages/pettycash/PettyCash';
 import PettyCashReconciliation from './pages/pettycash/PettyCashReconciliation';
 import PendingExpenses from './pages/pettycash/PendingExpenses';
 import IncomeStatement from './pages/reports/IncomeStatement';
@@ -30,6 +30,10 @@ import EditRoom from './pages/rooms/EditRoom';
 import Suppliers from './pages/suppliers/Suppliers';
 import ViewSupplier from './pages/suppliers/ViewSupplier';
 import Reconciliation from './pages/accounting/Reconciliation';
+import BankReconciliation from './pages/accounting/BankReconciliation';
+import BankReconciliationDetail from './pages/accounting/BankReconciliationDetail';
+import BalanceBDCD from './pages/accounting/BalanceBDCD';
+import AccountLedger from './pages/accounting/AccountLedger';
 
 const App = () => {
   return (
@@ -59,6 +63,10 @@ const App = () => {
         <Route path="chart-of-accounts" element={<COA />} />
         <Route path="account-transactions/:accountId" element={<AccountTransactions />} />
         <Route path="accounting/reconciliation" element={<Reconciliation />} />
+        <Route path="accounting/bank-reconciliation" element={<BankReconciliation />} />
+        <Route path="accounting/bank-reconciliation/:id" element={<BankReconciliationDetail />} />
+        <Route path="accounting/balance-bd-cd" element={<BalanceBDCD />} />
+        <Route path="accounting/account-ledger/:accountId/:periodId" element={<AccountLedger />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expenses/add" element={<AddExpense />} />
         <Route path="expenses/edit/:id" element={<EditExpense />} />
