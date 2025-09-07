@@ -191,7 +191,7 @@ const BankReconciliation = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E78D69]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f58020]"></div>
       </div>
     );
   }
@@ -214,7 +214,7 @@ const BankReconciliation = () => {
           </button>
           <button
             onClick={() => setShowReconcileModal(true)}
-            className="bg-[#E78D69] text-white px-4 py-2 rounded-lg hover:bg-[#E78D69]/90 flex items-center"
+            className="bg-[#f58020] text-white px-4 py-2 rounded-lg hover:bg-[#f58020]/90 flex items-center"
           >
             <FaBalanceScale className="mr-2" />
             New Reconciliation
@@ -370,7 +370,7 @@ const BankReconciliation = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => navigate(`/dashboard/accounting/bank-reconciliation/${reconciliation.id}`)}
-                        className="text-[#E78D69] hover:text-[#E78D69]/80 mr-3"
+                        className="text-[#f58020] hover:text-[#f58020]/80 mr-3"
                       >
                         <FaEye className="inline" />
                       </button>
@@ -556,7 +556,7 @@ const BankReconciliation = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#E78D69] text-white rounded-md hover:bg-[#E78D69]/90"
+                    className="px-4 py-2 bg-[#f58020] text-white rounded-md hover:bg-[#f58020]/90"
                   >
                     Create
                   </button>

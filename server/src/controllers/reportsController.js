@@ -5,16 +5,39 @@ const getCashflowReport = async (req, res) => {
   
   try {
     const { boarding_house_id, start_date, end_date } = req.query;
- 
-    // First, get the cash/bank account IDs for this boarding house
+    
+    console.log('Cashflow request params:', { boarding_house_id, start_date, end_date });
+
+    // Handle "all" boarding houses case
+    let whereClause = '';
+    let queryParams = [];
+    
+    if (boarding_house_id && boarding_house_id !== 'all') {
+      whereClause = 'AND t.boarding_house_id = ?';
+      queryParams.push(boarding_house_id);
+    }
+
+    // Get all cash and bank accounts (specific accounts from your chart)
     const [cashAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts 
-       WHERE code IN ('10001', '10002', '10003')  -- Petty Cash, Cash, CBZ Bank Account
-       AND deleted_at IS NULL`
+      `SELECT id, code, name, type FROM chart_of_accounts 
+       WHERE code IN ('10001', '10002', '10003', '10004')  -- Petty Cash, Cash, CBZ Bank Account, CBZ Vault
+       AND type = 'Asset'
+       AND deleted_at IS NULL
+       ORDER BY code`
     );
 
     const cashAccountIds = cashAccounts.map(acc => acc.id);
     console.log('Cash account IDs:', cashAccountIds);
+
+    if (cashAccountIds.length === 0) {
+      return res.json({
+        inflows: [],
+        outflows: [],
+        totalInflows: { amount: 0 },
+        totalOutflows: { amount: 0 },
+        netCashflow: { amount: 0 }
+      });
+    }
 
     // Get all transactions with their journal entries for the period
     const [transactions] = await connection.query(
@@ -38,15 +61,17 @@ const getCashflowReport = async (req, res) => {
       JOIN journal_entries je_credit ON t.id = je_credit.transaction_id AND je_credit.entry_type = 'credit'
       JOIN chart_of_accounts coa_debit ON je_debit.account_id = coa_debit.id
       JOIN chart_of_accounts coa_credit ON je_credit.account_id = coa_credit.id
-      WHERE t.boarding_house_id = ?
-        AND DATE(t.transaction_date) BETWEEN ? AND ?
+      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
         AND t.deleted_at IS NULL
         AND t.status = 'posted'
+        ${whereClause}
+        AND (je_debit.account_id IN (${cashAccountIds.map(() => '?').join(',')}) 
+             OR je_credit.account_id IN (${cashAccountIds.map(() => '?').join(',')}))
       ORDER BY t.transaction_date`,
-      [boarding_house_id, start_date, end_date]
+      [start_date, end_date, ...queryParams, ...cashAccountIds, ...cashAccountIds]
     );
 
-    console.log('Raw transactions:', transactions); // Debug log
+    console.log('Raw transactions count:', transactions.length);
 
     // Process transactions into inflows and outflows
     const inflows = [];
@@ -55,42 +80,98 @@ const getCashflowReport = async (req, res) => {
     let totalOutflows = 0;
 
     // Group transactions by category
-    const categoryTotals = transactions.reduce((acc, transaction) => {
+    const categoryTotals = {};
+    const processedTransactions = new Set();
+
+    transactions.forEach(transaction => {
       const { 
+        id,
         amount,
         debit_account_id,
         credit_account_id,
         debit_account_code,
         credit_account_code,
         debit_account_name,
-        credit_account_name
+        credit_account_name,
+        transaction_type
       } = transaction;
+
+      // Skip if we've already processed this transaction
+      if (processedTransactions.has(id)) {
+        return;
+      }
 
       const parsedAmount = Math.abs(parseFloat(amount || 0));
 
-      // For cash inflows: when a cash account is debited (revenue/income transactions)
-      if (cashAccountIds.includes(debit_account_id) && credit_account_code?.startsWith('4')) {
-        const category = credit_account_name;
-        if (!acc[category]) {
-          acc[category] = { inflow: 0, outflow: 0 };
+      // For cash inflows: when a cash account is debited (money coming in)
+      if (cashAccountIds.includes(debit_account_id)) {
+        let category = 'Other Income';
+        
+        // Determine category based on credit account
+        if (credit_account_code?.startsWith('4')) {
+          category = credit_account_name || 'Revenue';
+        } else if (credit_account_code?.startsWith('2')) {
+          category = 'Loan/Advance';
+        } else if (credit_account_code?.startsWith('3')) {
+          category = 'Owner Investment';
         }
-        acc[category].inflow += parsedAmount;
+
+        if (!categoryTotals[category]) {
+          categoryTotals[category] = { inflow: 0, outflow: 0 };
+        }
+        categoryTotals[category].inflow += parsedAmount;
         totalInflows += parsedAmount;
+        processedTransactions.add(id);
       }
-      // For cash outflows: when a cash account is credited (expense transactions)
-      else if (cashAccountIds.includes(credit_account_id) && debit_account_code?.startsWith('5')) {
-        const category = debit_account_name;
-        if (!acc[category]) {
-          acc[category] = { inflow: 0, outflow: 0 };
+      // For cash outflows: when a cash account is credited (money going out)
+      else if (cashAccountIds.includes(credit_account_id)) {
+        let category = 'Other Expenses';
+        
+        // Determine category based on debit account
+        if (debit_account_code?.startsWith('5')) {
+          category = debit_account_name || 'Operating Expenses';
+        } else if (debit_account_code?.startsWith('2')) {
+          category = 'Loan Repayment';
+        } else if (debit_account_code?.startsWith('3')) {
+          category = 'Owner Withdrawal';
         }
-        acc[category].outflow += parsedAmount;
+
+        if (!categoryTotals[category]) {
+          categoryTotals[category] = { inflow: 0, outflow: 0 };
+        }
+        categoryTotals[category].outflow += parsedAmount;
         totalOutflows += parsedAmount;
+        processedTransactions.add(id);
       }
+      
+      // Additional check: Handle expenses where cash is debited and expense is credited
+      // This is the typical pattern for expense transactions
+      if (debit_account_code?.startsWith('5') && cashAccountIds.includes(credit_account_id) && !processedTransactions.has(id)) {
+        let category = debit_account_name || 'Operating Expenses';
+        
+        if (!categoryTotals[category]) {
+          categoryTotals[category] = { inflow: 0, outflow: 0 };
+        }
+        categoryTotals[category].outflow += parsedAmount;
+        totalOutflows += parsedAmount;
+        processedTransactions.add(id);
+      }
+      
+      // Additional check: Handle revenue where cash is credited and revenue is debited
+      // This is the typical pattern for revenue transactions
+      if (credit_account_code?.startsWith('4') && cashAccountIds.includes(debit_account_id) && !processedTransactions.has(id)) {
+        let category = credit_account_name || 'Revenue';
+        
+        if (!categoryTotals[category]) {
+          categoryTotals[category] = { inflow: 0, outflow: 0 };
+        }
+        categoryTotals[category].inflow += parsedAmount;
+        totalInflows += parsedAmount;
+        processedTransactions.add(id);
+      }
+    });
 
-      return acc;
-    }, {});
-
-    console.log('Category totals:', categoryTotals); // Debug log
+    console.log('Category totals:', categoryTotals);
 
     // Convert category totals to arrays
     for (const [category, totals] of Object.entries(categoryTotals)) {
@@ -117,7 +198,7 @@ const getCashflowReport = async (req, res) => {
       outflows,
       totalInflows,
       totalOutflows
-    }); // Debug log
+    });
 
     res.json({
       inflows,
@@ -129,7 +210,7 @@ const getCashflowReport = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getCashflowReport:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   } finally {
     connection.release();
   }
@@ -141,11 +222,22 @@ const exportCashflowReport = async (req, res) => {
   try {
     const { boarding_house_id, start_date, end_date } = req.query;
 
-    // Get cash account IDs
+    // Handle "all" boarding houses case
+    let whereClause = '';
+    let queryParams = [];
+    
+    if (boarding_house_id && boarding_house_id !== 'all') {
+      whereClause = 'AND t.boarding_house_id = ?';
+      queryParams.push(boarding_house_id);
+    }
+
+    // Get all cash and bank accounts (specific accounts from your chart)
     const [cashAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts 
-       WHERE code IN ('10001', '10002', '10003')  -- Petty Cash, Cash, CBZ Bank Account
-       AND deleted_at IS NULL`
+      `SELECT id, code, name, type FROM chart_of_accounts 
+       WHERE code IN ('10001', '10002', '10003', '10004')  -- Petty Cash, Cash, CBZ Bank Account, CBZ Vault
+       AND type = 'Asset'
+       AND deleted_at IS NULL
+       ORDER BY code`
     );
 
     const cashAccountIds = cashAccounts.map(acc => acc.id);
@@ -170,23 +262,31 @@ const exportCashflowReport = async (req, res) => {
       JOIN journal_entries je_credit ON t.id = je_credit.transaction_id AND je_credit.entry_type = 'credit'
       JOIN chart_of_accounts coa_debit ON je_debit.account_id = coa_debit.id
       JOIN chart_of_accounts coa_credit ON je_credit.account_id = coa_credit.id
-      WHERE t.boarding_house_id = ?
-        AND DATE(t.transaction_date) BETWEEN ? AND ?
+      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
         AND t.deleted_at IS NULL
         AND t.status = 'posted'
+        ${whereClause}
+        AND (je_debit.account_id IN (${cashAccountIds.map(() => '?').join(',')}) 
+             OR je_credit.account_id IN (${cashAccountIds.map(() => '?').join(',')}))
       ORDER BY t.transaction_date`,
-      [boarding_house_id, start_date, end_date]
+      [start_date, end_date, ...queryParams, ...cashAccountIds, ...cashAccountIds]
     );
 
     // Get boarding house details for the report header
-    const [boardingHouse] = await connection.query(
-      'SELECT name FROM boarding_houses WHERE id = ?',
-      [boarding_house_id]
-    );
+    let boardingHouseName = 'All Boarding Houses';
+    if (boarding_house_id && boarding_house_id !== 'all') {
+      const [boardingHouse] = await connection.query(
+        'SELECT name FROM boarding_houses WHERE id = ?',
+        [boarding_house_id]
+      );
+      if (boardingHouse.length > 0) {
+        boardingHouseName = boardingHouse[0].name;
+      }
+    }
 
     // Generate CSV content
     let csvContent = 'Cashflow Report\n';
-    csvContent += `${boardingHouse[0].name}\n`;
+    csvContent += `${boardingHouseName}\n`;
     csvContent += `Period: ${start_date} to ${end_date}\n\n`;
     csvContent += 'Date,Reference,Category,Type,Amount,Notes\n';
 
@@ -194,16 +294,46 @@ const exportCashflowReport = async (req, res) => {
       let category, type, amount;
       
       // Determine if it's an inflow or outflow
-      if (cashAccountIds.includes(t.debit_account_id) && t.credit_account_code?.startsWith('4')) {
-        // Cash inflow
-        category = t.credit_account_name;
+      if (cashAccountIds.includes(t.debit_account_id)) {
+        // Cash inflow: when a cash account is debited
+        if (t.credit_account_code?.startsWith('4')) {
+          category = t.credit_account_name || 'Revenue';
+        } else if (t.credit_account_code?.startsWith('2')) {
+          category = 'Loan/Advance';
+        } else if (t.credit_account_code?.startsWith('3')) {
+          category = 'Owner Investment';
+        } else {
+          category = 'Other Income';
+        }
         type = 'Inflow';
         amount = Math.abs(parseFloat(t.amount));
-      } else if (cashAccountIds.includes(t.credit_account_id) && t.debit_account_code?.startsWith('5')) {
-        // Cash outflow
-        category = t.debit_account_name;
+      } else if (cashAccountIds.includes(t.credit_account_id)) {
+        // Cash outflow: when a cash account is credited
+        if (t.debit_account_code?.startsWith('5')) {
+          category = t.debit_account_name || 'Operating Expenses';
+        } else if (t.debit_account_code?.startsWith('2')) {
+          category = 'Loan Repayment';
+        } else if (t.debit_account_code?.startsWith('3')) {
+          category = 'Owner Withdrawal';
+        } else {
+          category = 'Other Expenses';
+        }
         type = 'Outflow';
         amount = -Math.abs(parseFloat(t.amount));
+      }
+      
+      // Additional check: Handle expenses where expense is debited and cash is credited
+      else if (t.debit_account_code?.startsWith('5') && cashAccountIds.includes(t.credit_account_id)) {
+        category = t.debit_account_name || 'Operating Expenses';
+        type = 'Outflow';
+        amount = -Math.abs(parseFloat(t.amount));
+      }
+      
+      // Additional check: Handle revenue where revenue is credited and cash is debited
+      else if (t.credit_account_code?.startsWith('4') && cashAccountIds.includes(t.debit_account_id)) {
+        category = t.credit_account_name || 'Revenue';
+        type = 'Inflow';
+        amount = Math.abs(parseFloat(t.amount));
       }
 
       if (category) {
@@ -218,11 +348,17 @@ const exportCashflowReport = async (req, res) => {
 
     // Calculate totals
     const totalInflows = transactions
-      .filter(t => cashAccountIds.includes(t.debit_account_id) && t.credit_account_code?.startsWith('4'))
+      .filter(t => 
+        cashAccountIds.includes(t.debit_account_id) || 
+        (t.credit_account_code?.startsWith('4') && cashAccountIds.includes(t.debit_account_id))
+      )
       .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0);
 
     const totalOutflows = transactions
-      .filter(t => cashAccountIds.includes(t.credit_account_id) && t.debit_account_code?.startsWith('5'))
+      .filter(t => 
+        cashAccountIds.includes(t.credit_account_id) || 
+        (t.debit_account_code?.startsWith('5') && cashAccountIds.includes(t.credit_account_id))
+      )
       .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0);
 
     csvContent += '\nSummary\n';

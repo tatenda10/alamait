@@ -137,7 +137,7 @@ const AccountModal = ({ isOpen, onClose, onSubmit, selectedAccount, accounts }) 
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Saving...' : selectedAccount ? 'Update Account' : 'Create Account'}
             </button>
@@ -368,7 +368,7 @@ const COA = () => {
                 setOpenModal(true);
               }}
               className="flex items-center px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               <FiPlus size={14} className="mr-2" />
               Add Account

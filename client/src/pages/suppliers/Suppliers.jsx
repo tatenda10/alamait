@@ -92,7 +92,7 @@ const Suppliers = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E78D69]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f58020]"></div>
       </div>
     );
   }
@@ -140,7 +140,7 @@ const Suppliers = () => {
             <button 
               onClick={handleAddSupplier}
               className="flex items-center px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               + Add Supplier
             </button>

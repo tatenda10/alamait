@@ -195,7 +195,7 @@ const BalanceBDCD = () => {
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-transparent"
+                  className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-transparent"
                 >
                   {availableYears.map((year) => (
                     <option key={year} value={year}>
@@ -211,7 +211,7 @@ const BalanceBDCD = () => {
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-transparent"
+                  className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-transparent"
                 >
                   <option value="">Select Month</option>
                   {availableMonths.map((month) => (
@@ -281,7 +281,7 @@ const BalanceBDCD = () => {
               <button
                 onClick={fetchBalances}
                 disabled={loading}
-                className="flex items-center px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#E78D69]"
+                className="flex items-center px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#f58020]"
               >
                 <FiRefreshCw className={`h-3 w-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -291,7 +291,7 @@ const BalanceBDCD = () => {
 
           {loading ? (
             <div className="p-4 text-center">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#E78D69] mx-auto"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#f58020] mx-auto"></div>
               <p className="mt-2 text-xs text-gray-500">Loading balances...</p>
             </div>
           ) : balances.length === 0 ? (
@@ -361,7 +361,7 @@ const BalanceBDCD = () => {
                               setBalances(newBalances);
                             }}
                             onBlur={() => setBalanceBroughtDown(balance.account_id, balance.balance_brought_down)}
-                            className="w-20 text-right border border-gray-300 px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69]"
+                            className="w-20 text-right border border-gray-300 px-1 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020]"
                             step="0.01"
                           />
                         ) : (
@@ -383,7 +383,7 @@ const BalanceBDCD = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-center text-xs font-medium">
                         <Link
                           to={`/dashboard/accounting/account-ledger/${balance.account_id}/${selectedPeriod}`}
-                          className="text-[#E78D69] hover:text-[#E78D69]/80"
+                          className="text-[#f58020] hover:text-[#f58020]/80"
                         >
                           View Ledger
                         </Link>

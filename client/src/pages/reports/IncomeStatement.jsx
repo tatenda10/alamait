@@ -479,14 +479,14 @@ const IncomeStatement = () => {
         <div className="w-full px-8 py-4">
           {/* Top row - Title and Search Button */}
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-lg font-bold text-gray-900">Income Statement</h1>
+            <h1 className="text-sm font-bold text-gray-900">Income Statement</h1>
             
             {/* Search Income Statement Button */}
             <button
               onClick={fetchIncomeStatementData}
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               <FiSearch size={14} />
               {loading ? 'Loading...' : 'Search Income Statement'}
@@ -563,7 +563,7 @@ const IncomeStatement = () => {
                   }}
                   disabled={!selectedSavedStatement || loadingSavedStatements}
                   className="flex items-center gap-2 px-3 py-2 text-xs text-white transition-colors"
-                  style={{ backgroundColor: '#E78D69' }}
+                  style={{ backgroundColor: '#f58020' }}
                 >
                   <FiDownload size={14} />
                   {loadingSavedStatements ? 'Loading...' : 'Load'}
@@ -573,7 +573,7 @@ const IncomeStatement = () => {
               <button
                 onClick={() => setShowSaveModal(true)}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-white transition-colors"
-                style={{ backgroundColor: '#E78D69' }}
+                style={{ backgroundColor: '#f58020' }}
               >
                 <FiSave size={14} />
                 Save
@@ -583,7 +583,7 @@ const IncomeStatement = () => {
                 onClick={exportToExcel}
                 disabled={!showIncomeStatement || !incomeData}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-white transition-colors"
-                style={{ backgroundColor: '#E78D69' }}
+                style={{ backgroundColor: '#f58020' }}
               >
                 <FiDownload size={14} />
                 Export Excel
@@ -600,90 +600,82 @@ const IncomeStatement = () => {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-gray-800">
-                    <th className="px-4 py-3 text-left font-bold text-gray-900 border-r border-gray-300">Code</th>
-                    <th className="px-4 py-3 text-left font-bold text-gray-900 border-r border-gray-300">Account</th>
-                    <th className="px-4 py-3 text-right font-bold text-gray-900">Amount</th>
+                  <tr className="bg-gray-800 text-white">
+                    <th className="px-3 py-3 text-left font-semibold text-xs">Account</th>
+                    <th className="px-3 py-3 text-right font-semibold text-xs">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {/* Revenue Section Header */}
-                  <tr className="border-b border-gray-400">
-                    <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-300">
+                  <tr className="bg-gray-100 border-b border-gray-300">
+                    <td className="px-3 py-3 font-bold text-gray-900 text-xs">
                       REVENUE
                     </td>
-                    <td className="px-4 py-3 border-r border-gray-300"></td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900"></td>
+                    <td className="px-3 py-3 text-right font-bold text-gray-900"></td>
                   </tr>
                   
-                  {filteredData.revenue.map(item => (
+                  {filteredData.revenue.map((item, index) => (
                     <tr key={item.id} className="border-b border-gray-200">
                       <td 
-                        className="px-4 py-2 text-gray-600 border-r border-gray-300 font-mono cursor-pointer hover:text-blue-600 hover:underline"
+                        className="px-3 py-2 text-gray-700 text-xs cursor-pointer hover:text-blue-600 hover:underline bg-gray-100"
                         onClick={() => handleAccountClick(item)}
                         title="Click to view account transactions"
                       >
-                        {item.account_code}
+                        {item.account_name}
                       </td>
-                      <td className="px-6 py-2 text-gray-700 border-r border-gray-300">{item.account_name}</td>
-                      <td className="px-4 py-2 text-right">
-                        <span className="text-gray-900">{formatCurrency(item.amount || 0)}</span>
+                      <td className="px-3 py-2 text-right bg-gray-100">
+                        <span className="text-gray-900 font-medium text-xs">{formatCurrency(item.amount || 0)}</span>
                       </td>
                     </tr>
                   ))}
 
                   {/* Revenue Total */}
-                  <tr className="border-b-2 border-gray-800">
-                    <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-300">
+                  <tr className="bg-gray-200 border-b-2 border-gray-400">
+                    <td className="px-3 py-3 font-bold text-gray-900 text-xs">
                       TOTAL REVENUE
                     </td>
-                    <td className="px-4 py-3 border-r border-gray-300"></td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">
+                    <td className="px-3 py-3 text-right font-bold text-gray-900 text-xs">
                       {formatCurrency(totals.totalRevenue)}
                     </td>
                   </tr>
 
                   {/* Expenses Section Header */}
-                  <tr className="border-b border-gray-400">
-                    <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-300">
+                  <tr className="bg-gray-100 border-b border-gray-300">
+                    <td className="px-3 py-3 font-bold text-gray-900 text-xs">
                       EXPENSES
                     </td>
-                    <td className="px-4 py-3 border-r border-gray-300"></td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900"></td>
+                    <td className="px-3 py-3 text-right font-bold text-gray-900"></td>
                   </tr>
                   
-                  {filteredData.expenses.map(item => (
+                  {filteredData.expenses.map((item, index) => (
                     <tr key={item.id} className="border-b border-gray-200">
                       <td 
-                        className="px-4 py-2 text-gray-600 border-r border-gray-300 font-mono cursor-pointer hover:text-blue-600 hover:underline"
+                        className="px-3 py-2 text-gray-700 text-xs cursor-pointer hover:text-blue-600 hover:underline bg-gray-100"
                         onClick={() => handleAccountClick(item)}
                         title="Click to view account transactions"
                       >
-                        {item.account_code}
+                        {item.account_name}
                       </td>
-                      <td className="px-6 py-2 text-gray-700 border-r border-gray-300">{item.account_name}</td>
-                      <td className="px-4 py-2 text-right">
-                        <span className="text-gray-900">{formatCurrency(item.amount || 0)}</span>
+                      <td className="px-3 py-2 text-right bg-gray-100">
+                        <span className="text-gray-900 font-medium text-xs">{formatCurrency(item.amount || 0)}</span>
                       </td>
                     </tr>
                   ))}
 
                   {/* Expenses Total */}
-                  <tr className="border-b-2 border-gray-800">
-                    <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-300">
+                  <tr className="bg-gray-200 border-b-2 border-gray-400">
+                    <td className="px-3 py-3 font-bold text-gray-900 text-xs">
                       TOTAL EXPENSES
                     </td>
-                    <td className="px-4 py-3 border-r border-gray-300"></td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">
+                    <td className="px-3 py-3 text-right font-bold text-gray-900 text-xs">
                       {formatCurrency(totals.totalExpenses)}
                     </td>
                   </tr>
 
                   {/* Net Income Section */}
-                  <tr className="border-b-2 border-gray-800 bg-gray-50">
-                    <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-300">NET INCOME</td>
-                    <td className="px-4 py-3 border-r border-gray-300"></td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">
+                  <tr className="bg-gray-300 border-b-2 border-gray-500">
+                    <td className="px-3 py-3 font-bold text-gray-900 text-xs">NET INCOME</td>
+                    <td className="px-3 py-3 text-right font-bold text-gray-900 text-xs">
                       {formatCurrency(totals.netIncome)}
                     </td>
                   </tr>
@@ -698,7 +690,7 @@ const IncomeStatement = () => {
       {showSaveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 w-[500px] mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Save Income Statement</h3>
+            <h3 className="text-sm font-bold text-gray-900 mb-4">Save Income Statement</h3>
             
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -729,7 +721,7 @@ const IncomeStatement = () => {
                 onClick={saveIncomeStatement}
                 disabled={saving || !statementName.trim()}
                 className="px-4 py-2 text-white transition-colors"
-                style={{ backgroundColor: '#E78D69' }}
+                style={{ backgroundColor: '#f58020' }}
               >
                 {saving ? 'Saving...' : 'Save Statement'}
               </button>

@@ -157,7 +157,7 @@ const BankReconciliationDetail = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E78D69]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f58020]"></div>
       </div>
     );
   }
@@ -168,7 +168,7 @@ const BankReconciliationDetail = () => {
         <h3 className="text-lg font-medium text-gray-900">Reconciliation not found</h3>
         <button
           onClick={() => navigate('/dashboard/accounting/bank-reconciliation')}
-          className="mt-4 text-[#E78D69] hover:text-[#E78D69]/80"
+          className="mt-4 text-[#f58020] hover:text-[#f58020]/80"
         >
           Back to Reconciliations
         </button>
@@ -205,7 +205,7 @@ const BankReconciliationDetail = () => {
           <button
             onClick={handleManualMatch}
             disabled={selectedBookItems.length === 0 || selectedBankItems.length === 0}
-            className="bg-[#E78D69] text-white px-4 py-2 rounded-lg hover:bg-[#E78D69]/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            className="bg-[#f58020] text-white px-4 py-2 rounded-lg hover:bg-[#f58020]/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             <FaLink className="mr-2" />
             Match Selected

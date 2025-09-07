@@ -226,7 +226,7 @@ const EditExpense = () => {
   if (initialLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#E78D69]"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#f58020]"></div>
       </div>
     );
   }
@@ -277,7 +277,7 @@ const EditExpense = () => {
                     type="date"
                     value={formData.expense_date}
                     onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     required
                   />
                 </div>
@@ -290,7 +290,7 @@ const EditExpense = () => {
                     type="number"
                     value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     placeholder="0.00"
                     step="0.01"
                     min="0"
@@ -306,7 +306,7 @@ const EditExpense = () => {
                     type="text"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     placeholder="Enter expense description"
                     required
                   />
@@ -325,7 +325,7 @@ const EditExpense = () => {
                   <select
                     value={formData.payment_method}
                     onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     required
                   >
                     <option value="">Select payment method</option>
@@ -345,7 +345,7 @@ const EditExpense = () => {
                     type="text"
                     value={formData.reference_number}
                     onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     placeholder="Enter reference number"
                   />
                 </div>
@@ -363,7 +363,7 @@ const EditExpense = () => {
                   <select
                     value={formData.expense_account_id}
                     onChange={(e) => setFormData({ ...formData, expense_account_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     required
                   >
                     <option value="">Select expense account</option>
@@ -382,7 +382,7 @@ const EditExpense = () => {
                   <select
                     value={formData.boarding_house_id}
                     onChange={(e) => setFormData({ ...formData, boarding_house_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                   >
                     <option value="">Select boarding house</option>
                     {boardingHouses.map((house) => (
@@ -406,7 +406,7 @@ const EditExpense = () => {
                   <select
                     value={formData.supplier_id}
                     onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                   >
                     <option value="">Select supplier</option>
                     {suppliers.map((supplier) => (
@@ -424,7 +424,7 @@ const EditExpense = () => {
                   <input
                     type="file"
                     onChange={handleFileChange}
-                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                     accept="image/*,.pdf"
                   />
                 </div>
@@ -438,7 +438,7 @@ const EditExpense = () => {
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                   placeholder="Enter additional notes"
                 />
               </div>
@@ -449,14 +449,14 @@ const EditExpense = () => {
               <button
                 type="button"
                 onClick={() => navigate('/dashboard/expenses')}
-                className="px-6 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69]"
+                className="px-6 py-2 border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-[#E78D69] border border-transparent text-sm font-medium text-white hover:bg-[#E78D69]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-[#f58020] border border-transparent text-sm font-medium text-white hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Updating...' : 'Update Expense'}
               </button>
@@ -482,7 +482,7 @@ const EditExpense = () => {
               <div className="items-center px-4 py-3">
                 <button
                   onClick={handleModalClose}
-                  className="px-4 py-2 bg-[#E78D69] text-white text-base font-medium w-full shadow-sm hover:bg-[#E78D69]/90 focus:outline-none focus:ring-2 focus:ring-[#E78D69]"
+                  className="px-4 py-2 bg-[#f58020] text-white text-base font-medium w-full shadow-sm hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-[#f58020]"
                 >
                   Continue
                 </button>

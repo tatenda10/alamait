@@ -19,7 +19,9 @@ import AssignRoom from './pages/students/AssignRoom';
 import PettyCash from './pages/pettycash/PettyCash';
 import PettyCashReconciliation from './pages/pettycash/PettyCashReconciliation';
 import PendingExpenses from './pages/pettycash/PendingExpenses';
+import Banking from './pages/banking/Banking';
 import IncomeStatement from './pages/reports/IncomeStatement';
+import CashflowReport from './pages/reports/CashflowReport';
 import DebtorsReport from './pages/reports/DebtorsReport';
 import CreditorsReport from './pages/reports/CreditorsReport';
 import ExpensesReport from './pages/reports/ExpensesReport';
@@ -76,13 +78,14 @@ const App = () => {
         <Route path="petty-cash/reconciliation" element={<PettyCashReconciliation />} />
         <Route path="petty-cash/reconciliation/:accountId" element={<PettyCashReconciliation />} />
         <Route path="petty-cash/pending-expenses" element={<PendingExpenses />} />
+        <Route path="banking" element={<Banking />} />
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="suppliers/:id" element={<ViewSupplier />} />
         
         {/* Reports Routes */}
         <Route path="reports/overview" element={<div>Reports Overview Page</div>} />
         <Route path="reports/income-statement" element={<IncomeStatement />} />
-        <Route path="reports/cashflow" element={<div>Cashflow Report Page</div>} />
+        <Route path="reports/cashflow" element={<CashflowReport />} />
         <Route path="reports/debtors" element={<DebtorsReport />} />
         <Route path="reports/creditors" element={<CreditorsReport />} />
         <Route path="reports/expenses" element={<ExpensesReport />} />

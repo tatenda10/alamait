@@ -75,7 +75,7 @@ const Login = () => {
             {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded px-3 py-2 text-center text-sm font-medium">{error}</div>}
             <button
               type="submit"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
               className="w-full py-3 px-4 text-white font-bold rounded-lg transition disabled:opacity-60 text-lg tracking-wide mt-2 hover:bg-[#e07a4e] focus:bg-[#e07a4e]"
               disabled={loading}
             >

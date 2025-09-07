@@ -188,6 +188,20 @@ const AddExpense = () => {
     }
   }, [formData.boarding_house_id]);
 
+  // Generate auto reference number
+  const generateReferenceNumber = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    // Format: EXP-YYYYMMDD-HHMMSS
+    return `EXP-${year}${month}${day}-${hours}${minutes}${seconds}`;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -239,10 +253,16 @@ const AddExpense = () => {
     try {
       const formDataToSend = new FormData();
       
+      // Auto-generate reference number if not provided
+      const referenceNumber = formData.reference_number || generateReferenceNumber();
+      
       // Add all form fields to FormData
       Object.keys(formData).forEach(key => {
         if (key === 'receipt' && formData[key]) {
           formDataToSend.append('receipt', formData[key]);
+        } else if (key === 'reference_number') {
+          // Always send the reference number (auto-generated if empty)
+          formDataToSend.append('reference_number', referenceNumber);
         } else if (formData[key] !== null && formData[key] !== '') {
           formDataToSend.append(key, formData[key]);
         }
@@ -254,14 +274,22 @@ const AddExpense = () => {
       }
 
       // Regular expense creation (including petty cash expenses)
-      await axios.post(`${BASE_URL}/expenses`, formDataToSend, {
+      const response = await axios.post(`${BASE_URL}/expenses`, formDataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
 
-      navigate('/dashboard/expenses');
+      // Show success modal instead of navigating
+      setSubmittedExpenseData({
+        amount: formData.amount,
+        description: formData.description,
+        user: 'Current User', // You can get this from auth context if needed
+        date: formData.expense_date,
+        reference: formData.reference_number || generateReferenceNumber()
+      });
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Error creating expense:', error);
       setError(error.response?.data?.message || 'Failed to create expense');
@@ -281,7 +309,25 @@ const AddExpense = () => {
   const handleModalClose = () => {
     setShowSuccessModal(false);
     setSubmittedExpenseData(null);
-    navigate('/dashboard/expenses');
+    // Reset form for adding another expense
+    setFormData({
+      expense_date: new Date().toISOString().split('T')[0],
+      amount: '',
+      description: '',
+      payment_method: '',
+      reference_number: '',
+      expense_account_id: '',
+      boarding_house_id: formData.boarding_house_id, // Keep boarding house
+      notes: '',
+      receipt: null,
+      supplier_id: '',
+      payment_status: 'full',
+      petty_cash_account_id: '',
+      expense_category: '',
+      partial_payment_amount: '',
+      remaining_balance: '',
+      remaining_payment_method: ''
+    });
   };
 
   return (
@@ -390,14 +436,26 @@ const AddExpense = () => {
             )}
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number</label>
-              <input
-                type="text"
-                className="w-full text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={formData.reference_number}
-                onChange={(e) => setFormData(prev => ({ ...prev, reference_number: e.target.value }))}
-                placeholder="Enter reference number"
-              />
+              <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number (Optional)</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  value={formData.reference_number}
+                  onChange={(e) => setFormData(prev => ({ ...prev, reference_number: e.target.value }))}
+                  placeholder="Leave empty to auto-generate (EXP-YYYYMMDD-HHMMSS)"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, reference_number: generateReferenceNumber() }))}
+                  className="px-3 py-2 text-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded"
+                >
+                  Auto
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Click "Auto" button to generate a unique reference number, or leave empty to auto-generate on submit
+              </p>
             </div>
 
             <div>
@@ -571,7 +629,7 @@ const AddExpense = () => {
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Creating...' : 'Create Expense'}
             </button>
@@ -591,72 +649,53 @@ const AddExpense = () => {
                 </div>
               </div>
               
-              {/* Title */}
-              <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
-                Expense Submitted for Approval
-              </h3>
-              
-              {/* Message */}
-              <p className="text-sm text-gray-600 text-center mb-6">
-                Your petty cash expense has been successfully submitted and is now pending approval from an administrator.
-              </p>
-              
-              {/* Expense Details */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
-                  <FiClock className="w-4 h-4 mr-2 text-orange-500" />
-                  Expense Details
-                </h4>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Amount:</span>
-                    <span className="font-medium">${parseFloat(submittedExpenseData.amount).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">User:</span>
-                    <span className="font-medium">{submittedExpenseData.user}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Date:</span>
-                    <span className="font-medium">{submittedExpenseData.date}</span>
-                  </div>
-                  {submittedExpenseData.reference && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Reference:</span>
-                      <span className="font-medium">{submittedExpenseData.reference}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-gray-200">
-                    <span className="text-gray-600">Description:</span>
-                    <p className="font-medium mt-1">{submittedExpenseData.description}</p>
-                  </div>
-                </div>
+                      {/* Title */}
+        <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+          Expense Created Successfully!
+        </h3>
+        
+        {/* Message */}
+        <p className="text-sm text-gray-600 text-center mb-6">
+          Your expense has been successfully recorded in the system.
+        </p>
+        
+        {/* Expense Details */}
+        <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+            <FiCheckCircle className="w-4 h-4 mr-2 text-green-500" />
+            Expense Details
+          </h4>
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Amount:</span>
+              <span className="font-medium">${parseFloat(submittedExpenseData.amount).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Date:</span>
+              <span className="font-medium">{submittedExpenseData.date}</span>
+            </div>
+            {submittedExpenseData.reference && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Reference:</span>
+                <span className="font-medium">{submittedExpenseData.reference}</span>
               </div>
-              
-              {/* Status Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
-                <p className="text-xs text-blue-800">
-                  <strong>Next Steps:</strong> An administrator will review your expense and either approve or reject it. 
-                  You'll be notified of the decision, and if approved, the amount will be deducted from the petty cash balance.
-                </p>
-              </div>
-              
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button
-                  onClick={handleModalClose}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Back to Expenses
-                </button>
-                <button
-                  onClick={() => navigate('/dashboard/petty-cash/pending-expenses')}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
-                  style={{ backgroundColor: '#E78D69' }}
-                >
-                  View Pending
-                </button>
-              </div>
+            )}
+            <div className="pt-2 border-t border-gray-200">
+              <span className="text-gray-600">Description:</span>
+              <p className="font-medium mt-1">{submittedExpenseData.description}</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleModalClose}
+            className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Close
+          </button>
+        </div>
             </div>
           </div>
         </div>

@@ -605,13 +605,14 @@ exports.getBoardingHouseExpenses = async (req, res) => {
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
 
-    // Get total count with search
+    // Get total count with search (excluding petty cash expense duplicates)
     const [totalResult] = await db.query(
       `SELECT COUNT(*) as total
        FROM expenses e
        JOIN chart_of_accounts coa ON e.expense_account_id = coa.id
        WHERE e.boarding_house_id = ?
          AND e.deleted_at IS NULL
+         AND coa.name != 'Petty Cash Expense'
          AND (
            e.description LIKE ?
            OR e.reference_number LIKE ?
@@ -621,7 +622,7 @@ exports.getBoardingHouseExpenses = async (req, res) => {
       [boardingHouseId, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`]
     );
 
-    // Get paginated expenses with search
+    // Get paginated expenses with search (excluding petty cash expense duplicates)
     const [expenses] = await db.query(
       `SELECT 
         e.*,
@@ -636,6 +637,7 @@ exports.getBoardingHouseExpenses = async (req, res) => {
       LEFT JOIN suppliers s ON e.supplier_id = s.id
       WHERE e.boarding_house_id = ?
         AND e.deleted_at IS NULL
+        AND coa.name != 'Petty Cash Expense'
         AND (
           e.description LIKE ?
           OR e.reference_number LIKE ?
@@ -666,7 +668,7 @@ exports.getExpensesWithoutSupplier = async (req, res) => {
     // Use boarding house ID from user if authenticated, otherwise use default (1)
     const boardingHouseId = req.user?.boarding_house_id || 1;
 
-    // Get expenses that don't have a supplier_id or have null supplier_id
+    // Get expenses that don't have a supplier_id or have null supplier_id (excluding petty cash expense duplicates)
     const [expenses] = await db.query(
       `SELECT 
         e.id,
@@ -684,6 +686,7 @@ exports.getExpensesWithoutSupplier = async (req, res) => {
       LEFT JOIN supplier_payments sp ON e.id = sp.expense_id
       WHERE e.boarding_house_id = ?
         AND e.deleted_at IS NULL
+        AND coa.name != 'Petty Cash Expense'
         AND sp.expense_id IS NULL
       ORDER BY e.expense_date DESC, e.created_at DESC`,
       [boardingHouseId]
@@ -819,7 +822,7 @@ exports.deleteExpense = async (req, res) => {
 // Get all expenses across all boarding houses
 exports.getAllExpenses = async (req, res) => {
   try {
-    // Get all expenses from both regular expenses and petty cash expenses
+    // Get all expenses (excluding petty cash expense duplicates)
     const [expenses] = await db.query(
       `SELECT 
         'regular' as expense_type,
@@ -863,42 +866,8 @@ exports.getAllExpenses = async (req, res) => {
         GROUP BY expense_id
       ) sp ON e.id = sp.expense_id
       WHERE e.deleted_at IS NULL
-
-      UNION ALL
-
-      SELECT 
-        'petty_cash' as expense_type,
-        pct.id,
-        pct.transaction_date as expense_date,
-        pct.amount,
-        pct.description,
-        'petty_cash' as payment_method,
-        'full' as payment_status,
-        0 as remaining_balance,
-        pct.reference_number as reference_number,
-        NULL as expense_account_id,
-        'Petty Cash Expense' as expense_account_name,
-        'PC-EXP' as expense_account_code,
-        'Expense' as expense_account_type,
-        'approved' as transaction_status,
-        pct.boarding_house_id,
-        bh.name as boarding_house_name,
-        bh.location as boarding_house_location,
-        NULL as receipt_path,
-        NULL as receipt_original_name,
-        NULL as supplier_id,
-        pct.description as supplier_name,
-        NULL as supplier_contact,
-        NULL as supplier_phone,
-        NULL as supplier_address,
-        pct.amount as total_paid,
-        pct.created_at,
-        pct.created_at as updated_at
-      FROM petty_cash_transactions pct
-      LEFT JOIN boarding_houses bh ON pct.boarding_house_id = bh.id
-      WHERE pct.transaction_type = 'expense'
-
-      ORDER BY expense_date DESC, created_at DESC`,
+        AND coa.name != 'Petty Cash Expense'
+      ORDER BY e.expense_date DESC, e.created_at DESC`,
       []
     );
 

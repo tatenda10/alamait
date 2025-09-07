@@ -152,7 +152,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
               required
               value={terminationDate}
               onChange={(e) => setTerminationDate(e.target.value)}
-              className="block w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+              className="block w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
               placeholder="dd/mm/yyyy"
             />
           </div>
@@ -166,7 +166,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
               required
               value={terminationReason}
               onChange={(e) => setTerminationReason(e.target.value)}
-              className="block w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+              className="block w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
             >
               <option value="">Select a reason</option>
               <option value="end_of_lease">End of Lease</option>
@@ -192,7 +192,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
                     type="checkbox"
                     checked={checklistItems.payments.checked}
                     onChange={(e) => updateChecklistItem('payments', e.target.checked, checklistItems.payments.notes)}
-                    className="h-5 w-5 text-[#E78D69] focus:ring-[#E78D69] border-gray-300 rounded"
+                    className="h-5 w-5 text-[#f58020] focus:ring-[#f58020] border-gray-300 rounded"
                   />
                   <span className="ml-4 text-sm text-gray-700">All payments settled</span>
                 </div>
@@ -212,7 +212,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
                     type="checkbox"
                     checked={checklistItems.keys.checked}
                     onChange={(e) => updateChecklistItem('keys', e.target.checked, checklistItems.keys.notes)}
-                    className="h-5 w-5 text-[#E78D69] focus:ring-[#E78D69] border-gray-300 rounded"
+                    className="h-5 w-5 text-[#f58020] focus:ring-[#f58020] border-gray-300 rounded"
                   />
                   <span className="ml-4 text-sm text-gray-700">Keys returned</span>
                 </div>
@@ -232,7 +232,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
                     type="checkbox"
                     checked={checklistItems.inspection.checked}
                     onChange={(e) => updateChecklistItem('inspection', e.target.checked, checklistItems.inspection.notes)}
-                    className="h-5 w-5 text-[#E78D69] focus:ring-[#E78D69] border-gray-300 rounded"
+                    className="h-5 w-5 text-[#f58020] focus:ring-[#f58020] border-gray-300 rounded"
                   />
                   <span className="ml-4 text-sm text-gray-700">Room inspection completed</span>
                 </div>
@@ -252,7 +252,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
                     type="checkbox"
                     checked={checklistItems.cleaning.checked}
                     onChange={(e) => updateChecklistItem('cleaning', e.target.checked, checklistItems.cleaning.notes)}
-                    className="h-5 w-5 text-[#E78D69] focus:ring-[#E78D69] border-gray-300 rounded"
+                    className="h-5 w-5 text-[#f58020] focus:ring-[#f58020] border-gray-300 rounded"
                   />
                   <span className="ml-4 text-sm text-gray-700">Room cleaned</span>
                 </div>
@@ -272,7 +272,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
                     type="checkbox"
                     checked={checklistItems.belongings.checked}
                     onChange={(e) => updateChecklistItem('belongings', e.target.checked, checklistItems.belongings.notes)}
-                    className="h-5 w-5 text-[#E78D69] focus:ring-[#E78D69] border-gray-300 rounded"
+                    className="h-5 w-5 text-[#f58020] focus:ring-[#f58020] border-gray-300 rounded"
                   />
                   <span className="ml-4 text-sm text-gray-700">All belongings removed</span>
                 </div>
@@ -296,7 +296,7 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
               value={terminationNotes}
               onChange={(e) => setTerminationNotes(e.target.value)}
               rows={4}
-              className="block w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+              className="block w-full border border-gray-200 rounded px-3 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
               placeholder="Add any additional notes about the checkout..."
             />
           </div>

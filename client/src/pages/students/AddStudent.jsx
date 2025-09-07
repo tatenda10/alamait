@@ -229,7 +229,7 @@ export default function AddStudent() {
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Creating...' : 'Create Student'}
             </button>

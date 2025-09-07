@@ -179,7 +179,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                   errors.name ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter supplier name"
@@ -196,7 +196,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="company"
                 value={formData.company}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter company name"
               />
             </div>
@@ -210,7 +210,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                   errors.email ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter email address"
@@ -227,7 +227,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                   errors.phone ? 'border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter phone number"
@@ -243,7 +243,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="category"
                 value={formData.category}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                   errors.category ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
@@ -263,7 +263,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -284,7 +284,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="address"
                 value={formData.address}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter street address"
               />
             </div>
@@ -298,7 +298,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="city"
                 value={formData.city}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter city"
               />
             </div>
@@ -312,7 +312,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="state"
                 value={formData.state}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter state/province"
               />
             </div>
@@ -326,7 +326,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="zip_code"
                 value={formData.zip_code}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter ZIP/postal code"
               />
             </div>
@@ -340,7 +340,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="country"
                 value={formData.country}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter country"
               />
             </div>
@@ -359,7 +359,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="tax_id"
                 value={formData.tax_id}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter tax ID"
               />
             </div>
@@ -372,7 +372,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="payment_terms"
                 value={formData.payment_terms}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
               >
                 {paymentTermsOptions.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -389,7 +389,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 name="credit_limit"
                 value={formData.credit_limit}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter credit limit"
                 min="0"
                 step="0.01"
@@ -405,7 +405,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
                 value={formData.notes}
                 onChange={handleInputChange}
                 rows="3"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                 placeholder="Enter any additional notes"
               />
             </div>
@@ -423,7 +423,7 @@ const EditSupplierModal = ({ supplier, onClose, onSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-[#E78D69] text-white rounded-lg hover:bg-[#d67c5a] transition flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 bg-[#f58020] text-white rounded-lg hover:bg-[#d67c5a] transition flex items-center gap-2 disabled:opacity-50"
             >
               {loading ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

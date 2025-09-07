@@ -179,7 +179,7 @@ export default function AddPayment({
             id="payment_date"
             value={paymentDate}
             onChange={(e) => setPaymentDate(e.target.value)}
-            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
             required
           />
         </div>
@@ -192,7 +192,7 @@ export default function AddPayment({
             id="feeType"
             value={feeType}
             onChange={handleFeeTypeChange}
-            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
             required
           >
             {feeTypes.map(type => (
@@ -217,7 +217,7 @@ export default function AddPayment({
             id="amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
             required
             min="0"
             step="0.01"
@@ -238,7 +238,7 @@ export default function AddPayment({
             id="paymentMethod"
             value={paymentMethod}
             onChange={(e) => setPaymentMethod(e.target.value)}
-            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
             required
           >
             <option value="cash">Cash</option>
@@ -257,7 +257,7 @@ export default function AddPayment({
               id="schedule"
               value={selectedSchedule}
               onChange={(e) => setSelectedSchedule(e.target.value)}
-              className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+              className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
               required
             >
               <option value="">Select a schedule</option>
@@ -280,7 +280,7 @@ export default function AddPayment({
           id="receipt"
           onChange={(e) => setReceipt(e.target.files[0])}
           accept=".pdf,.jpg,.jpeg,.png"
-          className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-medium file:bg-[#E78D69]/10 file:text-[#E78D69] hover:file:bg-[#E78D69]/20"
+          className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-medium file:bg-[#f58020]/10 file:text-[#f58020] hover:file:bg-[#f58020]/20"
         />
       </div>
 
@@ -293,7 +293,7 @@ export default function AddPayment({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
-          className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+          className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
           placeholder="Add any additional notes about this payment..."
         />
       </div>
@@ -302,7 +302,7 @@ export default function AddPayment({
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 text-xs font-medium text-white bg-[#E78D69] hover:bg-[#E78D69]/90 rounded disabled:opacity-50"
+          className="px-4 py-2 text-xs font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90 rounded disabled:opacity-50"
         >
           {loading ? 'Adding Payment...' : 'Add Payment'}
         </button>

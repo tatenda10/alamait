@@ -238,7 +238,7 @@ export default function ViewRoom() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <button
                   onClick={() => navigate(`/dashboard/rooms/${room.id}/edit`)}
-                  className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69]"
+                  className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
                 >
                   <PencilIcon className="h-4 w-4 mr-2" />
                   Edit Room Details
@@ -266,7 +266,7 @@ export default function ViewRoom() {
 
                 <button
                   onClick={() => navigate('/dashboard/rooms')}
-                  className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69]"
+                  className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
                 >
                   <HomeIcon className="h-4 w-4 mr-2" />
                   Back to Rooms
@@ -331,7 +331,7 @@ export default function ViewRoom() {
           </div>
           <button
             onClick={() => navigate(`/dashboard/rooms/${room.id}/edit`)}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium text-white bg-[#E78D69] hover:bg-[#E78D69]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69]"
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
           >
             <PencilIcon className="h-4 w-4 mr-2" />
             Edit Room
@@ -351,7 +351,7 @@ export default function ViewRoom() {
                   onClick={() => setActiveTab(tab.id)}
                   className={`${
                     activeTab === tab.id
-                      ? 'border-[#E78D69] text-[#E78D69]'
+                      ? 'border-[#f58020] text-[#f58020]'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center`}
                 >

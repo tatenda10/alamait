@@ -6,11 +6,11 @@ import {
   FaCalculator, 
   FaChartBar,
   FaSignOutAlt,
-  FaUser
+  FaUser,
+  FaChartLine
 } from 'react-icons/fa';
 
-const Navbar = ({ onSectionChange, currentSection }) => {
-  const location = useLocation();
+const Navbar = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const handleLogout = () => {
@@ -21,6 +21,13 @@ const Navbar = ({ onSectionChange, currentSection }) => {
 
   const navigationItems = [
     {
+      id: 'dashboard',
+      label: 'Dashboard',
+      icon: FaChartLine,
+      path: '/dashboard',
+      exact: true
+    },
+    {
       id: 'students',
       label: 'Students',
       icon: FaUserGraduate,
@@ -30,19 +37,19 @@ const Navbar = ({ onSectionChange, currentSection }) => {
       id: 'accounting',
       label: 'Accounting',
       icon: FaCalculator,
-      path: '/dashboard/accounting'
+      path: '/dashboard/chart-of-accounts'
     },
     {
       id: 'reports',
       label: 'Reports',
       icon: FaChartBar,
-      path: '/dashboard/reports'
+      path: '/dashboard/reports/income-statement'
     },
     {
       id: 'configuration',
       label: 'Configuration',
       icon: FaCog,
-      path: '/dashboard'
+      path: '/dashboard/boarding-houses'
     }
   ];
 
@@ -57,21 +64,21 @@ const Navbar = ({ onSectionChange, currentSection }) => {
       <nav className="flex items-center space-x-1">
         {navigationItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentSection === item.id;
           
           return (
-            <button
+            <NavLink
               key={item.id}
-              onClick={() => onSectionChange(item.id)}
-              className={`flex items-center px-4 py-2 transition-all duration-200 font-medium text-sm relative ${
+              to={item.path}
+              end={item.exact}
+              className={({ isActive }) => `flex items-center px-4 py-2 transition-all duration-200 font-medium text-sm relative ${
                 isActive 
-                  ? 'text-[#E78D69] border-b-2 border-[#E78D69]' 
+                  ? 'text-[#f58020] border-b-2 border-[#f58020]' 
                   : 'text-gray-600 hover:text-gray-900 hover:border-b-2 hover:border-gray-300'
               }`}
             >
               <Icon className="h-4 w-4 mr-2" />
               {item.label}
-            </button>
+            </NavLink>
           );
         })}
       </nav>
@@ -83,7 +90,7 @@ const Navbar = ({ onSectionChange, currentSection }) => {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 transition-colors"
           >
-            <div className="w-8 h-8 bg-[#E78D69] rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-[#f58020] rounded-full flex items-center justify-center">
               <FaUser className="h-4 w-4 text-white" />
             </div>
             <span className="text-sm font-medium">Admin</span>

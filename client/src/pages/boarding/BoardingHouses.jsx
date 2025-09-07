@@ -128,7 +128,7 @@ const EditBoardingHouseModal = ({ isOpen, onClose, onBoardingHouseUpdated, token
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Updating...' : 'Update Boarding House'}
             </button>
@@ -258,7 +258,7 @@ const AddBoardingHouseModal = ({ isOpen, onClose, onBoardingHouseAdded, token, a
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Creating...' : 'Create Boarding House'}
             </button>
@@ -489,7 +489,7 @@ export default function BoardingHouses() {
             <button 
               onClick={() => setIsAddModalOpen(true)}
               className="flex items-center px-4 py-2 text-xs text-white transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               + Add Boarding House
             </button>

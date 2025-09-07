@@ -156,7 +156,7 @@ export default function Rooms() {
           </div>
           <Link
             to="/dashboard/rooms/add"
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-medium text-white bg-[#E78D69] hover:bg-[#E78D69]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69]"
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
           >
             <PlusIcon className="h-4 w-4 mr-2" />
             Add Room
@@ -175,7 +175,7 @@ export default function Rooms() {
             placeholder="Search rooms or boarding houses..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 text-xs leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 text-xs leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
           />
         </div>
         
@@ -186,7 +186,7 @@ export default function Rooms() {
           <select
             value={selectedBoardingHouse}
             onChange={(e) => setSelectedBoardingHouse(e.target.value)}
-            className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-gray-300 text-xs leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+            className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-gray-300 text-xs leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
           >
             <option value="all">All Boarding Houses</option>
             {boardingHouses.map((house) => (
@@ -200,7 +200,7 @@ export default function Rooms() {
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="block w-full sm:w-48 px-3 py-2 border border-gray-300 text-xs leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+          className="block w-full sm:w-48 px-3 py-2 border border-gray-300 text-xs leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
         >
           <option value="all">All Status</option>
           <option value="available">Available</option>
@@ -261,7 +261,7 @@ export default function Rooms() {
                   <div className="flex items-center space-x-2">
                     <Link
                       to={`/dashboard/rooms/${room.id}`}
-                      className="text-[#E78D69] hover:text-[#E78D69]/80"
+                      className="text-[#f58020] hover:text-[#f58020]/80"
                       title="View Details"
                     >
                       <EyeIcon className="h-5 w-5" />
@@ -298,7 +298,7 @@ export default function Rooms() {
                 <div className="mt-6">
                   <Link
                     to="/dashboard/rooms/add"
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-medium text-white bg-[#E78D69] hover:bg-[#E78D69]/90"
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-xs font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90"
                   >
                     <PlusIcon className="h-4 w-4 mr-2" />
                     Add Room

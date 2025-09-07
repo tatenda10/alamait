@@ -137,7 +137,7 @@ const Students = () => {
         <Link
           to="/dashboard/students/add"
           className="flex items-center px-4 py-2 text-xs text-white transition-colors"
-          style={{ backgroundColor: '#E78D69' }}
+          style={{ backgroundColor: '#f58020' }}
         >
           <FiPlus size={14} className="mr-2" />
           Add Student

@@ -31,7 +31,7 @@ const SuccessModal = ({ isOpen, onClose, isUpdate }) => {
             <div className="mt-5 sm:mt-6">
               <button
                 type="button"
-                className="inline-flex w-full justify-center rounded-md bg-[#E78D69] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#E78D69]/90"
+                className="inline-flex w-full justify-center rounded-md bg-[#f58020] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#f58020]/90"
                 onClick={onClose}
               >
                 View Student Details
@@ -389,7 +389,7 @@ export default function AssignRoom() {
                   key={room.id}
                   className={`relative flex cursor-pointer rounded-lg border p-4 focus:outline-none ${
                     selectedRoom === room.id 
-                      ? 'border-[#E78D69] bg-[#E78D69]/5'
+                      ? 'border-[#f58020] bg-[#f58020]/5'
                       : 'border-gray-200'
                   }`}
                 >
@@ -409,7 +409,7 @@ export default function AssignRoom() {
                       <div className="flex-shrink-0 mt-0.5">
                         <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
                           selectedRoom === room.id 
-                            ? 'border-[#E78D69] bg-[#E78D69]' 
+                            ? 'border-[#f58020] bg-[#f58020]' 
                             : 'border-gray-300'
                         }`}>
                           {selectedRoom === room.id && (
@@ -562,7 +562,7 @@ export default function AssignRoom() {
               <button
                 type="button"
                 onClick={handleAddSchedule}
-                className="inline-flex items-center text-sm text-[#E78D69] hover:text-[#E78D69]/90"
+                className="inline-flex items-center text-sm text-[#f58020] hover:text-[#f58020]/90"
               >
                 <PlusIcon className="h-5 w-5 mr-1" />
                 Add Schedule
@@ -579,7 +579,7 @@ export default function AssignRoom() {
                       type="date"
                       value={schedule.startDate}
                       onChange={(e) => handleScheduleChange(index, 'startDate', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                       required
                     />
                   </div>
@@ -591,7 +591,7 @@ export default function AssignRoom() {
                       type="date"
                       value={schedule.endDate}
                       onChange={(e) => handleScheduleChange(index, 'endDate', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                       required
                     />
                   </div>
@@ -603,7 +603,7 @@ export default function AssignRoom() {
                       type="number"
                       value={schedule.amount}
                       onChange={(e) => handleScheduleChange(index, 'amount', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                       required
                     />
                   </div>
@@ -615,7 +615,7 @@ export default function AssignRoom() {
                       type="text"
                       value={schedule.notes}
                       onChange={(e) => handleScheduleChange(index, 'notes', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                       placeholder="Optional notes..."
                     />
                   </div>
@@ -651,17 +651,17 @@ export default function AssignRoom() {
                   <label
                     htmlFor="lease-agreement"
                     className={`flex items-center justify-center px-6 py-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-gray-400 ${
-                      leaseAgreement ? 'border-[#E78D69] bg-[#E78D69]/5' : 'border-gray-300'
+                      leaseAgreement ? 'border-[#f58020] bg-[#f58020]/5' : 'border-gray-300'
                     }`}
                   >
                     <div className="space-y-1 text-center">
                       <DocumentArrowUpIcon className="mx-auto h-8 w-8 text-gray-400" />
                       <div className="text-sm text-gray-600">
                         {leaseAgreement ? (
-                          <span className="text-[#E78D69]">{leaseAgreement.name}</span>
+                          <span className="text-[#f58020]">{leaseAgreement.name}</span>
                         ) : (
                           <>
-                            <span className="text-[#E78D69]">
+                            <span className="text-[#f58020]">
                               {isUpdate ? 'Upload new lease agreement (optional)' : 'Upload lease agreement'}
                             </span>
                             <p className="text-xs text-gray-500">PDF only (max. 10MB)</p>
@@ -698,7 +698,7 @@ export default function AssignRoom() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add any additional notes or comments about this room assignment..."
-                className="block w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                className="block w-full border border-gray-200 rounded-lg px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
               />
             </div>
           </div>
@@ -715,7 +715,7 @@ export default function AssignRoom() {
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm font-semibold text-white bg-[#E78D69] hover:bg-[#E78D69]/90"
+            className="px-4 py-2 text-sm font-semibold text-white bg-[#f58020] hover:bg-[#f58020]/90"
           >
             {isUpdate ? 'Update Assignment' : 'Assign Room'}
           </button>

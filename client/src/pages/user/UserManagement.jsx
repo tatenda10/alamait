@@ -187,7 +187,7 @@ const AddUserModal = ({ isOpen, onClose, onUserAdded, token }) => {
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs text-white rounded-md transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Creating...' : 'Create User'}
             </button>
@@ -373,7 +373,7 @@ const EditUserModal = ({ isOpen, onClose, onUserUpdated, token, user }) => {
               type="submit"
               disabled={loading}
               className="px-4 py-2 text-xs text-white rounded-md transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               {loading ? 'Updating...' : 'Update User'}
             </button>
@@ -513,7 +513,7 @@ export default function UserManagement() {
             <button 
               onClick={() => setIsAddModalOpen(true)}
               className="flex items-center px-4 py-2 text-xs text-white rounded-md transition-colors"
-              style={{ backgroundColor: '#E78D69' }}
+              style={{ backgroundColor: '#f58020' }}
             >
               + Add User
             </button>

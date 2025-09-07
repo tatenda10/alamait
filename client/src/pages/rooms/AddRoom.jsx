@@ -185,7 +185,7 @@ export default function AddRoom() {
                   className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
                     errors.room_name
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:ring-[#E78D69] focus:border-[#E78D69]'
+                      : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
                   }`}
                   placeholder="e.g., Room 101, Deluxe Suite A"
                 />
@@ -212,7 +212,7 @@ export default function AddRoom() {
                   className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
                     errors.boarding_house_id
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                      : 'border-gray-300 focus:ring-[#E78D69] focus:border-[#E78D69]'
+                      : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
                   }`}
                 >
                   <option value="">Select a boarding house</option>
@@ -248,7 +248,7 @@ export default function AddRoom() {
                     className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
                       errors.capacity
                         ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                        : 'border-gray-300 focus:ring-[#E78D69] focus:border-[#E78D69]'
+                        : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
                     }`}
                     placeholder="1"
                   />
@@ -277,7 +277,7 @@ export default function AddRoom() {
                     className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
                       errors.monthly_rent
                         ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                        : 'border-gray-300 focus:ring-[#E78D69] focus:border-[#E78D69]'
+                        : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
                     }`}
                     placeholder="0.00"
                   />
@@ -299,7 +299,7 @@ export default function AddRoom() {
                   name="status"
                   value={formData.status}
                   onChange={handleInputChange}
-                  className="block w-full px-3 py-2 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+                  className="block w-full px-3 py-2 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
                 >
                   <option value="available">Available</option>
                   <option value="occupied">Occupied</option>
@@ -320,7 +320,7 @@ export default function AddRoom() {
                   rows={3}
                   value={formData.description}
                   onChange={handleInputChange}
-                  className="block w-full px-3 py-2 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+                  className="block w-full px-3 py-2 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
                   placeholder="Optional description of the room..."
                 />
               </div>
@@ -338,7 +338,7 @@ export default function AddRoom() {
                   rows={2}
                   value={formData.amenities}
                   onChange={handleInputChange}
-                  className="block w-full px-3 py-2 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#E78D69] focus:border-[#E78D69]"
+                  className="block w-full px-3 py-2 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
                   placeholder="e.g., Air conditioning, WiFi, Private bathroom..."
                 />
               </div>
@@ -349,14 +349,14 @@ export default function AddRoom() {
               <button
                 type="button"
                 onClick={() => navigate('/dashboard/rooms')}
-                className="px-3 py-2 border border-gray-300 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69]"
+                className="px-3 py-2 border border-gray-300 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-3 py-2 border border-transparent text-xs font-medium text-white bg-[#E78D69] hover:bg-[#E78D69]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#E78D69] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 border border-transparent text-xs font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating...' : 'Create Room'}
               </button>

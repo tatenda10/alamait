@@ -25,6 +25,7 @@ const pendingPettyCashRoutes = require('./routes/pendingPettyCash');
 const incomeStatementRoutes = require('./routes/incomeStatement');
 const accountsPayableRoutes = require('./routes/accountsPayable');
 const supplierPaymentRoutes = require('./routes/supplierPayment');
+const bankingRoutes = require('./routes/banking');
 // Enable CORS
 app.use(cors({
   origin: ['http://localhost:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
@@ -58,6 +59,7 @@ app.use('/api/pending-petty-cash', pendingPettyCashRoutes);
 app.use('/api/income-statement', incomeStatementRoutes);
 app.use('/api/accounts-payable', accountsPayableRoutes);
 app.use('/api/supplier-payments', supplierPaymentRoutes);
+app.use('/api/banking', bankingRoutes);
 
 const swaggerDefinition = {
   openapi: '3.0.0',

@@ -60,25 +60,25 @@ const Sidebar = () => {
       </div>
       <nav className="flex-1 space-y-2">
         {/* Dashboard */}
-        <NavLink to="/dashboard" end className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard" end className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaTachometerAlt className="h-5 w-5 mr-2" /> Dashboard
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
 
         {/* Boarding Houses */}
-        <NavLink to="/dashboard/boarding-houses" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/boarding-houses" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaBuilding className="h-5 w-5 mr-2" /> Boarding Houses
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
 
         {/* Rooms */}
-        <NavLink to="/dashboard/rooms" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/rooms" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaDoorOpen className="h-5 w-5 mr-2" /> Rooms
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
 
         {/* Chart of Accounts */}
-        <NavLink to="/dashboard/chart-of-accounts" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/chart-of-accounts" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaBook className="h-5 w-5 mr-2" /> Chart of Accounts
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
@@ -103,13 +103,13 @@ const Sidebar = () => {
             <div className="ml-4 mt-1 space-y-1">
               <NavLink 
                 to="/dashboard/expenses" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaReceipt className="h-4 w-4 mr-2" /> All Expenses
               </NavLink>
               <NavLink 
                 to="/dashboard/expenses/accounts-payable" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaFileAlt className="h-4 w-4 mr-2" /> Accounts Payable
               </NavLink>
@@ -119,7 +119,7 @@ const Sidebar = () => {
         <div className="border-b border-gray-200 my-1" />
 
         {/* Income */}
-        <NavLink to="/dashboard/income" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/income" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaMoneyBill className="h-5 w-5 mr-2" /> Income
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
@@ -144,13 +144,13 @@ const Sidebar = () => {
             <div className="ml-4 mt-1 space-y-1">
               <NavLink 
                 to="/dashboard/petty-cash" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaWallet className="h-4 w-4 mr-2" /> Manage Users
               </NavLink>
               <NavLink 
                 to="/dashboard/petty-cash/pending-expenses" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaExclamationTriangle className="h-4 w-4 mr-2" /> Pending Expenses
               </NavLink>
@@ -160,7 +160,7 @@ const Sidebar = () => {
         <div className="border-b border-gray-200 my-1" />
 
         {/* Suppliers */}
-        <NavLink to="/dashboard/suppliers" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/suppliers" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaTruck className="h-5 w-5 mr-2" /> Suppliers
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
@@ -185,31 +185,31 @@ const Sidebar = () => {
             <div className="ml-4 mt-1 space-y-1">
               <NavLink 
                 to="/dashboard/reports/income-statement" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaChartLine className="h-4 w-4 mr-2" /> Income Statement
               </NavLink>
               <NavLink 
                 to="/dashboard/reports/debtors" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaExclamationTriangle className="h-4 w-4 mr-2" /> Debtors Report
               </NavLink>
               <NavLink 
                 to="/dashboard/reports/creditors" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaTruck className="h-4 w-4 mr-2" /> Creditors Report
               </NavLink>
               {/* <NavLink 
                 to="/dashboard/reports/expenses" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaReceipt className="h-4 w-4 mr-2" /> Expenses Report
               </NavLink>
               <NavLink 
                 to="/dashboard/reports/cashflow" 
-                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-600'}`}
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaExchangeAlt className="h-4 w-4 mr-2" /> Cashflow Report
               </NavLink> */}
@@ -219,13 +219,13 @@ const Sidebar = () => {
         <div className="border-b border-gray-200 my-1" />
 
         {/* User Management */}
-        <NavLink to="/dashboard/users" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/users" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaUsers className="h-5 w-5 mr-2" /> User Management
         </NavLink>
         <div className="border-b border-gray-200 my-1" />
 
         {/* Students */}
-        <NavLink to="/dashboard/students" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#E78D69] font-bold bg-[#E78D69]/10' : 'text-gray-700'}`}>
+        <NavLink to="/dashboard/students" className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-700'}`}>
           <FaUserGraduate className="h-5 w-5 mr-2" /> Students
         </NavLink>
         <div className="border-b border-gray-200 my-1" />

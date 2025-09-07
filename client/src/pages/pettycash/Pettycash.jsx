@@ -32,15 +32,19 @@ const PettyCash = () => {
   const [addCashForm, setAddCashForm] = useState({
     amount: '',
     description: '',
+    reference_date: new Date().toISOString().split('T')[0], // Default to today
     reference_number: '',
-    notes: ''
+    notes: '',
+    source_account: '10002' // Default to Cash on Hand
   });
 
   const [withdrawForm, setWithdrawForm] = useState({
     amount: '',
     purpose: '',
+    reference_date: new Date().toISOString().split('T')[0], // Default to today
     reference_number: '',
-    notes: ''
+    notes: '',
+    destination_account: '10002' // Default to Cash on Hand
   });
 
   useEffect(() => {
@@ -106,8 +110,10 @@ const PettyCash = () => {
       const cashData = {
         amount: parseFloat(addCashForm.amount),
         description: addCashForm.description,
+        transaction_date: addCashForm.reference_date,
         reference_number: addCashForm.reference_number,
-        notes: addCashForm.notes
+        notes: addCashForm.notes,
+        source_account: addCashForm.source_account
       };
       
       await axios.post(`${BASE_URL}/petty-cash/add-cash`, cashData, {
@@ -118,7 +124,14 @@ const PettyCash = () => {
         }
       });
       
-      toast.success('Cash added successfully');
+      // Get source account name for better user feedback
+      const sourceNames = {
+        '10002': 'Cash on Hand',
+        '10003': 'CBZ Bank Account',
+        '10004': 'CBZ Vault'
+      };
+      const sourceName = sourceNames[addCashForm.source_account] || 'selected account';
+      toast.success(`Cash added successfully from ${sourceName}`);
       setShowAddCashModal(false);
       resetAddCashForm();
       fetchPettyCashData();
@@ -137,8 +150,10 @@ const PettyCash = () => {
       const withdrawData = {
         amount: parseFloat(withdrawForm.amount),
         purpose: withdrawForm.purpose,
+        transaction_date: withdrawForm.reference_date,
         reference_number: withdrawForm.reference_number,
-        notes: withdrawForm.notes
+        notes: withdrawForm.notes,
+        destination_account: withdrawForm.destination_account
       };
       
       await axios.post(`${BASE_URL}/petty-cash/withdraw-cash`, withdrawData, {
@@ -149,7 +164,14 @@ const PettyCash = () => {
         }
       });
       
-      toast.success('Cash withdrawn successfully');
+      // Get destination account name for better user feedback
+      const destinationNames = {
+        '10002': 'Cash on Hand',
+        '10003': 'CBZ Bank Account',
+        '10004': 'CBZ Vault'
+      };
+      const destinationName = destinationNames[withdrawForm.destination_account] || 'selected account';
+      toast.success(`Cash withdrawn successfully to ${destinationName}`);
       setShowWithdrawModal(false);
       resetWithdrawForm();
       fetchPettyCashData();
@@ -166,8 +188,10 @@ const PettyCash = () => {
     setAddCashForm({
       amount: '',
       description: '',
+      reference_date: new Date().toISOString().split('T')[0], // Reset to today
       reference_number: '',
-      notes: ''
+      notes: '',
+      source_account: '10002' // Reset to Cash on Hand
     });
   };
 
@@ -175,8 +199,10 @@ const PettyCash = () => {
     setWithdrawForm({
       amount: '',
       purpose: '',
+      reference_date: new Date().toISOString().split('T')[0], // Reset to today
       reference_number: '',
-      notes: ''
+      notes: '',
+      destination_account: '10002' // Reset to Cash on Hand
     });
   };
 
@@ -238,7 +264,7 @@ const PettyCash = () => {
           <button
             onClick={() => setShowAddCashModal(true)}
             className="flex items-center px-4 py-2 text-xs text-white transition-colors"
-            style={{ backgroundColor: '#E78D69' }}
+            style={{ backgroundColor: '#f58020' }}
           >
             <FaPlus size={14} className="mr-2" />
             Add Cash
@@ -409,6 +435,32 @@ const PettyCash = () => {
                   />
                 </div>
                 <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Source Account*</label>
+                  <select
+                    required
+                    value={addCashForm.source_account}
+                    onChange={(e) => setAddCashForm({...addCashForm, source_account: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="10002">10002 - Cash (Cash on Hand)</option>
+                    <option value="10003">10003 - CBZ Bank Account</option>
+                    <option value="10004">10004 - CBZ Vault</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select where the money is coming from
+                  </p>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Transaction Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={addCashForm.reference_date}
+                    onChange={(e) => setAddCashForm({...addCashForm, reference_date: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Reference Number</label>
                   <input
                     type="text"
@@ -439,7 +491,7 @@ const PettyCash = () => {
                   <button
                     type="submit"
                     className="px-4 py-2 text-xs font-medium text-white transition-colors"
-                    style={{ backgroundColor: '#E78D69' }}
+                    style={{ backgroundColor: '#f58020' }}
                   >
                     Add Cash
                   </button>
@@ -478,6 +530,32 @@ const PettyCash = () => {
                     onChange={(e) => setWithdrawForm({...withdrawForm, purpose: e.target.value})}
                     className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="e.g., Bank deposit"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Destination Account*</label>
+                  <select
+                    required
+                    value={withdrawForm.destination_account}
+                    onChange={(e) => setWithdrawForm({...withdrawForm, destination_account: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="10002">10002 - Cash (Cash on Hand)</option>
+                    <option value="10003">10003 - CBZ Bank Account</option>
+                    <option value="10004">10004 - CBZ Vault</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select where the withdrawn money will go
+                  </p>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Transaction Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={withdrawForm.reference_date}
+                    onChange={(e) => setWithdrawForm({...withdrawForm, reference_date: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div className="mb-4">

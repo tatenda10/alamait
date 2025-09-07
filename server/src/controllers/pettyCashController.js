@@ -106,7 +106,7 @@ exports.addCash = async (req, res) => {
     await connection.beginTransaction();
     
     const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
-    const { amount, description, reference_number, notes } = req.body;
+    const { amount, description, transaction_date, reference_number, notes, source_account } = req.body;
     const created_by = req.user.id;
     
     if (!boardingHouseId) {
@@ -130,17 +130,73 @@ exports.addCash = async (req, res) => {
       });
     }
 
+    if (!source_account) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Source account is required. Where is the money coming from?' 
+      });
+    }
+
     const cashAmount = parseFloat(amount);
     
-    // Create transaction record
+    // Get source account details
+    const [sourceAccountResult] = await connection.query(
+      `SELECT id, code, name, type FROM chart_of_accounts WHERE code = ? AND deleted_at IS NULL`,
+      [source_account]
+    );
+
+    if (sourceAccountResult.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid source account code: ${source_account}`
+      });
+    }
+
+    const sourceAccount = sourceAccountResult[0];
+
+    // Validate that source account is an asset account (cash, bank, etc.)
+    if (sourceAccount.type !== 'Asset') {
+      return res.status(400).json({
+        success: false,
+        message: `Source account must be an Asset account. ${sourceAccount.name} is a ${sourceAccount.type} account.`
+      });
+    }
+
+    // Create main transaction record
+    const [mainTransactionResult] = await connection.query(
+      `INSERT INTO transactions (
+        transaction_type,
+        reference,
+        amount,
+        currency,
+        description,
+        transaction_date,
+        boarding_house_id,
+        created_by,
+        created_at,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'posted')`,
+      [
+        'petty_cash_addition',
+        reference_number || `PCA-${Date.now()}`,
+        cashAmount,
+        'USD',
+        `Petty Cash Addition: ${description}`,
+        transaction_date || new Date().toISOString().split('T')[0],
+        boardingHouseId,
+        created_by
+      ]
+    );
+    
+    // Create petty cash transaction record
     const [transactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
        (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-       VALUES (?, 'cash_inflow', ?, ?, ?, ?, CURDATE(), ?, NOW())`,
-      [boardingHouseId, cashAmount, description, reference_number, notes, created_by]
+       VALUES (?, 'cash_inflow', ?, ?, ?, ?, ?, ?, NOW())`,
+      [boardingHouseId, cashAmount, description, reference_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
     );
     
-    // Update account balance
+    // Update petty cash account balance
     await connection.query(
       `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
        VALUES (?, ?, ?, NOW())
@@ -150,13 +206,116 @@ exports.addCash = async (req, res) => {
        updated_at = NOW()`,
       [boardingHouseId, cashAmount, cashAmount, cashAmount, cashAmount]
     );
+
+    // Create journal entries for proper double-entry bookkeeping
+    // 1. Debit petty cash account
+    const [pettyCashAccountResult] = await connection.query(
+      `SELECT id FROM chart_of_accounts WHERE code = '10001' AND deleted_at IS NULL`
+    );
+
+    if (pettyCashAccountResult.length > 0) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
+        [
+          mainTransactionResult.insertId,
+          pettyCashAccountResult[0].id,
+          cashAmount,
+          `Petty Cash Addition: ${description}`,
+          boardingHouseId,
+          created_by
+        ]
+      );
+    }
+
+    // 2. Credit the source account (Cash, Bank, etc.)
+    await connection.query(
+      `INSERT INTO journal_entries (
+        transaction_id,
+        account_id,
+        entry_type,
+        amount,
+        description,
+        boarding_house_id,
+        created_by,
+        created_at
+      ) VALUES (?, ?, 'credit', ?, ?, ?, ?, NOW())`,
+      [
+        mainTransactionResult.insertId,
+        sourceAccount.id,
+        cashAmount,
+        `Petty Cash Addition from ${sourceAccount.name}`,
+        boardingHouseId,
+        created_by
+      ]
+    );
+
+    // Update current account balances
+    // Update petty cash balance
+    await connection.query(
+      `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+       VALUES (?, '10001', 'Petty Cash', 'Asset', ?, ?, 0, 1, ?)
+       ON DUPLICATE KEY UPDATE 
+       current_balance = current_balance + ?,
+       total_debits = total_debits + ?,
+       transaction_count = transaction_count + 1,
+       last_transaction_date = ?,
+       updated_at = NOW()`,
+      [
+        pettyCashAccountResult[0].id,
+        cashAmount,
+        cashAmount,
+        transaction_date || new Date().toISOString().split('T')[0],
+        cashAmount,
+        cashAmount,
+        transaction_date || new Date().toISOString().split('T')[0]
+      ]
+    );
+
+    // Update source account balance
+    await connection.query(
+      `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+       VALUES (?, ?, ?, ?, 0, 0, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE 
+       current_balance = current_balance - ?,
+       total_credits = total_credits + ?,
+       transaction_count = transaction_count + 1,
+       last_transaction_date = ?,
+       updated_at = NOW()`,
+      [
+        sourceAccount.id,
+        sourceAccount.code,
+        sourceAccount.name,
+        sourceAccount.type,
+        cashAmount,
+        transaction_date || new Date().toISOString().split('T')[0],
+        cashAmount,
+        cashAmount,
+        transaction_date || new Date().toISOString().split('T')[0]
+      ]
+    );
     
     await connection.commit();
     
     res.json({
       success: true,
-      message: 'Cash added successfully',
-      transaction_id: transactionResult.insertId
+      message: `Cash added successfully from ${sourceAccount.name}`,
+      transaction_id: mainTransactionResult.insertId,
+      petty_cash_transaction_id: transactionResult.insertId,
+      source_account: {
+        code: sourceAccount.code,
+        name: sourceAccount.name,
+        type: sourceAccount.type
+      },
+      amount: cashAmount
     });
 
   } catch (error) {
@@ -179,7 +338,7 @@ exports.withdrawCash = async (req, res) => {
     await connection.beginTransaction();
     
     const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
-    const { amount, purpose, reference_number, notes } = req.body;
+    const { amount, purpose, transaction_date, reference_number, notes, destination_account } = req.body;
     const created_by = req.user.id;
     
     if (!boardingHouseId) {
@@ -203,6 +362,13 @@ exports.withdrawCash = async (req, res) => {
       });
     }
 
+    if (!destination_account) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Destination account is required. Where is the withdrawn money going?' 
+      });
+    }
+
     const withdrawAmount = parseFloat(amount);
     
     // Check current balance
@@ -219,16 +385,65 @@ exports.withdrawCash = async (req, res) => {
         message: `Insufficient balance. Current balance: $${currentBalance.toFixed(2)}`
       });
     }
-    
-    // Create transaction record
-    const [transactionResult] = await connection.query(
+
+    // Get destination account details
+    const [destinationAccountResult] = await connection.query(
+      `SELECT id, code, name, type FROM chart_of_accounts WHERE code = ? AND deleted_at IS NULL`,
+      [destination_account]
+    );
+
+    if (destinationAccountResult.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid destination account code: ${destination_account}`
+      });
+    }
+
+    const destinationAccount = destinationAccountResult[0];
+
+    // Validate that destination account is an asset account (cash, bank, etc.)
+    if (destinationAccount.type !== 'Asset') {
+      return res.status(400).json({
+        success: false,
+        message: `Destination account must be an Asset account. ${destinationAccount.name} is a ${destinationAccount.type} account.`
+      });
+    }
+
+    // Create main transaction record
+    const [mainTransactionResult] = await connection.query(
+      `INSERT INTO transactions (
+        transaction_type,
+        reference,
+        amount,
+        currency,
+        description,
+        transaction_date,
+        boarding_house_id,
+        created_by,
+        created_at,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'posted')`,
+      [
+        'petty_cash_withdrawal',
+        reference_number || `PCW-${Date.now()}`,
+        withdrawAmount,
+        'USD',
+        `Petty Cash Withdrawal: ${purpose}`,
+        transaction_date || new Date().toISOString().split('T')[0],
+        boardingHouseId,
+        created_by
+      ]
+    );
+
+    // Create petty cash transaction record
+    const [pettyCashTransactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
        (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-       VALUES (?, 'withdrawal', ?, ?, ?, ?, CURDATE(), ?, NOW())`,
-      [boardingHouseId, withdrawAmount, purpose, reference_number, notes, created_by]
+       VALUES (?, 'withdrawal', ?, ?, ?, ?, ?, ?, NOW())`,
+      [boardingHouseId, withdrawAmount, purpose, reference_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
     );
     
-    // Update account balance
+    // Update petty cash account balance
     await connection.query(
       `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_outflows, created_at)
        VALUES (?, ?, ?, NOW())
@@ -238,13 +453,118 @@ exports.withdrawCash = async (req, res) => {
        updated_at = NOW()`,
       [boardingHouseId, currentBalance - withdrawAmount, withdrawAmount, withdrawAmount, withdrawAmount]
     );
+
+    // Create journal entries for proper double-entry bookkeeping
+    // 1. Debit the destination account (Cash, Bank, etc.)
+    await connection.query(
+      `INSERT INTO journal_entries (
+        transaction_id,
+        account_id,
+        entry_type,
+        amount,
+        description,
+        boarding_house_id,
+        created_by,
+        created_at
+      ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
+      [
+        mainTransactionResult.insertId,
+        destinationAccount.id,
+        withdrawAmount,
+        `Petty Cash Withdrawal to ${destinationAccount.name}`,
+        boardingHouseId,
+        created_by
+      ]
+    );
+
+    // 2. Credit petty cash account
+    const [pettyCashAccountResult] = await connection.query(
+      `SELECT id FROM chart_of_accounts WHERE code = '10001' AND deleted_at IS NULL`
+    );
+
+    if (pettyCashAccountResult.length > 0) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, 'credit', ?, ?, ?, ?, NOW())`,
+        [
+          mainTransactionResult.insertId,
+          pettyCashAccountResult[0].id,
+          withdrawAmount,
+          `Petty Cash Withdrawal: ${purpose}`,
+          boardingHouseId,
+          created_by
+        ]
+      );
+    }
+
+    // Update current account balances
+    // Update petty cash balance
+    await connection.query(
+      `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+       VALUES (?, '10001', 'Petty Cash', 'Asset', ?, 0, ?, 1, ?)
+       ON DUPLICATE KEY UPDATE 
+       current_balance = current_balance - ?,
+       total_credits = total_credits + ?,
+       transaction_count = transaction_count + 1,
+       last_transaction_date = ?,
+       updated_at = NOW()`,
+      [
+        pettyCashAccountResult[0].id,
+        currentBalance - withdrawAmount,
+        withdrawAmount,
+        transaction_date || new Date().toISOString().split('T')[0],
+        withdrawAmount,
+        withdrawAmount,
+        transaction_date || new Date().toISOString().split('T')[0]
+      ]
+    );
+
+    // Update destination account balance
+    await connection.query(
+      `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?)
+       ON DUPLICATE KEY UPDATE 
+       current_balance = current_balance + ?,
+       total_debits = total_debits + ?,
+       transaction_count = transaction_count + 1,
+       last_transaction_date = ?,
+       updated_at = NOW()`,
+      [
+        destinationAccount.id,
+        destinationAccount.code,
+        destinationAccount.name,
+        destinationAccount.type,
+        withdrawAmount,
+        withdrawAmount,
+        transaction_date || new Date().toISOString().split('T')[0],
+        withdrawAmount,
+        withdrawAmount,
+        transaction_date || new Date().toISOString().split('T')[0]
+      ]
+    );
     
     await connection.commit();
     
     res.json({
       success: true,
-      message: 'Cash withdrawn successfully',
-      transaction_id: transactionResult.insertId
+      message: `Cash withdrawn successfully from petty cash to ${destinationAccount.name}`,
+      transaction_id: mainTransactionResult.insertId,
+      petty_cash_transaction_id: pettyCashTransactionResult.insertId,
+      destination_account: {
+        code: destinationAccount.code,
+        name: destinationAccount.name,
+        type: destinationAccount.type
+      },
+      amount: withdrawAmount,
+      new_petty_cash_balance: currentBalance - withdrawAmount
     });
 
   } catch (error) {
@@ -270,6 +590,7 @@ exports.addExpense = async (req, res) => {
     const { 
       amount, 
       description, 
+      transaction_date,
       expense_category, 
       vendor_name, 
       receipt_number, 
@@ -319,8 +640,8 @@ exports.addExpense = async (req, res) => {
     const [transactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
        (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-       VALUES (?, 'expense', ?, ?, ?, ?, CURDATE(), ?, NOW())`,
-      [boardingHouseId, expenseAmount, description, receipt_number, notes, created_by]
+       VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, NOW())`,
+      [boardingHouseId, expenseAmount, description, receipt_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
     );
     
     // Update account balance

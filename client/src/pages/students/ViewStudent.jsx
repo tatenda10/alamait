@@ -27,7 +27,7 @@ const TabButton = ({ active, icon: Icon, label, onClick }) => (
     onClick={onClick}
     className={`flex items-center gap-x-2 px-4 py-2 text-sm font-medium border-b-2 ${
       active
-        ? 'border-[#E78D69] text-[#E78D69]'
+        ? 'border-[#f58020] text-[#f58020]'
         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
     }`}
   >
@@ -243,7 +243,7 @@ export default function ViewStudent() {
                   type="date"
                   value={newSchedule.startDate}
                   onChange={(e) => setNewSchedule({ ...newSchedule, startDate: e.target.value })}
-                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                   required
                 />
               </div>
@@ -256,7 +256,7 @@ export default function ViewStudent() {
                   type="date"
                   value={newSchedule.endDate}
                   onChange={(e) => setNewSchedule({ ...newSchedule, endDate: e.target.value })}
-                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                   required
                 />
               </div>
@@ -269,7 +269,7 @@ export default function ViewStudent() {
                   type="number"
                   value={newSchedule.amount}
                   onChange={(e) => setNewSchedule({ ...newSchedule, amount: e.target.value })}
-                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                   required
                   min="0"
                   step="0.01"
@@ -283,7 +283,7 @@ export default function ViewStudent() {
                 <select
                   value={newSchedule.currency}
                   onChange={(e) => setNewSchedule({ ...newSchedule, currency: e.target.value })}
-                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                 >
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
@@ -298,7 +298,7 @@ export default function ViewStudent() {
                 <textarea
                   value={newSchedule.notes}
                   onChange={(e) => setNewSchedule({ ...newSchedule, notes: e.target.value })}
-                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#E78D69] focus:ring-[#E78D69]"
+                  className="block w-full border border-gray-200 rounded-md px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
                   rows={3}
                 />
               </div>
@@ -314,7 +314,7 @@ export default function ViewStudent() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-[#E78D69] rounded-md hover:bg-[#E78D69]/90"
+                className="px-4 py-2 text-sm font-medium text-white bg-[#f58020] rounded-md hover:bg-[#f58020]/90"
               >
                 Add Schedule
               </button>
@@ -395,7 +395,7 @@ export default function ViewStudent() {
           <h3 className="text-base font-medium text-gray-900">Current Room Assignment</h3>
           <button
             onClick={() => navigate(`/dashboard/students/assign-room/${student.id}`)}
-            className="text-sm text-[#E78D69] hover:text-[#E78D69]/80"
+            className="text-sm text-[#f58020] hover:text-[#f58020]/80"
           >
             {student.room_id ? 'Change Room' : 'Assign Room'}
           </button>
@@ -492,7 +492,7 @@ export default function ViewStudent() {
               <p className="text-sm text-gray-500">No room currently assigned</p>
               <button
                 onClick={() => navigate(`/dashboard/students/assign-room/${student.id}`)}
-                className="mt-2 text-sm text-[#E78D69] hover:text-[#E78D69]/80 font-medium"
+                className="mt-2 text-sm text-[#f58020] hover:text-[#f58020]/80 font-medium"
               >
                 Assign a Room
               </button>
@@ -507,7 +507,7 @@ export default function ViewStudent() {
               <h4 className="text-xs font-medium text-gray-900">Payment Schedule</h4>
               <button
                 onClick={() => setIsScheduleModalOpen(true)}
-                className="inline-flex items-center text-xs text-[#E78D69] hover:text-[#E78D69]/90"
+                className="inline-flex items-center text-xs text-[#f58020] hover:text-[#f58020]/90"
               >
                 <PlusIcon className="h-4 w-4 mr-1" />
                 Add Schedule
@@ -1014,7 +1014,7 @@ export default function ViewStudent() {
             <button
               onClick={onConfirm}
               className={`px-4 py-2 text-sm font-medium text-white ${
-                hasFailedItems ? 'bg-red-600 hover:bg-red-700' : 'bg-[#E78D69] hover:bg-[#E78D69]/90'
+                hasFailedItems ? 'bg-red-600 hover:bg-red-700' : 'bg-[#f58020] hover:bg-[#f58020]/90'
               }`}
             >
               {hasFailedItems ? 'Proceed Anyway' : 'Complete Checkout'}

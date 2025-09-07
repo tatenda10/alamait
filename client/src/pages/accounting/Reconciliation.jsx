@@ -40,7 +40,7 @@ const Reconciliation = () => {
         <button
           onClick={handleCreateReconciliation}
           disabled={!selectedAccount}
-          className="bg-[#E78D69] text-white px-4 py-2 rounded-lg hover:bg-[#E78D69]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-[#f58020] text-white px-4 py-2 rounded-lg hover:bg-[#f58020]/90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FaBalanceScale className="inline mr-2" />
           New Reconciliation
@@ -58,7 +58,7 @@ const Reconciliation = () => {
                 onClick={() => setSelectedAccount(account)}
                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
                   selectedAccount?.id === account.id
-                    ? 'border-[#E78D69] bg-[#E78D69]/10'
+                    ? 'border-[#f58020] bg-[#f58020]/10'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
@@ -129,16 +129,16 @@ const Reconciliation = () => {
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:border-[#E78D69] hover:bg-[#E78D69]/5 transition-colors">
-            <FaDownload className="h-5 w-5 mr-2 text-[#E78D69]" />
+          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:border-[#f58020] hover:bg-[#f58020]/5 transition-colors">
+            <FaDownload className="h-5 w-5 mr-2 text-[#f58020]" />
             Export Ledger
           </button>
-          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:border-[#E78D69] hover:bg-[#E78D69]/5 transition-colors">
-            <FaBalanceScale className="h-5 w-5 mr-2 text-[#E78D69]" />
+          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:border-[#f58020] hover:bg-[#f58020]/5 transition-colors">
+            <FaBalanceScale className="h-5 w-5 mr-2 text-[#f58020]" />
             View Account Balances
           </button>
-          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:border-[#E78D69] hover:bg-[#E78D69]/5 transition-colors">
-            <FaEye className="h-5 w-5 mr-2 text-[#E78D69]" />
+          <button className="flex items-center justify-center p-4 border border-gray-200 rounded-lg hover:border-[#f58020] hover:bg-[#f58020]/5 transition-colors">
+            <FaEye className="h-5 w-5 mr-2 text-[#f58020]" />
             Transaction History
           </button>
         </div>

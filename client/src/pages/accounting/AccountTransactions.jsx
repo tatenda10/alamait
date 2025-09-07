@@ -459,7 +459,7 @@ const AccountTransactions = () => {
               <button
                 onClick={fetchTransactions}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-white border border-gray-200"
-                style={{ backgroundColor: '#E78D69' }}
+                style={{ backgroundColor: '#f58020' }}
               >
                 <FiRefreshCw size={14} />
                 Refresh
@@ -467,7 +467,7 @@ const AccountTransactions = () => {
               <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-3 py-2 text-xs text-white border border-gray-200"
-                style={{ backgroundColor: '#E78D69' }}
+                style={{ backgroundColor: '#f58020' }}
               >
                 <FiDownload size={14} />
                 Export
@@ -513,7 +513,7 @@ const AccountTransactions = () => {
               <button
                 onClick={() => setFilters(prev => ({ ...prev, start_date: '', end_date: '', offset: 0 }))}
                 className="text-xs text-white px-3 py-1"
-                style={{ backgroundColor: '#E78D69' }}
+                style={{ backgroundColor: '#f58020' }}
               >
                 Clear filters
               </button>
@@ -541,7 +541,7 @@ const AccountTransactions = () => {
                 onClick={fetchAccountBalance}
                 disabled={balanceLoading}
                 className="flex items-center gap-2 px-3 py-1 text-xs text-white border border-gray-200 disabled:opacity-50"
-                style={{ backgroundColor: balanceLoading ? '#9CA3AF' : '#E78D69' }}
+                style={{ backgroundColor: balanceLoading ? '#9CA3AF' : '#f58020' }}
               >
                 <FiRefreshCw size={12} className={balanceLoading ? 'animate-spin' : ''} />
                 Refresh Balance
@@ -654,7 +654,7 @@ const AccountTransactions = () => {
                         onClick={() => handleFilterChange('offset', Math.max(0, filters.offset - filters.limit))}
                         disabled={filters.offset === 0}
                         className="px-4 py-2 text-xs border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-white"
-                        style={{ backgroundColor: filters.offset === 0 ? '#9CA3AF' : '#E78D69' }}
+                        style={{ backgroundColor: filters.offset === 0 ? '#9CA3AF' : '#f58020' }}
                       >
                         Previous
                       </button>
@@ -662,7 +662,7 @@ const AccountTransactions = () => {
                         onClick={() => handleFilterChange('offset', filters.offset + filters.limit)}
                         disabled={!pagination.has_more}
                         className="px-4 py-2 text-xs border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-white"
-                        style={{ backgroundColor: !pagination.has_more ? '#9CA3AF' : '#E78D69' }}
+                        style={{ backgroundColor: !pagination.has_more ? '#9CA3AF' : '#f58020' }}
                       >
                         Next
                       </button>
@@ -777,7 +777,7 @@ const AccountTransactions = () => {
                     type="button"
                     onClick={addJournalEntry}
                     className="text-xs text-white px-3 py-1"
-                    style={{ backgroundColor: '#E78D69' }}
+                    style={{ backgroundColor: '#f58020' }}
                   >
                     Add Entry
                   </button>
@@ -877,7 +877,7 @@ const AccountTransactions = () => {
                   type="submit"
                   disabled={editLoading}
                   className="px-4 py-2 text-xs font-medium text-white transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: '#E78D69' }}
+                  style={{ backgroundColor: '#f58020' }}
                 >
                   {editLoading ? 'Updating...' : 'Update Transaction'}
                 </button>

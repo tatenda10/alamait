@@ -61,7 +61,7 @@ const ViewSupplierModal = ({ supplier, onClose, onEdit }) => {
             {/* Contact Information */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <FaUser className="h-5 w-5 text-[#E78D69]" />
+                <FaUser className="h-5 w-5 text-[#f58020]" />
                 Contact Information
               </h3>
               <div className="space-y-3">
@@ -98,7 +98,7 @@ const ViewSupplierModal = ({ supplier, onClose, onEdit }) => {
             {/* Business Information */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <FaBuilding className="h-5 w-5 text-[#E78D69]" />
+                <FaBuilding className="h-5 w-5 text-[#f58020]" />
                 Business Information
               </h3>
               <div className="space-y-3">
@@ -169,7 +169,7 @@ const ViewSupplierModal = ({ supplier, onClose, onEdit }) => {
           {onEdit && (
             <button
               onClick={() => onEdit(supplier)}
-              className="px-4 py-2 bg-[#E78D69] text-white rounded-lg hover:bg-[#d67c5a] transition flex items-center gap-2"
+              className="px-4 py-2 bg-[#f58020] text-white rounded-lg hover:bg-[#d67c5a] transition flex items-center gap-2"
             >
               <FaEdit className="h-4 w-4" />
               Edit Supplier

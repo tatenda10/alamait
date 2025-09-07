@@ -199,7 +199,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                    name="company"
                    value={formData.company}
                    onChange={handleInputChange}
-                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                      errors.company ? 'border-red-500' : 'border-gray-300'
                    }`}
                    placeholder="Enter company name"
@@ -216,7 +216,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                    name="contact_person"
                    value={formData.contact_person}
                    onChange={handleInputChange}
-                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                      errors.contact_person ? 'border-red-500' : 'border-gray-300'
                    }`}
                    placeholder="Enter contact person name"
@@ -236,7 +236,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                    name="phone"
                    value={formData.phone}
                    onChange={handleInputChange}
-                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                      errors.phone ? 'border-red-500' : 'border-gray-300'
                    }`}
                    placeholder="Enter contact number"
@@ -252,7 +252,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                    name="category"
                    value={formData.category}
                    onChange={handleInputChange}
-                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                      errors.category ? 'border-red-500' : 'border-gray-300'
                    }`}
                  >
@@ -275,7 +275,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                    name="boarding_house_id"
                    value={formData.boarding_house_id}
                    onChange={handleInputChange}
-                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                      errors.boarding_house_id ? 'border-red-500' : 'border-gray-300'
                    }`}
                  >
@@ -295,7 +295,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                    name="status"
                    value={formData.status}
                    onChange={handleInputChange}
-                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-[#E78D69] focus:border-transparent"
+                   className="w-full px-3 py-2 border border-gray-300 focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
                  >
                    <option value="active">Active</option>
                    <option value="inactive">Inactive</option>
@@ -313,7 +313,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                  value={formData.address}
                  onChange={handleInputChange}
                  rows="3"
-                 className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#E78D69] focus:border-transparent ${
+                 className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
                    errors.address ? 'border-red-500' : 'border-gray-300'
                  }`}
                  placeholder="Enter complete address"
@@ -334,7 +334,7 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-[#E78D69] text-white hover:bg-[#d67c5a] transition disabled:opacity-50"
+              className="px-4 py-2 bg-[#f58020] text-white hover:bg-[#d67c5a] transition disabled:opacity-50"
             >
               {loading ? 'Adding...' : 'Add Supplier'}
             </button>

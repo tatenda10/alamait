@@ -89,7 +89,7 @@ const AccountLedger = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E78D69]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f58020]"></div>
       </div>
     );
   }
@@ -101,7 +101,7 @@ const AccountLedger = () => {
           <p className="text-red-600 mb-4">{error}</p>
           <button
             onClick={() => navigate('/dashboard/accounting/balance-bd-cd')}
-            className="px-4 py-2 bg-[#E78D69] text-white rounded hover:bg-[#E78D69]/80"
+            className="px-4 py-2 bg-[#f58020] text-white rounded hover:bg-[#f58020]/80"
           >
             Back to Balance BD/CD
           </button>
