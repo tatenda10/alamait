@@ -19,7 +19,7 @@ const IncomeStatement = () => {
   });
   
   const [boardingHouses, setBoardingHouses] = useState([]);
-  const [selectedBoardingHouse, setSelectedBoardingHouse] = useState('all');
+  const [selectedBoardingHouse, setSelectedBoardingHouse] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -526,7 +526,7 @@ const IncomeStatement = () => {
                   }}
                   className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
-                  <option value="all">All Boarding Houses</option>
+                  {/* <option value="all">All Boarding Houses</option> */}
                   {boardingHouses.map(bh => (
                     <option key={bh.id} value={bh.id}>
                       {bh.name}

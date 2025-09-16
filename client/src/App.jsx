@@ -36,6 +36,7 @@ import BankReconciliation from './pages/accounting/BankReconciliation';
 import BankReconciliationDetail from './pages/accounting/BankReconciliationDetail';
 import BalanceBDCD from './pages/accounting/BalanceBDCD';
 import AccountLedger from './pages/accounting/AccountLedger';
+import TrialBalance from './pages/accounting/TrialBalance';
 
 const App = () => {
   return (
@@ -69,6 +70,7 @@ const App = () => {
         <Route path="accounting/bank-reconciliation/:id" element={<BankReconciliationDetail />} />
         <Route path="accounting/balance-bd-cd" element={<BalanceBDCD />} />
         <Route path="accounting/account-ledger/:accountId/:periodId" element={<AccountLedger />} />
+        <Route path="accounting/trial-balance" element={<TrialBalance />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expenses/add" element={<AddExpense />} />
         <Route path="expenses/edit/:id" element={<EditExpense />} />

@@ -26,9 +26,10 @@ const incomeStatementRoutes = require('./routes/incomeStatement');
 const accountsPayableRoutes = require('./routes/accountsPayable');
 const supplierPaymentRoutes = require('./routes/supplierPayment');
 const bankingRoutes = require('./routes/banking');
+const trialBalanceRoutes = require('./routes/trialBalance');
 // Enable CORS
 app.use(cors({
-  origin: ['http://localhost:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
+  origin: ['http://localhost:5173','http://192.168.100.42:5173','http://192.168.100.24:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
   credentials: true
 }));
 
@@ -60,6 +61,7 @@ app.use('/api/income-statement', incomeStatementRoutes);
 app.use('/api/accounts-payable', accountsPayableRoutes);
 app.use('/api/supplier-payments', supplierPaymentRoutes);
 app.use('/api/banking', bankingRoutes);
+app.use('/api/trial-balance', trialBalanceRoutes);
 
 const swaggerDefinition = {
   openapi: '3.0.0',
@@ -94,8 +96,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(errorHandler);
  
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
 
 module.exports = app;
