@@ -10,73 +10,50 @@ import {
   HomeIcon,
   UsersIcon,
   KeyIcon,
-  CreditCardIcon,
-  DocumentChartBarIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   BanknotesIcon,
-  CalculatorIcon,
-  ClipboardDocumentListIcon,
-  ReceiptRefundIcon,
-  WalletIcon
+  WalletIcon,
+  CurrencyDollarIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
 const defaultNavigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, exact: true },
-  { name: 'Students', href: '/dashboard/students', icon: UsersIcon },
+  {
+    name: 'Students',
+    icon: UsersIcon,
+    children: [
+      { name: 'All Students', href: '/dashboard/students' }
+    ],
+  },
   { name: 'Rooms', href: '/dashboard/rooms', icon: KeyIcon },
+          {
+            name: 'Payments',
+            icon: BanknotesIcon,
+            children: [
+              { name: 'Record Payment', href: '/dashboard/payments/record' },
+              { name: 'Payment History', href: '/dashboard/payments/history' }
+            ],
+          },
+  { name: 'Petty Cash', href: '/dashboard/petty-cash', icon: WalletIcon },
   {
-    name: 'Accounting',
-    icon: CalculatorIcon,
+    name: 'Budget Management',
+    icon: CurrencyDollarIcon,
     children: [
-      { name: 'Chart of Accounts', href: '/dashboard/accounting/coa' },
-      // { name: 'Transactions', href: '/dashboard/accounting/transactions' },
-      // { name: 'Journal Entry', href: '/dashboard/accounting/journal' },
-      // { name: 'General Ledger', href: '/dashboard/accounting/ledger' },
-    ],
-  },
-  {
-    name: 'Suppliers',
-    icon: ClipboardDocumentListIcon,
-    children: [
-      { name: 'Suppliers List', href: '/dashboard/suppliers' },
-      { name: 'Add Supplier', href: '/dashboard/suppliers/add' }
-    ],
-  },
-  {
-    name: 'Payments',
-    icon: BanknotesIcon,
-    children: [
-      { name: 'Record Payment', href: '/dashboard/student-financials/payments' },
-      { name: 'Payment History', href: '/dashboard/student-financials/payment-history' },
-      { name: 'Overdue Payments', href: '/dashboard/student-financials/overdue' },
-      { name: 'Rent Ledger', href: '/dashboard/student-financials/rent-ledger' }
+      { name: 'Budget Dashboard', href: '/dashboard/budget' },
+      { name: 'Budget Request', href: '/dashboard/budget/request' },
+      { name: 'Budget Approval', href: '/dashboard/budget/approval' }
     ],
   },
   {
     name: 'Expenses',
-    icon: ReceiptRefundIcon,
+    icon: DocumentTextIcon,
     children: [
       { name: 'Add Expense', href: '/dashboard/expenses/add' },
-      { name: 'Expenses List', href: '/dashboard/expenses' }
-    ],
-  },
-  {
-    name: 'Petty Cash',
-    icon: WalletIcon,
-    children: [
-      { name: 'Manage Accounts', href: '/dashboard/petty-cash' },
-      { name: 'Reconciliation', href: '/dashboard/petty-cash/reconciliation' }
-    ],
-  },
-  {
-    name: 'Reports',
-    icon: DocumentChartBarIcon,
-    children: [
-      { name: 'Debtors Report', href: '/dashboard/reports/debtors' },
-      { name: 'Cashflow Report', href: '/dashboard/reports/cashflow' },
-      { name: 'Income Projection', href: '/dashboard/reports/income-projection' },
-      { name: 'Income Statement', href: '/dashboard/reports/income-statement' },
+      { name: 'Expenses List', href: '/dashboard/expenses' },
+      { name: 'Expenditure Request', href: '/dashboard/expenditure/request' },
+      { name: 'Expenditure Approval', href: '/dashboard/expenditure/approval' }
     ],
   },
   { name: 'Change Password', href: '/dashboard/change-password', icon: Cog6ToothIcon },
@@ -104,7 +81,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
     boardingHouseName: localStorage.getItem('boarding_house_name')
   });
 
-  const boardingHouseName = localStorage.getItem('boarding_house_name') || 'Boarding House';
+  const userName = userInfo?.username || 'User';
 
   const handleLogout = async () => {
     await logout();
@@ -219,17 +196,6 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
 
   return (
     <>
-      {/* Hamburger Menu Button */}
-      <div className="fixed top-0 right-0 z-50 lg:hidden">
-        <button
-          type="button"
-          className="m-3 rounded-md bg-white p-2 text-gray-600 shadow-lg ring-1 ring-gray-200 hover:bg-gray-50"
-          onClick={() => setIsOpen(true)}
-        >
-          <span className="sr-only">Open sidebar</span>
-          <Bars3Icon className="h-6 w-6" aria-hidden="true" />
-        </button>
-      </div>
 
       {/* Mobile sidebar */}
       <Transition.Root show={isOpen} as={React.Fragment}>
@@ -259,7 +225,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
               <Dialog.Panel className="relative mr-16 flex w-full max-w-xs flex-1">
                 <div className="flex grow flex-col overflow-y-auto bg-white pb-2 shadow-xl">
                   <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
-                    <span className="text-base font-semibold text-gray-900">{boardingHouseName}</span>
+                    <span className="text-base font-semibold text-gray-900">{userName}</span>
                   </div>
                   <nav className="flex-1 px-4 mt-4 overflow-y-hidden">
                     <ul role="list" className="flex flex-1 flex-col gap-y-1">
@@ -288,7 +254,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
         <div className="flex grow flex-col overflow-y-auto bg-white pb-2 shadow-xl">
           <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
-            <span className="text-base font-semibold text-gray-900">{boardingHouseName}</span>
+            <span className="text-base font-semibold text-gray-900">{userName}</span>
           </div>
           <nav className="flex-1 px-4 mt-4 overflow-y-hidden">
             <ul role="list" className="flex flex-1 flex-col gap-y-1">

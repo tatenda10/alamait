@@ -42,30 +42,13 @@ const generateIncomeStatement = async (req, res) => {
       revenueData,
       expenseData,
       pettyCashExpenseData,
-      accountsPayableData,
-      accountsReceivableData,
       boardingHouses
     ] = await Promise.all([
       getRevenueData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
       getExpenseData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
       getPettyCashExpenseData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
-      getAccountsPayableData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
-      getAccountsReceivableData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
       getBoardingHouses()
     ]);
-
-    // Calculate total receivables and payables
-    const totalReceivables = accountsReceivableData.reduce((sum, receivable) => sum + receivable.total_due, 0);
-    const totalPayables = accountsPayableData.reduce((sum, payable) => sum + payable.balance, 0);
-
-    // Console log totals for debugging
-    console.log('=== ACCOUNTS RECEIVABLE TOTAL ===');
-    console.log('Total receivables amount:', totalReceivables);
-    console.log('Number of receivables:', accountsReceivableData.length);
-    
-    console.log('=== ACCOUNTS PAYABLE TOTAL ===');
-    console.log('Total payables amount:', totalPayables);
-    console.log('Number of payables:', accountsPayableData.length);
 
     // Calculate totals for each account type
     const revenueTotal = revenueData.reduce((sum, item) => sum + item.amount, 0);
@@ -80,24 +63,18 @@ const generateIncomeStatement = async (req, res) => {
           !boardingHouseIdNum || bh.id == boardingHouseIdNum
         ).map(bh => bh.name).join(', '),
         revenue: {
-          total: revenueTotal + totalReceivables, // Include receivables as part of revenue
+          total: revenueTotal, // Only actual revenue from invoices
           accounts: [
             ...revenueData.map(account => ({
               account_id: account.account_id,
               account_name: account.account_name,
               account_code: account.account_code,
               amount: account.amount
-            })),
-            {
-              account_id: null, // Accounts receivable doesn't have a specific account_id
-              account_name: "Accounts Receivable",
-              account_code: "10004",
-              amount: totalReceivables
-            }
+            }))
           ]
         },
         expenses: {
-          total: expensesTotal + pettyCashTotal + totalPayables, // Include payables as part of expenses
+          total: expensesTotal + pettyCashTotal, // Only actual expenses
           accounts: [
             ...expenseData.map(account => ({
               account_id: account.account_id,
@@ -110,19 +87,13 @@ const generateIncomeStatement = async (req, res) => {
               account_name: account.account_name,
               account_code: account.account_code,
               amount: account.amount
-            })),
-            {
-              account_id: null, // Accounts payable doesn't have a specific account_id
-              account_name: "Accounts Payable",
-              account_code: "20001",
-              amount: totalPayables
-            }
+            }))
           ]
         },
         summary: {
-          totalRevenue: revenueTotal + totalReceivables,
-          totalExpenses: expensesTotal + pettyCashTotal + totalPayables,
-          netIncome: (revenueTotal + totalReceivables) - (expensesTotal + pettyCashTotal + totalPayables)
+          totalRevenue: revenueTotal,
+          totalExpenses: expensesTotal + pettyCashTotal,
+          netIncome: revenueTotal - (expensesTotal + pettyCashTotal)
         }
       }
     };
@@ -143,37 +114,37 @@ const generateIncomeStatement = async (req, res) => {
 };
 
 /**
- * Get revenue data from transactions and journal entries for date range
+ * Get revenue data from student invoices for date range
+ * This shows rental income based on when invoices were created, not when payments were received
  */
 const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
   
   let query = `
     SELECT 
-      coa.name as account_name,
-      coa.type as account_type,
+      'Rentals Income' as account_name,
+      'Revenue' as account_type,
       coa.id as account_id,
       coa.code as account_code,
-      SUM(je.amount) as amount,
-      COUNT(DISTINCT t.id) as transaction_count,
+      SUM(si.amount) as amount,
+      COUNT(DISTINCT si.id) as transaction_count,
       bh.name as boarding_house_name
-    FROM journal_entries je
-    JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts coa ON je.account_id = coa.id
-    JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-    WHERE DATE(t.transaction_date) BETWEEN ? AND ?
-      AND t.status = 'posted'
-      AND je.entry_type = 'credit'
-      AND coa.type = 'Revenue'
-      AND je.deleted_at IS NULL
-      AND t.deleted_at IS NULL
-      AND coa.deleted_at IS NULL
+    FROM student_invoices si
+    JOIN student_enrollments se ON si.enrollment_id = se.id
+    JOIN rooms r ON se.room_id = r.id
+    JOIN boarding_houses bh ON r.boarding_house_id = bh.id
+    JOIN chart_of_accounts coa ON coa.code = '40001' AND coa.type = 'Revenue'
+    WHERE DATE(si.invoice_date) BETWEEN ? AND ?
+      AND si.deleted_at IS NULL
+      AND se.deleted_at IS NULL
+      AND r.deleted_at IS NULL
       AND bh.deleted_at IS NULL
+      AND coa.deleted_at IS NULL
   `;
 
   let params = [startDate, endDate];
 
   if (!isConsolidated && boardingHouseId) {
-    query += ' AND je.boarding_house_id = ?';
+    query += ' AND r.boarding_house_id = ?';
     params.push(boardingHouseId);
   }
 
@@ -182,7 +153,7 @@ const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidate
     ORDER BY coa.code, bh.name
   `;
 
-  console.log('Revenue Query:', query);
+  console.log('Revenue Query (from invoices):', query);
   console.log('Revenue Params:', params);
 
   const [results] = await db.query(query, params);

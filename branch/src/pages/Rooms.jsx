@@ -3,6 +3,10 @@ import { Dialog, Transition } from '@headlessui/react';
 import {
   PlusIcon,
   XMarkIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  HomeIcon,
+  UserIcon,
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../utils/api';
@@ -14,6 +18,8 @@ export default function Rooms() {
   const [error, setError] = useState(null);
   const [submitError, setSubmitError] = useState(null);
   const [editingRoom, setEditingRoom] = useState(null);
+  const [expandedRooms, setExpandedRooms] = useState({});
+  const [roomBeds, setRoomBeds] = useState({});
   const [newRoom, setNewRoom] = useState({
     name: '',
     capacity: '',
@@ -52,7 +58,11 @@ export default function Rooms() {
       const response = await api.get(`/rooms/boarding-house/${boardingHouseId}`);
       
       if (response.data && (Array.isArray(response.data) || Array.isArray(response.data.data))) {
-        setRooms(Array.isArray(response.data) ? response.data : response.data.data);
+        const roomsData = Array.isArray(response.data) ? response.data : response.data.data;
+        setRooms(roomsData);
+        
+        // Fetch beds for each room
+        await fetchBedsForRooms(roomsData);
       } else {
         console.warn('Unexpected API response format:', response.data);
         setRooms([]);
@@ -63,6 +73,40 @@ export default function Rooms() {
       setRooms([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBedsForRooms = async (roomsData) => {
+    try {
+      const bedsPromises = roomsData.map(async (room) => {
+        try {
+          // Try the public endpoint first
+          const bedsResponse = await api.get(`/beds/room/${room.id}/public`);
+          console.log(`Beds for room ${room.id}:`, bedsResponse.data);
+          return { roomId: room.id, beds: bedsResponse.data || [] };
+        } catch (err) {
+          console.error(`Error fetching beds for room ${room.id}:`, err);
+          // If public endpoint fails, try without authentication
+          try {
+            const bedsResponse = await axios.get(`${BASE_URL}/beds/room/${room.id}/public`);
+            console.log(`Beds for room ${room.id} (no auth):`, bedsResponse.data);
+            return { roomId: room.id, beds: bedsResponse.data || [] };
+          } catch (err2) {
+            console.error(`Error fetching beds for room ${room.id} (no auth):`, err2);
+            return { roomId: room.id, beds: [] };
+          }
+        }
+      });
+
+      const bedsResults = await Promise.all(bedsPromises);
+      const bedsMap = {};
+      bedsResults.forEach(({ roomId, beds }) => {
+        bedsMap[roomId] = beds;
+      });
+      console.log('Final beds map:', bedsMap);
+      setRoomBeds(bedsMap);
+    } catch (err) {
+      console.error('Error fetching beds:', err);
     }
   };
 
@@ -151,6 +195,28 @@ export default function Rooms() {
     }
   };
 
+  const getBedStatusColor = (status) => {
+    switch (status) {
+      case 'available':
+        return 'text-green-700 bg-green-50 ring-green-600/20';
+      case 'occupied':
+        return 'text-red-700 bg-red-50 ring-red-600/20';
+      case 'maintenance':
+        return 'text-yellow-700 bg-yellow-50 ring-yellow-600/20';
+      case 'reserved':
+        return 'text-blue-700 bg-blue-50 ring-blue-600/20';
+      default:
+        return 'text-gray-700 bg-gray-50 ring-gray-600/20';
+    }
+  };
+
+  const toggleRoomExpansion = (roomId) => {
+    setExpandedRooms(prev => ({
+      ...prev,
+      [roomId]: !prev[roomId]
+    }));
+  };
+
   if (loading) {
     return (
       <div className="px-2 mt-8 sm:px-4 lg:px-6 py-4">
@@ -228,44 +294,134 @@ export default function Rooms() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {rooms && rooms.length > 0 ? (
-                  rooms.map((room) => (
-                    <tr key={room.id} className="hover:bg-gray-50">
-                      <td className="py-2 pl-4 pr-3 text-xs text-gray-900 sm:pl-4 border-x border-gray-200">
-                        {room.name}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                        {room.capacity}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                        {room.currentOccupants || 0}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                        US${(room.rent || 0).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                        US${(room.adminFee || 0).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                        US${(room.securityDeposit || 0).toLocaleString()}
-                      </td>
-                      <td className="px-3 py-2 text-xs border-r border-gray-200">
-                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusColor(room.status || 'Available')}`}>
-                          {room.status || 'Available'}
-                        </span>
-                      </td>
-                      <td className="relative py-2 pl-3 pr-4 text-right text-xs font-medium sm:pr-4 border-r border-gray-200">
-                        <button 
-                          onClick={() => handleEdit(room)}
-                          className="text-blue-600 hover:text-blue-900 mr-3"
-                        >
-                          Edit
-                        </button>
-                        <button className="text-red-600 hover:text-red-900">
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  rooms.map((room) => {
+                    const beds = roomBeds[room.id] || [];
+                    const isExpanded = expandedRooms[room.id];
+                    const occupiedBeds = beds.filter(bed => bed.status === 'occupied').length;
+                    const availableBeds = beds.filter(bed => bed.status === 'available').length;
+                    
+                    console.log(`Room ${room.id} (${room.name}):`, {
+                      beds,
+                      isExpanded,
+                      occupiedBeds,
+                      availableBeds,
+                      roomBeds: roomBeds[room.id]
+                    });
+                    
+                    return (
+                      <React.Fragment key={room.id}>
+                        {/* Room Row */}
+                        <tr className="hover:bg-gray-50">
+                          <td className="py-2 pl-4 pr-3 text-xs text-gray-900 sm:pl-4 border-x border-gray-200">
+                            <div className="flex items-center">
+                              <button
+                                onClick={() => toggleRoomExpansion(room.id)}
+                                className="mr-2 p-1 hover:bg-gray-100 rounded"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDownIcon className="h-3 w-3 text-gray-500" />
+                                ) : (
+                                  <ChevronRightIcon className="h-3 w-3 text-gray-500" />
+                                )}
+                              </button>
+                              <div>
+                                <div className="font-medium">{room.name}</div>
+                                {beds.length > 0 && (
+                                  <div className="text-[10px] text-gray-500">
+                                    {beds.length} bed{beds.length !== 1 ? 's' : ''} • {occupiedBeds} occupied • {availableBeds} available
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                            {room.capacity}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                            {room.currentOccupants || occupiedBeds}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                            US${(room.rent || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                            US${(room.adminFee || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                            US${(room.securityDeposit || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-xs border-r border-gray-200">
+                            <span className={`inline-flex items-center px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusColor(room.status || 'Available')}`}>
+                              {room.status || 'Available'}
+                            </span>
+                          </td>
+                          <td className="relative py-2 pl-3 pr-4 text-right text-xs font-medium sm:pr-4 border-r border-gray-200">
+                            <button 
+                              onClick={() => handleEdit(room)}
+                              className="text-blue-600 hover:text-blue-900 mr-3"
+                            >
+                              Edit
+                            </button>
+                            <button className="text-red-600 hover:text-red-900">
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                        
+                        {/* Beds Row */}
+                        {isExpanded && (
+                          <tr className="bg-gray-50">
+                            <td colSpan="8" className="px-4 py-3 border-x border-gray-200">
+                              <div className="space-y-2">
+                                <div className="text-xs font-medium text-gray-700 mb-2 flex items-center">
+                                  <HomeIcon className="h-3 w-3 mr-1" />
+                                  Beds in {room.name}
+                                </div>
+                                {beds.length > 0 ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    {beds.map((bed) => (
+                                      <div key={bed.id} className="bg-white border border-gray-200 rounded p-2">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center">
+                                            <HomeIcon className="h-3 w-3 text-gray-400 mr-1" />
+                                            <span className="text-xs font-medium text-gray-900">
+                                              Bed {bed.bed_number}
+                                            </span>
+                                          </div>
+                                          <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${getBedStatusColor(bed.status)}`}>
+                                            {bed.status}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1 text-[10px] text-gray-500">
+                                          <div>Price: US${(bed.price || 0).toLocaleString()}</div>
+                                          {bed.student_name && (
+                                            <div className="flex items-center mt-1">
+                                              <UserIcon className="h-2 w-2 mr-1" />
+                                              {bed.student_name}
+                                            </div>
+                                          )}
+                                          {bed.notes && (
+                                            <div className="mt-1 text-gray-400">{bed.notes}</div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-4 text-xs text-gray-500">
+                                    <HomeIcon className="h-6 w-6 mx-auto mb-2 text-gray-400" />
+                                    <p>No beds found for this room</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                      Beds may not be configured yet or there was an error loading them
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="8" className="px-3 py-4 text-sm text-center text-gray-500">

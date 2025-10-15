@@ -31,6 +31,11 @@ const IncomeStatement = () => {
   const [endDate, setEndDate] = useState('');
   const [showIncomeStatement, setShowIncomeStatement] = useState(false);
   
+  // Month/Year selection state
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [useMonthYear, setUseMonthYear] = useState(true); // Toggle between month/year and custom date range
+  
   // Saved statements state
   const [savedStatements, setSavedStatements] = useState([]);
   const [selectedSavedStatement, setSelectedSavedStatement] = useState('');
@@ -64,16 +69,26 @@ const IncomeStatement = () => {
       // Determine if we're fetching consolidated data or specific boarding house
       const isConsolidated = selectedBoardingHouse === 'all';
       
+      // Calculate date range based on selection method
+      let dateStart, dateEnd;
+      if (useMonthYear) {
+        // Use month/year selection
+        const year = selectedYear;
+        const month = selectedMonth;
+        dateStart = `${year}-${month.toString().padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate(); // Get last day of month
+        dateEnd = `${year}-${month.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
+      } else {
+        // Use custom date range
+        dateStart = startDate;
+        dateEnd = endDate;
+      }
+      
       const params = new URLSearchParams({
         isConsolidated: isConsolidated.toString(),
-        year: new Date().getFullYear()
+        startDate: dateStart,
+        endDate: dateEnd
       });
-
-      // Add date range if provided
-      if (startDate && endDate) {
-        params.append('startDate', startDate);
-        params.append('endDate', endDate);
-      }
 
       // Add boarding house filter if selected
       if (selectedBoardingHouse !== 'all') {
@@ -84,6 +99,7 @@ const IncomeStatement = () => {
       }
 
       console.log('📤 Request URL:', `${BASE_URL}/income-statement/generate?${params}`);
+      console.log('📅 Date Range:', { dateStart, dateEnd, useMonthYear, selectedYear, selectedMonth });
       
       const response = await axios.get(`${BASE_URL}/income-statement/generate?${params}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -496,22 +512,71 @@ const IncomeStatement = () => {
           {/* Bottom row - Filters and Actions */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6">
-              {/* Date Range */}
+              {/* Month/Year Selection */}
               <div className="flex items-center gap-2">
                 <FiCalendar className="text-gray-500" size={16} />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                <label className="text-xs text-gray-600">Period:</label>
+                <select
+                  value={useMonthYear ? 'month' : 'custom'}
+                  onChange={(e) => setUseMonthYear(e.target.value === 'month')}
                   className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <span className="text-xs text-gray-500">to</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
+                >
+                  <option value="month">Month/Year</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+                
+                {useMonthYear ? (
+                  <>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value={1}>January</option>
+                      <option value={2}>February</option>
+                      <option value={3}>March</option>
+                      <option value={4}>April</option>
+                      <option value={5}>May</option>
+                      <option value={6}>June</option>
+                      <option value={7}>July</option>
+                      <option value={8}>August</option>
+                      <option value={9}>September</option>
+                      <option value={10}>October</option>
+                      <option value={11}>November</option>
+                      <option value={12}>December</option>
+                    </select>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      {Array.from({ length: 5 }, (_, i) => {
+                        const year = new Date().getFullYear() - 2 + i;
+                        return (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-gray-500">to</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="text-xs border border-gray-300 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </>
+                )}
               </div>
 
               {/* Boarding House Filter */}

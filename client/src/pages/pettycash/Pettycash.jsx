@@ -1,98 +1,77 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   FaPlus, 
   FaDollarSign,
   FaCalendarAlt,
-  FaArrowUp,
-  FaArrowDown
+  FaArrowDown,
+  FaUser
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 
 const PettyCash = () => {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [showAddCashModal, setShowAddCashModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [selectedBoardingHouse, setSelectedBoardingHouse] = useState('');
-  const [boardingHouses, setBoardingHouses] = useState([]);
   
   // Petty cash data
   const [pettyCashData, setPettyCashData] = useState({
-    current_balance: 0,
-    beginning_balance: 0,
-    total_inflows: 0,
-    total_outflows: 0,
-    transactions: []
+    accounts: [],
+    total_balance: 0,
+    total_accounts: 0
   });
+
+  // Transaction history state
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [transactionHistory, setTransactionHistory] = useState([]);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
 
   // Form states
   const [addCashForm, setAddCashForm] = useState({
     amount: '',
     description: '',
-    reference_date: new Date().toISOString().split('T')[0], // Default to today
+    reference_date: new Date().toISOString().split('T')[0],
     reference_number: '',
     notes: '',
-    source_account: '10002' // Default to Cash on Hand
+    source_account: '10002',
+    user_id: '',
+    account_id: ''
   });
 
   const [withdrawForm, setWithdrawForm] = useState({
     amount: '',
     purpose: '',
-    reference_date: new Date().toISOString().split('T')[0], // Default to today
+    reference_date: new Date().toISOString().split('T')[0],
     reference_number: '',
     notes: '',
-    destination_account: '10002' // Default to Cash on Hand
+    destination_account: '10002',
+    user_id: '',
+    account_id: ''
   });
 
   useEffect(() => {
-    fetchBoardingHouses();
+    fetchPettyCashData();
   }, []);
-
-  useEffect(() => {
-    if (selectedBoardingHouse) {
-      fetchPettyCashData();
-    }
-  }, [selectedBoardingHouse]);
-
-  const fetchBoardingHouses = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${BASE_URL}/boarding-houses`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      setBoardingHouses(response.data);
-      // Set the first boarding house as default if available
-      if (response.data.length > 0) {
-        setSelectedBoardingHouse(response.data[0].id);
-      }
-    } catch (error) {
-      console.error('Error fetching boarding houses:', error);
-      toast.error('Failed to fetch boarding houses');
-    }
-  };
 
   const fetchPettyCashData = async () => {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await axios.get(`${BASE_URL}/petty-cash/account`, {
+      // Fetch all petty cash users/accounts for admin view
+      const response = await axios.get(`${BASE_URL}/petty-cash-admin/users`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'boarding-house-id': selectedBoardingHouse
+          'Authorization': `Bearer ${token}`
         }
       });
       
-      setPettyCashData(response.data || {
-        current_balance: 0,
-        beginning_balance: 0,
-        total_inflows: 0,
-        total_outflows: 0,
-        transactions: []
+      const users = response.data.users || [];
+      const totalBalance = users.reduce((sum, user) => sum + parseFloat(user.current_balance || 0), 0);
+      
+      setPettyCashData({
+        accounts: users,
+        total_balance: totalBalance,
+        total_accounts: users.length
       });
     } catch (error) {
       console.error('Error fetching petty cash data:', error);
@@ -100,6 +79,30 @@ const PettyCash = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTransactionHistory = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.get(`${BASE_URL}/petty-cash/account`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'user-id': userId
+        }
+      });
+      
+      setTransactionHistory(response.data.transactions || []);
+    } catch (error) {
+      console.error('Error fetching transaction history:', error);
+      toast.error('Failed to fetch transaction history');
+    }
+  };
+
+  const handleViewTransactions = (account) => {
+    setSelectedAccount(account);
+    fetchTransactionHistory(account.user_id);
+    setShowTransactionModal(true);
   };
 
   const handleAddCash = async (e) => {
@@ -113,18 +116,18 @@ const PettyCash = () => {
         transaction_date: addCashForm.reference_date,
         reference_number: addCashForm.reference_number,
         notes: addCashForm.notes,
-        source_account: addCashForm.source_account
+        source_account: addCashForm.source_account,
+        user_id: addCashForm.user_id,
+        account_id: addCashForm.account_id
       };
       
       await axios.post(`${BASE_URL}/petty-cash/add-cash`, cashData, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'boarding-house-id': selectedBoardingHouse,
           'Content-Type': 'application/json'
         }
       });
       
-      // Get source account name for better user feedback
       const sourceNames = {
         '10002': 'Cash on Hand',
         '10003': 'CBZ Bank Account',
@@ -153,18 +156,18 @@ const PettyCash = () => {
         transaction_date: withdrawForm.reference_date,
         reference_number: withdrawForm.reference_number,
         notes: withdrawForm.notes,
-        destination_account: withdrawForm.destination_account
+        destination_account: withdrawForm.destination_account,
+        user_id: withdrawForm.user_id,
+        account_id: withdrawForm.account_id
       };
       
       await axios.post(`${BASE_URL}/petty-cash/withdraw-cash`, withdrawData, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'boarding-house-id': selectedBoardingHouse,
           'Content-Type': 'application/json'
         }
       });
       
-      // Get destination account name for better user feedback
       const destinationNames = {
         '10002': 'Cash on Hand',
         '10003': 'CBZ Bank Account',
@@ -182,16 +185,16 @@ const PettyCash = () => {
     }
   };
 
-
-
   const resetAddCashForm = () => {
     setAddCashForm({
       amount: '',
       description: '',
-      reference_date: new Date().toISOString().split('T')[0], // Reset to today
+      reference_date: new Date().toISOString().split('T')[0],
       reference_number: '',
       notes: '',
-      source_account: '10002' // Reset to Cash on Hand
+      source_account: '10002',
+      user_id: '',
+      account_id: ''
     });
   };
 
@@ -199,42 +202,16 @@ const PettyCash = () => {
     setWithdrawForm({
       amount: '',
       purpose: '',
-      reference_date: new Date().toISOString().split('T')[0], // Reset to today
+      reference_date: new Date().toISOString().split('T')[0],
       reference_number: '',
       notes: '',
-      destination_account: '10002' // Reset to Cash on Hand
+      destination_account: '10002',
+      user_id: '',
+      account_id: ''
     });
   };
 
 
-
-  const getTransactionIcon = (type) => {
-    switch (type) {
-      case 'cash_inflow':
-      case 'student_payment':
-        return <FaArrowUp className="text-green-500" />;
-      case 'cash_outflow':
-      case 'withdrawal':
-      case 'expense':
-        return <FaArrowDown className="text-red-500" />;
-      default:
-        return <FaDollarSign className="text-gray-500" />;
-    }
-  };
-
-  const getTransactionColor = (type) => {
-    switch (type) {
-      case 'cash_inflow':
-      case 'student_payment':
-        return 'text-green-600';
-      case 'cash_outflow':
-      case 'withdrawal':
-      case 'expense':
-        return 'text-red-600';
-      default:
-        return 'text-gray-600';
-    }
-  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -244,7 +221,7 @@ const PettyCash = () => {
     });
   };
 
-  if (loading || !selectedBoardingHouse) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500"></div>
@@ -255,147 +232,150 @@ const PettyCash = () => {
   return (
     <div className="bg-gray-50 min-h-screen p-6">
       {/* Header Section */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-800 mb-2">Petty Cash Management</h1>
-          <p className="text-xs text-gray-500">Track cash inflows and outflows for this boarding house</p>
+          <h1 className="text-lg font-semibold text-gray-800 mb-1">All Petty Cash Accounts</h1>
+          <p className="text-xs text-gray-500">Overview of all petty cash accounts and their balances</p>
         </div>
         <div className="flex space-x-2">
           <button
             onClick={() => setShowAddCashModal(true)}
-            className="flex items-center px-4 py-2 text-xs text-white transition-colors"
+            className="flex items-center px-3 py-2 text-xs text-white transition-colors"
             style={{ backgroundColor: '#f58020' }}
           >
-            <FaPlus size={14} className="mr-2" />
+            <FaPlus size={12} className="mr-1" />
             Add Cash
           </button>
           <button
             onClick={() => setShowWithdrawModal(true)}
-            className="flex items-center px-4 py-2 text-xs bg-red-600 text-white transition-colors hover:bg-red-700"
+            className="flex items-center px-3 py-2 text-xs bg-red-600 text-white transition-colors hover:bg-red-700"
           >
-            <FaArrowDown size={14} className="mr-2" />
+            <FaArrowDown size={12} className="mr-1" />
             Withdraw
           </button>
         </div>
       </div>
 
-      {/* Boarding House Filter */}
-      <div className="bg-white border border-gray-200 p-4 mb-6">
-        <div className="flex items-center space-x-4">
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Select Boarding House
-            </label>
-            <select
-              value={selectedBoardingHouse}
-              onChange={(e) => setSelectedBoardingHouse(e.target.value)}
-              className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">Select Boarding House</option>
-              {boardingHouses.map(house => (
-                <option key={house.id} value={house.id}>
-                  {house.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
       {/* Balance Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 border border-gray-200">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className="bg-white p-3 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Current Balance</p>
-              <p className="text-lg font-bold text-gray-900">${pettyCashData.current_balance?.toFixed(2) || '0.00'}</p>
+              <p className="text-xs font-medium text-gray-600">Total Balance</p>
+              <p className="text-sm font-bold text-gray-900">${pettyCashData.total_balance?.toFixed(2) || '0.00'}</p>
             </div>
-            <FaDollarSign className="h-5 w-5 text-green-500" />
+            <FaDollarSign className="h-4 w-4 text-green-500" />
           </div>
         </div>
 
-        <div className="bg-white p-4 border border-gray-200">
+        <div className="bg-white p-3 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Beginning Balance (BD)</p>
-              <p className="text-lg font-bold text-gray-900">${pettyCashData.beginning_balance?.toFixed(2) || '0.00'}</p>
+              <p className="text-xs font-medium text-gray-600">Total Accounts</p>
+              <p className="text-sm font-bold text-gray-900">{pettyCashData.total_accounts || 0}</p>
             </div>
-            <FaCalendarAlt className="h-5 w-5 text-blue-500" />
+            <FaUser className="h-4 w-4 text-blue-500" />
           </div>
         </div>
 
-        <div className="bg-white p-4 border border-gray-200">
+        <div className="bg-white p-3 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Total Inflows</p>
-              <p className="text-lg font-bold text-green-600">${pettyCashData.total_inflows?.toFixed(2) || '0.00'}</p>
+              <p className="text-xs font-medium text-gray-600">Average Balance</p>
+              <p className="text-sm font-bold text-gray-900">
+                ${pettyCashData.total_accounts > 0 ? (pettyCashData.total_balance / pettyCashData.total_accounts).toFixed(2) : '0.00'}
+              </p>
             </div>
-            <FaArrowUp className="h-5 w-5 text-green-500" />
-          </div>
-        </div>
-
-        <div className="bg-white p-4 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600">Total Outflows</p>
-              <p className="text-lg font-bold text-red-600">${pettyCashData.total_outflows?.toFixed(2) || '0.00'}</p>
-            </div>
-            <FaArrowDown className="h-5 w-5 text-red-500" />
+            <FaCalendarAlt className="h-4 w-4 text-purple-500" />
           </div>
         </div>
       </div>
 
-      {/* Transactions Table */}
+      {/* Petty Cash Accounts Table */}
       <div className="bg-white border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-800">Recent Transactions</h2>
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-800">All Petty Cash Accounts</h2>
         </div>
         
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Boarding House</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Name</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Code</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current Balance</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {pettyCashData.transactions?.length > 0 ? (
-                pettyCashData.transactions.map((transaction, index) => (
-                  <tr key={transaction.id || index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+              {pettyCashData.accounts?.length > 0 ? (
+                pettyCashData.accounts.map((account, index) => (
+                  <tr key={account.id || index} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center">
-                        {getTransactionIcon(transaction.transaction_type)}
-                        <span className="ml-2 text-sm font-medium text-gray-900 capitalize">
-                          {transaction.transaction_type?.replace('_', ' ')}
-                        </span>
+                        <FaUser className="h-3 w-3 text-gray-400 mr-2" />
+                        <div>
+                          <div className="text-xs font-medium text-gray-900">
+                            {account.username || 'Unknown User'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {account.email || 'N/A'}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(transaction.transaction_date)}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="text-xs text-gray-900">
+                        {account.boarding_house_name || 'N/A'}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {transaction.description}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="text-xs font-medium text-gray-900">
+                        {account.account_name || 'Petty Cash Account'}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {transaction.reference_number}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <div className="text-xs text-gray-500">
+                        {account.account_code || 'N/A'}
+                      </div>
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${getTransactionColor(transaction.transaction_type)}`}>
-                      ${Math.abs(transaction.amount).toFixed(2)}
+                    <td className="px-3 py-2 whitespace-nowrap text-right">
+                      <div className={`text-xs font-semibold ${
+                        parseFloat(account.current_balance) >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        ${parseFloat(account.current_balance || 0).toFixed(2)}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                      ${transaction.running_balance?.toFixed(2) || '0.00'}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        account.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {account.status || 'active'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                      {formatDate(account.created_at)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
+                      <button
+                        onClick={() => handleViewTransactions(account)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        View Transactions
+                      </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">
-                    No transactions found
+                  <td colSpan="8" className="px-3 py-2 text-center text-xs text-gray-500">
+                    No petty cash accounts found
                   </td>
                 </tr>
               )}
@@ -411,6 +391,28 @@ const PettyCash = () => {
             <div className="mt-3">
               <h3 className="text-sm font-medium text-gray-900 mb-4">Add Cash to Petty Cash</h3>
               <form onSubmit={handleAddCash}>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Select User Account*</label>
+                  <select
+                    required
+                    value={`${addCashForm.user_id}|${addCashForm.account_id}`}
+                    onChange={(e) => {
+                      const [userId, accountId] = e.target.value.split('|');
+                      setAddCashForm({...addCashForm, user_id: userId, account_id: accountId});
+                    }}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select a user account</option>
+                    {pettyCashData.accounts?.map((account) => (
+                      <option key={account.id} value={`${account.user_id}|${account.id}`}>
+                        {account.username} - {account.boarding_house_name} (${parseFloat(account.current_balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select which user's petty cash account to add money to
+                  </p>
+                </div>
                 <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                   <input
@@ -510,6 +512,28 @@ const PettyCash = () => {
               <h3 className="text-sm font-medium text-gray-900 mb-4">Withdraw Cash from Petty Cash</h3>
               <form onSubmit={handleWithdrawCash}>
                 <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Select User Account*</label>
+                  <select
+                    required
+                    value={`${withdrawForm.user_id}|${withdrawForm.account_id}`}
+                    onChange={(e) => {
+                      const [userId, accountId] = e.target.value.split('|');
+                      setWithdrawForm({...withdrawForm, user_id: userId, account_id: accountId});
+                    }}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select a user account</option>
+                    {pettyCashData.accounts?.map((account) => (
+                      <option key={account.id} value={`${account.user_id}|${account.id}`}>
+                        {account.username} - {account.boarding_house_name} (${parseFloat(account.current_balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select which user's petty cash account to withdraw money from
+                  </p>
+                </div>
+                <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                   <input
                     type="number"
@@ -599,6 +623,98 @@ const PettyCash = () => {
         </div>
       )}
 
+      {/* Transaction History Modal */}
+      {showTransactionModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-4/5 max-w-6xl shadow-lg bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Transaction History - {selectedAccount?.username}
+                </h3>
+                <button
+                  onClick={() => setShowTransactionModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {transactionHistory.length > 0 ? (
+                      transactionHistory.map((transaction, index) => (
+                        <tr key={transaction.id || index} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {formatDate(transaction.transaction_date)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              transaction.transaction_type === 'cash_inflow' || transaction.transaction_type === 'student_payment'
+                                ? 'bg-green-100 text-green-800'
+                                : transaction.transaction_type === 'cash_outflow' || transaction.transaction_type === 'withdrawal'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {transaction.transaction_type === 'cash_inflow' ? 'Cash In' :
+                               transaction.transaction_type === 'cash_outflow' ? 'Cash Out' :
+                               transaction.transaction_type === 'student_payment' ? 'Student Payment' :
+                               transaction.transaction_type === 'withdrawal' ? 'Withdrawal' :
+                               transaction.transaction_type === 'expense' ? 'Expense' :
+                               transaction.transaction_type}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-900">
+                            {transaction.description}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right">
+                            <div className={`text-xs font-semibold ${
+                              transaction.transaction_type === 'cash_inflow' || transaction.transaction_type === 'student_payment'
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}>
+                              {transaction.transaction_type === 'cash_inflow' || transaction.transaction_type === 'student_payment'
+                                ? `+$${parseFloat(transaction.amount).toFixed(2)}`
+                                : `-$${parseFloat(transaction.amount).toFixed(2)}`
+                              }
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right text-xs text-gray-900">
+                            ${parseFloat(transaction.running_balance || 0).toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                            {transaction.reference_number || 'N/A'}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="6" className="px-3 py-2 text-center text-xs text-gray-500">
+                          No transactions found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

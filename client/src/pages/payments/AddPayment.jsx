@@ -5,7 +5,6 @@ import BASE_URL from '../../context/Api';
 export default function AddPayment({ 
   studentId, 
   studentName, 
-  paymentSchedules, 
   feeTypes,
   adminFee,
   securityDeposit,
@@ -13,15 +12,16 @@ export default function AddPayment({
   boardingHouseId
 }) {
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [selectedSchedule, setSelectedSchedule] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash_to_admin');
   const [feeType, setFeeType] = useState('monthly_rent');
   const [receipt, setReceipt] = useState(null);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]); // Add payment date state
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [remainingSecurityDeposit, setRemainingSecurityDeposit] = useState(securityDeposit || 0);
+  const [pettyCashAccounts, setPettyCashAccounts] = useState([]);
+  const [selectedPettyCashAccount, setSelectedPettyCashAccount] = useState('');
 
   // Fetch remaining security deposit amount
   useEffect(() => {
@@ -49,21 +49,45 @@ export default function AddPayment({
     fetchRemainingSecurityDeposit();
   }, [feeType, studentId, securityDeposit]);
 
-  // Check if schedule is required based on fee type
-  const isScheduleRequired = (type) => {
-    return type === 'monthly_rent';
-  };
+  // Fetch petty cash accounts for the boarding house
+  useEffect(() => {
+    const fetchPettyCashAccounts = async () => {
+      if (boardingHouseId) {
+        try {
+          const response = await axios.get(
+            `${BASE_URL}/petty-cash/account`,
+            {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json',
+                'boarding-house-id': boardingHouseId
+              }
+            }
+          );
+          
+          // For now, we'll use the boarding house as the petty cash account
+          // In the future, this could be expanded to show multiple petty cash accounts
+          if (response.data.success) {
+            setPettyCashAccounts([{
+              id: boardingHouseId,
+              name: 'Petty Cash Account',
+              current_balance: response.data.current_balance
+            }]);
+          }
+        } catch (err) {
+          console.error('Error fetching petty cash accounts:', err);
+        }
+      }
+    };
 
-  // Reset schedule and set predefined amount when fee type changes
+    fetchPettyCashAccounts();
+  }, [boardingHouseId]);
+
+  // Reset amount when fee type changes
   const handleFeeTypeChange = (e) => {
     const newFeeType = e.target.value;
     setFeeType(newFeeType);
     setError(''); // Clear any existing errors
-    
-    // Clear schedule if not required
-    if (!isScheduleRequired(newFeeType)) {
-      setSelectedSchedule('');
-    }
     
     // Set predefined amount based on fee type
     switch (newFeeType) {
@@ -101,9 +125,6 @@ export default function AddPayment({
       
       case 'monthly_rent':
         // Add any specific validation for monthly rent if needed
-        if (!selectedSchedule) {
-          return 'Please select a payment schedule for monthly rent';
-        }
         break;
     }
 
@@ -119,13 +140,13 @@ export default function AddPayment({
       // Debug log before sending
       const paymentData = {
         student_id: studentId,
-        schedule_id: selectedSchedule || undefined,
         amount: parseFloat(amount),
         payment_method: paymentMethod,
         fee_type: feeType,
         payment_date: paymentDate,
         notes: notes || undefined,
-        boarding_house_id: boardingHouseId
+        boarding_house_id: boardingHouseId,
+        petty_cash_account_id: paymentMethod === 'cash_to_ba' ? selectedPettyCashAccount : undefined
       };
 
       console.log('Sending payment data:', paymentData);
@@ -143,12 +164,12 @@ export default function AddPayment({
 
       // Reset form
       setAmount('');
-      setPaymentMethod('cash');
-      setSelectedSchedule('');
+      setPaymentMethod('cash_to_admin');
       setFeeType('monthly_rent');
       setReceipt(null);
       setNotes('');
       setPaymentDate(new Date().toISOString().split('T')[0]);
+      setSelectedPettyCashAccount('');
       
       // Refresh the page to show new payment
       window.location.reload();
@@ -241,29 +262,28 @@ export default function AddPayment({
             className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
             required
           >
-            <option value="cash">Cash</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="check">Check</option>
-            <option value="credit_card">Credit Card</option>
+            <option value="cash_to_admin">Cash to Admin</option>
+            <option value="cash_to_ba">Cash to BA (Petty Cash)</option>
+            <option value="bank">Bank Transfer</option>
           </select>
         </div>
 
-        {isScheduleRequired(feeType) && (
+        {paymentMethod === 'cash_to_ba' && (
           <div>
-            <label htmlFor="schedule" className="block text-xs font-medium text-gray-700 mb-1">
-              Payment Schedule
+            <label htmlFor="pettyCashAccount" className="block text-xs font-medium text-gray-700 mb-1">
+              Petty Cash Account
             </label>
             <select
-              id="schedule"
-              value={selectedSchedule}
-              onChange={(e) => setSelectedSchedule(e.target.value)}
+              id="pettyCashAccount"
+              value={selectedPettyCashAccount}
+              onChange={(e) => setSelectedPettyCashAccount(e.target.value)}
               className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
               required
             >
-              <option value="">Select a schedule</option>
-              {paymentSchedules.map((schedule, index) => (
-                <option key={schedule.id} value={schedule.id}>
-                  Period {index + 1}: {new Date(schedule.period_start_date).toLocaleDateString()} - {new Date(schedule.period_end_date).toLocaleDateString()}
+              <option value="">Select petty cash account</option>
+              {pettyCashAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} (Balance: ${account.current_balance?.toFixed(2) || '0.00'})
                 </option>
               ))}
             </select>

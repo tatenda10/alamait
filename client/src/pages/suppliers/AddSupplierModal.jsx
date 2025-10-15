@@ -13,12 +13,10 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
     contact_person: '',
     category: '',
     phone: '',
-    status: 'active',
-    boarding_house_id: ''
+    status: 'active'
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  const [boardingHouses, setBoardingHouses] = useState([]);
 
   const categories = [
     'Office Supplies',
@@ -32,40 +30,6 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
     'Transportation',
     'Other'
   ];
-
-  // Fetch boarding houses
-  const fetchBoardingHouses = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      console.log('🏠 Fetching boarding houses...');
-      
-      const response = await axios.get(`${BASE_URL}/boarding-houses`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      console.log('🏠 Boarding houses fetched:', response.data);
-      setBoardingHouses(response.data);
-      
-      // Auto-select from localStorage if available
-      const storedBoardingHouseId = localStorage.getItem('boarding_house_id');
-      console.log('🏠 Stored boarding house ID from localStorage:', storedBoardingHouseId);
-      
-      if (storedBoardingHouseId) {
-        setFormData(prev => ({
-          ...prev,
-          boarding_house_id: storedBoardingHouseId
-        }));
-      }
-    } catch (error) {
-      console.error('❌ Error fetching boarding houses:', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchBoardingHouses();
-  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -106,10 +70,6 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
       newErrors.address = 'Address is required';
     }
 
-    if (!formData.boarding_house_id) {
-      newErrors.boarding_house_id = 'Boarding house is required';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -128,20 +88,11 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const boarding_house_id = localStorage.getItem('boarding_house_id');
       
       console.log('🔑 Token from localStorage:', token ? 'Present' : 'Missing');
-      console.log('🏠 Boarding house ID from localStorage:', boarding_house_id);
-      console.log('🏠 Boarding house ID from form:', formData.boarding_house_id);
+      console.log('📤 Final supplier data being sent:', formData);
       
-      const supplierData = {
-        ...formData,
-        boarding_house_id: formData.boarding_house_id || boarding_house_id || '1'
-      };
-      
-      console.log('📤 Final supplier data being sent:', supplierData);
-      
-      const response = await axios.post(`${BASE_URL}/suppliers`, supplierData, {
+      const response = await axios.post(`${BASE_URL}/suppliers`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -265,28 +216,8 @@ const AddSupplierModal = ({ onClose, onSuccess }) => {
                </div>
              </div>
 
-             {/* Row 3: Boarding House and Status */}
+             {/* Row 3: Status */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                   Boarding House *
-                 </label>
-                 <select
-                   name="boarding_house_id"
-                   value={formData.boarding_house_id}
-                   onChange={handleInputChange}
-                   className={`w-full px-3 py-2 border focus:ring-2 focus:ring-[#f58020] focus:border-transparent ${
-                     errors.boarding_house_id ? 'border-red-500' : 'border-gray-300'
-                   }`}
-                 >
-                   <option value="">Select boarding house</option>
-                   {boardingHouses.map(house => (
-                     <option key={house.id} value={house.id}>{house.name}</option>
-                   ))}
-                 </select>
-                 {errors.boarding_house_id && <p className="mt-1 text-sm text-red-600">{errors.boarding_house_id}</p>}
-               </div>
-
                <div>
                  <label className="block text-sm font-medium text-gray-700 mb-1">
                    Status

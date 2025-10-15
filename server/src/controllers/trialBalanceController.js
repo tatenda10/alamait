@@ -17,12 +17,12 @@ const getTrialBalance = async (req, res) => {
         COALESCE(cab.current_balance, 0) as current_balance,
         CASE 
           WHEN coa.type IN ('Asset', 'Expense') THEN 
-            CASE WHEN COALESCE(cab.current_balance, 0) > 0 THEN COALESCE(cab.current_balance, 0) ELSE 0 END
+            ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as debit_balance,
         CASE 
           WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN 
-            CASE WHEN COALESCE(cab.current_balance, 0) > 0 THEN COALESCE(cab.current_balance, 0) ELSE 0 END
+            ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as credit_balance
       FROM chart_of_accounts coa
@@ -104,12 +104,12 @@ const getTrialBalanceByBoardingHouse = async (req, res) => {
         COALESCE(cab.current_balance, 0) as current_balance,
         CASE 
           WHEN coa.type IN ('Asset', 'Expense') THEN 
-            CASE WHEN COALESCE(cab.current_balance, 0) > 0 THEN COALESCE(cab.current_balance, 0) ELSE 0 END
+            ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as debit_balance,
         CASE 
           WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN 
-            CASE WHEN COALESCE(cab.current_balance, 0) > 0 THEN COALESCE(cab.current_balance, 0) ELSE 0 END
+            ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as credit_balance
       FROM chart_of_accounts coa
@@ -176,12 +176,12 @@ const exportTrialBalance = async (req, res) => {
         COALESCE(cab.current_balance, 0) as current_balance,
         CASE 
           WHEN coa.type IN ('Asset', 'Expense') THEN 
-            CASE WHEN COALESCE(cab.current_balance, 0) > 0 THEN COALESCE(cab.current_balance, 0) ELSE 0 END
+            ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as debit_balance,
         CASE 
           WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN 
-            CASE WHEN COALESCE(cab.current_balance, 0) > 0 THEN COALESCE(cab.current_balance, 0) ELSE 0 END
+            ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as credit_balance
       FROM chart_of_accounts coa

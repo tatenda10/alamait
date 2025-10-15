@@ -112,17 +112,17 @@ const TrialBalance = () => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="mb-6">
-        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Trial Balance</h1>
+      <div className="mb-4">
+        <div className="bg-white p-3 border border-gray-200 shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-900 mb-1">Trial Balance</h1>
           <p className="text-xs text-gray-600">Summary of all account balances as of current date</p>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">
+      <div className="bg-white p-3 border border-gray-200 mb-4">
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             {/* Search */}
@@ -133,7 +133,7 @@ const TrialBalance = () => {
                 placeholder="Search accounts..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
+                className="pl-8 pr-3 py-1.5 border border-gray-300 text-xs focus:ring-1 focus:ring-[#f58020] focus:border-transparent"
               />
             </div>
 
@@ -143,7 +143,7 @@ const TrialBalance = () => {
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
+                className="px-2 py-1.5 border border-gray-300 text-xs focus:ring-1 focus:ring-[#f58020] focus:border-transparent"
               >
                 <option value="all">All Accounts</option>
                 <option value="debit">Debit Balances</option>
@@ -156,7 +156,7 @@ const TrialBalance = () => {
           {/* Export Button */}
           <button
             onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-[#f58020] text-white rounded-lg hover:bg-orange-600 transition-colors text-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f58020] text-white hover:bg-orange-600 transition-colors text-xs"
           >
             <FaDownload className="h-4 w-4" />
             Export CSV
@@ -165,26 +165,26 @@ const TrialBalance = () => {
       </div>
 
       {/* Trial Balance Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Code</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Name</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debit Balance</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Balance</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Code</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Name</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Debit Balance</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Balance</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredData.map((item, index) => (
                 <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm text-gray-900 font-mono">{item.account_code}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900">{item.account_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                  <td className="px-3 py-2 text-xs text-gray-900 font-mono">{item.account_code}</td>
+                  <td className="px-3 py-2 text-xs text-gray-900">{item.account_name}</td>
+                  <td className="px-3 py-2 text-xs text-gray-900 text-right">
                     {item.debit_balance > 0 ? formatCurrency(item.debit_balance) : '-'}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                  <td className="px-3 py-2 text-xs text-gray-900 text-right">
                     {item.credit_balance > 0 ? formatCurrency(item.credit_balance) : '-'}
                   </td>
                 </tr>
@@ -192,11 +192,11 @@ const TrialBalance = () => {
             </tbody>
             <tfoot className="bg-gray-100 border-t-2 border-gray-300">
               <tr>
-                <td className="px-4 py-3 text-sm font-semibold text-gray-900" colSpan="2">TOTAL</td>
-                <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
+                <td className="px-3 py-2 text-xs font-semibold text-gray-900" colSpan="2">TOTAL</td>
+                <td className="px-3 py-2 text-xs font-semibold text-gray-900 text-right">
                   {formatCurrency(totalDebits)}
                 </td>
-                <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
+                <td className="px-3 py-2 text-xs font-semibold text-gray-900 text-right">
                   {formatCurrency(totalCredits)}
                 </td>
               </tr>
@@ -206,8 +206,8 @@ const TrialBalance = () => {
       </div>
 
       {/* Summary */}
-      <div className="mt-4 text-center">
-        <p className="text-sm text-gray-600">
+      <div className="mt-3 text-center">
+        <p className="text-xs text-gray-600">
           Total Debits: <span className="font-semibold">{formatCurrency(totalDebits)}</span> | 
           Total Credits: <span className="font-semibold">{formatCurrency(totalCredits)}</span> | 
           Difference: <span className={`font-semibold ${summary.isBalanced ? 'text-green-600' : 'text-red-600'}`}>
@@ -215,9 +215,9 @@ const TrialBalance = () => {
           </span>
         </p>
         {summary.isBalanced ? (
-          <p className="text-sm text-green-600 font-semibold mt-2">✓ Trial Balance is Balanced</p>
+          <p className="text-xs text-green-600 font-semibold mt-1">✓ Trial Balance is Balanced</p>
         ) : (
-          <p className="text-sm text-red-600 font-semibold mt-2">⚠ Trial Balance is Not Balanced</p>
+          <p className="text-xs text-red-600 font-semibold mt-1">⚠ Trial Balance is Not Balanced</p>
         )}
       </div>
     </div>

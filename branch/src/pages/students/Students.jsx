@@ -172,25 +172,25 @@ export default function Students() {
 
       {/* Table */}
       <div className="mt-6 flow-root">
-        <div className="-mx-2 -my-2 overflow-x-auto sm:-mx-4 lg:-mx-6">
+        <div className="overflow-x-auto">
           <div className="inline-block min-w-full py-2 align-middle">
             <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
               <thead className="bg-gray-200">
                 <tr>
-                  <th scope="col" className="py-2.5 pl-4 pr-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider sm:pl-4">
+                  <th scope="col" className="py-2.5 pl-4 pr-3 text-left text-xs font-medium text-gray-900 uppercase tracking-wider w-1/4">
                     Name / ID
                   </th>
-                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
+                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider w-1/4">
                     Contact
                   </th>
-                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
+                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider w-1/6">
                     Room
                   </th>
-                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
+                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider w-1/6">
                     Status
                   </th>
-                  <th scope="col" className="relative py-2.5 pl-3 pr-4 sm:pr-4">
-                    <span className="sr-only">Actions</span>
+                  <th scope="col" className="relative py-2.5 pl-3 pr-4 text-right text-xs font-medium text-gray-900 uppercase tracking-wider w-1/6">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -198,7 +198,7 @@ export default function Students() {
                 {students && students.length > 0 ? (
                   students.map((student) => (
                     <tr key={student.id} className="hover:bg-gray-50">
-                      <td className="py-2 pl-4 pr-3 text-xs text-gray-900 sm:pl-4 border-x border-gray-200">
+                      <td className="py-2 pl-4 pr-3 text-xs text-gray-900 border-x border-gray-200">
                         <div className="font-medium">{student.first_name} {student.last_name}</div>
                         <div className="text-gray-500">{student.id_number}</div>
                       </td>
@@ -218,37 +218,39 @@ export default function Students() {
                           {student.status}
                         </span>
                       </td>
-                      <td className="relative py-2 pl-3 pr-4 text-right text-xs font-medium sm:pr-4 border-r border-gray-200">
-                        <button 
-                          onClick={() => navigate(`/dashboard/students/view/${student.id}`)}
-                          className="text-gray-600 hover:text-gray-900 mr-3"
-                          title="View Student"
-                        >
-                          <EyeIcon className="h-4 w-4 inline-block" />
-                        </button>
-                        {!student.room_name && (
+                      <td className="relative py-2 pl-3 pr-4 text-right text-xs font-medium border-r border-gray-200">
+                        <div className="flex justify-end space-x-2">
                           <button 
-                            onClick={() => navigate(`/dashboard/students/assign-room/${student.id}`)}
-                            className="text-[#E78D69] hover:text-[#E78D69]/80 mr-3"
-                            title="Assign Room"
+                            onClick={() => navigate(`/dashboard/students/view/${student.id}`)}
+                            className="text-gray-600 hover:text-gray-900"
+                            title="View Student"
                           >
-                            <HomeIcon className="h-4 w-4 inline-block" />
+                            <EyeIcon className="h-4 w-4" />
                           </button>
-                        )}
-                        <button 
-                          onClick={() => navigate(`/dashboard/students/edit/${student.id}`)}
-                          className="text-blue-600 hover:text-blue-900 mr-3"
-                          title="Edit Student"
-                        >
-                          <PencilIcon className="h-4 w-4 inline-block" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteStudent(student.id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete Student"
-                        >
-                          <TrashIcon className="h-4 w-4 inline-block" />
-                        </button>
+                          {!student.room_name && (
+                            <button 
+                              onClick={() => navigate(`/dashboard/students/assign-room/${student.id}`)}
+                              className="text-[#E78D69] hover:text-[#E78D69]/80"
+                              title="Assign Room"
+                            >
+                              <HomeIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => navigate(`/dashboard/students/edit/${student.id}`)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Edit Student"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteStudent(student.id)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Delete Student"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

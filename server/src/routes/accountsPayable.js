@@ -12,4 +12,13 @@ router.get('/', accountsPayableController.getAccountsPayable);
 // Get accounts payable summary
 router.get('/summary', accountsPayableController.getAccountsPayableSummary);
 
+// Create new accounts payable entry
+router.post('/', accountsPayableController.createAccountsPayable);
+
+// Get accounts payable for a specific supplier
+router.get('/supplier/:supplierId', accountsPayableController.getAccountsPayableBySupplier);
+
+// Process payment for accounts payable
+router.post('/payment', accountsPayableController.processAccountsPayablePayment);
+
 module.exports = router;

@@ -1,0 +1,26 @@
+-- Create student_applications table
+CREATE TABLE IF NOT EXISTS student_applications (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  student_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(20) NOT NULL,
+  institution VARCHAR(255) NOT NULL,
+  medical_history TEXT,
+  room_id INT NOT NULL,
+  bed_id INT NULL,
+  preferred_move_in_date DATE,
+  emergency_contact_name VARCHAR(255),
+  emergency_contact_phone VARCHAR(20),
+  emergency_contact_relationship VARCHAR(100),
+  additional_notes TEXT,
+  status ENUM('pending', 'approved', 'rejected', 'under_review') DEFAULT 'pending',
+  admin_notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE,
+  FOREIGN KEY (bed_id) REFERENCES beds(id) ON DELETE SET NULL,
+  INDEX idx_applications_status (status),
+  INDEX idx_applications_room (room_id),
+  INDEX idx_applications_created_at (created_at)
+);

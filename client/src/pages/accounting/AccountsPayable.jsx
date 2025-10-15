@@ -3,14 +3,15 @@ import { FiEye, FiPlus, FiFilter, FiDownload } from 'react-icons/fi';
 import axios from 'axios';
 import PaymentModal from '../../components/PaymentModal';
 import BASE_URL from '../../context/Api';
+import AddAccountsPayableModal from '../suppliers/AddAccountsPayableModal';
 const AccountsPayable = () => {
   const [accountsPayable, setAccountsPayable] = useState([]);
-  const [boardingHouses, setBoardingHouses] = useState([]);
-  const [selectedBoardingHouse, setSelectedBoardingHouse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [paymentModal, setPaymentModal] = useState({ isOpen: false, payable: null });
+  const [showAddPayableModal, setShowAddPayableModal] = useState(false);
+  const [suppliers, setSuppliers] = useState([]);
   
   const token = localStorage.getItem('token');
   const isLoadingRef = useRef(false);
@@ -27,10 +28,9 @@ const AccountsPayable = () => {
       console.log('🔄 Starting fetchAccountsPayable...');
       isLoadingRef.current = true;
       setLoading(true);
-      const boardingHouseParam = selectedBoardingHouse ? `?boarding_house_id=${selectedBoardingHouse}` : '';
-      console.log('📡 Making API call to:', `${BASE_URL}/accounts-payable${boardingHouseParam}`);
+      console.log('📡 Making API call to:', `${BASE_URL}/accounts-payable`);
       
-      const response = await axios.get(`${BASE_URL}/accounts-payable${boardingHouseParam}`, {
+      const response = await axios.get(`${BASE_URL}/accounts-payable`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -50,39 +50,18 @@ const AccountsPayable = () => {
           console.log(`Item ${index + 1}:`, {
             id: item.id,
             description: item.description,
-            payment_method: item.payment_method,
             amount: item.amount,
-            isPettyCash: item.description && item.description.toLowerCase().includes('petty cash')
+            expense_account_name: item.expense_account_name,
+            expense_account_code: item.expense_account_code,
+            payable_account_name: item.payable_account_name,
+            payable_account_code: item.payable_account_code,
+            boarding_house_name: item.boarding_house_name
           });
         });
         
-        // Filter out any petty cash transactions as a safety measure
-        const filteredPayables = response.data.data.filter(payable => {
-          const isCredit = payable.payment_method === 'credit';
-          const isPettyCash = payable.description && payable.description.toLowerCase().includes('petty cash');
-          const shouldInclude = isCredit && !isPettyCash;
-          
-          console.log(`Filtering item ${payable.id}:`, {
-            description: payable.description,
-            payment_method: payable.payment_method,
-            isCredit,
-            isPettyCash,
-            shouldInclude
-          });
-          
-          return shouldInclude;
-        });
-        
-        console.log('✅ Setting accountsPayable state with filtered data:', filteredPayables);
-        setAccountsPayable(filteredPayables);
-        
-        // Log any petty cash items that might have been included
-        const pettyCashItems = response.data.data.filter(payable => 
-          payable.description && payable.description.toLowerCase().includes('petty cash')
-        );
-        if (pettyCashItems.length > 0) {
-          console.error('🚨 CRITICAL: Petty cash items found in accounts payable API response:', pettyCashItems);
-        }
+        // Use the data directly from the API (no filtering needed since backend already filters correctly)
+        console.log('✅ Setting accountsPayable state with data:', response.data.data);
+        setAccountsPayable(response.data.data);
       } else {
         console.log('❌ No data in response, setting empty array');
         setAccountsPayable([]);
@@ -96,23 +75,25 @@ const AccountsPayable = () => {
       setLoading(false);
       console.log('✅ fetchAccountsPayable completed');
     }
-  }, [selectedBoardingHouse, token]);
+  }, [token]);
 
-  // Fetch boarding houses
-  const fetchBoardingHouses = async () => {
+  // Fetch suppliers
+  const fetchSuppliers = async () => {
     try {
-      const response = await axios.get(`${BASE_URL}/boarding-houses`, {
+      const response = await axios.get(`${BASE_URL}/suppliers`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      setBoardingHouses(response.data);
-      if (response.data.length > 0) {
-        setSelectedBoardingHouse(response.data[0].id);
-      }
+      setSuppliers(response.data.data || []);
     } catch (error) {
-      console.error('Error fetching boarding houses:', error);
+      console.error('Error fetching suppliers:', error);
     }
+  };
+
+  // Handle add payable success
+  const handleAddPayableSuccess = () => {
+    fetchAccountsPayable(); // Refresh the accounts payable data
   };
 
   // Monitor accountsPayable state changes
@@ -127,20 +108,10 @@ const AccountsPayable = () => {
   // Initial data fetch
   useEffect(() => {
     if (token) {
-      fetchBoardingHouses();
+      fetchSuppliers();
+      fetchAccountsPayable();
     }
   }, [token]);
-
-  // Fetch accounts payable when boarding house changes
-  useEffect(() => {
-    if (token && selectedBoardingHouse !== undefined) {
-      const timeoutId = setTimeout(() => {
-        fetchAccountsPayable();
-      }, 100); // Small delay to prevent rapid successive calls
-      
-      return () => clearTimeout(timeoutId);
-    }
-  }, [selectedBoardingHouse, token]);
 
   // Format amount to USD
   const formatAmount = (amount) => {
@@ -159,12 +130,34 @@ const AccountsPayable = () => {
     });
   };
 
+  // Handle view details
+  const handleViewDetails = (payable) => {
+    // For now, we'll just show an alert with the details
+    // You can replace this with a modal or navigate to a details page
+    const details = `
+Accounts Payable Details:
+• Date: ${formatDate(payable.created_at)}
+• Boarding House: ${payable.boarding_house_name || 'N/A'}
+• Expense Account: ${payable.expense_account_name} (${payable.expense_account_code})
+• Payable Account: ${payable.payable_account_name} (${payable.payable_account_code})
+• Description: ${payable.description}
+• Amount: ${formatAmount(payable.amount)}
+• Status: Outstanding
+• Transaction ID: ${payable.transaction_id}
+    `.trim();
+    
+    alert(details);
+  };
+
   // Filter accounts payable based on search
   const filteredAccountsPayable = accountsPayable.filter(payable => {
     const matchesSearch = searchTerm === '' || 
       payable.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payable.invoice_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payable.supplier_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      payable.expense_account_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payable.expense_account_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payable.payable_account_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payable.payable_account_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payable.boarding_house_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesSearch;
   });
@@ -179,13 +172,21 @@ const AccountsPayable = () => {
     try {
       console.log('Payment modal payable:', paymentModal.payable);
       console.log('Payment data being sent:', {
-        expense_id: paymentModal.payable.id,
+        accounts_payable_id: paymentModal.payable.id,
+        transaction_id: paymentModal.payable.transaction_id,
         ...paymentData
       });
       
-      const response = await axios.post(`${BASE_URL}/supplier-payments`, {
-        expense_id: paymentModal.payable.id,
-        ...paymentData
+      const response = await axios.post(`${BASE_URL}/accounts-payable/payment`, {
+        accounts_payable_id: paymentModal.payable.id,
+        transaction_id: paymentModal.payable.transaction_id,
+        amount: parseFloat(paymentData.amount),
+        payment_method: paymentData.payment_method,
+        payment_date: paymentData.payment_date,
+        reference_number: paymentData.reference_number,
+        notes: paymentData.notes,
+        boarding_house_id: parseInt(paymentData.boarding_house_id),
+        petty_cash_account_id: paymentData.petty_cash_account_id ? parseInt(paymentData.petty_cash_account_id) : null
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -199,6 +200,7 @@ const AccountsPayable = () => {
         
         // Show success message (you can add a toast notification here)
         console.log('Payment recorded successfully');
+        alert('Payment recorded successfully!');
       }
     } catch (error) {
       console.error('Error recording payment:', error);
@@ -211,38 +213,24 @@ const AccountsPayable = () => {
     <div className="bg-gray-50 min-h-screen p-6">
       {/* Header Section */}
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-gray-800 mb-2">Accounts Payable</h1>
-        <p className="text-xs text-gray-500">Manage outstanding credit expenses and supplier payments</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-800 mb-2">Accounts Payable</h1>
+            <p className="text-xs text-gray-500">Manage outstanding credit expenses and supplier payments</p>
+          </div>
+          <button
+            onClick={() => setShowAddPayableModal(true)}
+            className="flex items-center gap-2 px-4 py-2 text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            <FiPlus className="h-4 w-4" />
+            Add Accounts Payable
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm">
           {error}
-        </div>
-      )}
-
-      {/* Boarding House Selection */}
-      {boardingHouses.length > 0 && (
-        <div className="bg-white p-4 mb-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-medium text-gray-700">
-                {boardingHouses.find(bh => bh.id === selectedBoardingHouse)?.name || 'All Boarding Houses'}
-              </h2>
-            </div>
-            <select
-              className="text-xs border border-gray-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              value={selectedBoardingHouse || ''}
-              onChange={(e) => setSelectedBoardingHouse(e.target.value ? Number(e.target.value) : null)}
-            >
-              <option value="">All Boarding Houses</option>
-              {boardingHouses.map(bh => (
-                <option key={bh.id} value={bh.id}>
-                  {bh.name} - {bh.location}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
       )}
 
@@ -255,7 +243,7 @@ const AccountsPayable = () => {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search accounts payable..."
+                  placeholder="Search by expense account, payable account, description, or boarding house..."
                   className="pl-8 pr-4 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -291,12 +279,11 @@ const AccountsPayable = () => {
             <thead>
               <tr className="text-xs font-medium text-gray-500 bg-gray-50 border-b border-gray-200">
                 <th className="px-6 py-3 text-left">Date</th>
-                <th className="px-6 py-3 text-left">Supplier</th>
+                <th className="px-6 py-3 text-left">Boarding House</th>
+                <th className="px-6 py-3 text-left">Expense Account</th>
+                <th className="px-6 py-3 text-left">Payable Account</th>
                 <th className="px-6 py-3 text-left">Description</th>
-                <th className="px-6 py-3 text-left">Reference</th>
-                <th className="px-6 py-3 text-right">Total Amount</th>
-                <th className="px-6 py-3 text-right">Paid Amount</th>
-                <th className="px-6 py-3 text-right">Balance Due</th>
+                <th className="px-6 py-3 text-right">Amount</th>
                 <th className="px-6 py-3 text-left">Status</th>
                 <th className="px-6 py-3 text-right">Actions</th>
               </tr>
@@ -304,50 +291,54 @@ const AccountsPayable = () => {
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
                     Loading accounts payable...
                   </td>
                 </tr>
               ) : filteredAccountsPayable.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
                     No accounts payable found
                   </td>
                 </tr>
               ) : (
                 filteredAccountsPayable.map((payable) => (
                   <tr key={payable.id} className="text-xs text-gray-700 hover:bg-gray-50">
-                    <td className="px-6 py-4">{formatDate(payable.date || payable.created_at)}</td>
-                    <td className="px-6 py-4">{payable.supplier_name || '-'}</td>
-                    <td className="px-6 py-4">{payable.description}</td>
-                    <td className="px-6 py-4">{payable.invoice_number || payable.reference_number || '-'}</td>
-                    <td className="px-6 py-4 text-right">{formatAmount(payable.amount)}</td>
-                    <td className="px-6 py-4 text-right">{formatAmount(payable.amount - payable.balance)}</td>
-                    <td className="px-6 py-4 text-right">{formatAmount(payable.balance)}</td>
+                    <td className="px-6 py-4">{formatDate(payable.created_at)}</td>
+                    <td className="px-6 py-4">{payable.boarding_house_name || '-'}</td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        payable.status === 'paid' 
-                          ? 'bg-green-100 text-green-800' 
-                          : payable.status === 'partial'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {payable.status === 'paid' ? 'Paid' : payable.status === 'partial' ? 'Partial' : 'Outstanding'}
+                      <div>
+                        <div className="font-medium">{payable.expense_account_name || '-'}</div>
+                        <div className="text-gray-500 text-xs">{payable.expense_account_code || ''}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div>
+                        <div className="font-medium">{payable.payable_account_name || '-'}</div>
+                        <div className="text-gray-500 text-xs">{payable.payable_account_code || ''}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">{payable.description}</td>
+                    <td className="px-6 py-4 text-right">{formatAmount(payable.amount)}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
+                        Outstanding
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right space-x-3">
                       <button 
                         className="text-gray-600 hover:text-blue-600 transition-colors"
+                        title="View details"
+                        onClick={() => handleViewDetails(payable)}
+                      >
+                        <FiEye size={14} />
+                      </button>
+                      <button 
+                        className="text-green-600 hover:text-green-700 transition-colors"
                         title="Make payment"
                         onClick={() => handleMakePayment(payable)}
                       >
-                        <FiPlus size={14} />
-                      </button>
-                      <button 
-                        className="text-gray-600 hover:text-blue-600 transition-colors"
-                        title="View details"
-                      >
-                        <FiEye size={14} />
+                        💳
                       </button>
                     </td>
                   </tr>
@@ -363,9 +354,18 @@ const AccountsPayable = () => {
         isOpen={paymentModal.isOpen}
         onClose={() => setPaymentModal({ isOpen: false, payable: null })}
         payable={paymentModal.payable}
-        onSubmit={handlePaymentSubmit}
+        onPaymentSubmit={handlePaymentSubmit}
         formatAmount={formatAmount}
       />
+
+      {/* Add Accounts Payable Modal */}
+      {showAddPayableModal && (
+        <AddAccountsPayableModal
+          supplier={null} // No specific supplier selected
+          onClose={() => setShowAddPayableModal(false)}
+          onSuccess={handleAddPayableSuccess}
+        />
+      )}
     </div>
   );
 };

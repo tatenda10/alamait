@@ -13,7 +13,8 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
   NoSymbolIcon,
-  ClockIcon
+  ClockIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
@@ -71,8 +72,11 @@ export default function ViewStudent() {
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accountBalance, setAccountBalance] = useState(null);
   const [activeTab, setActiveTab] = useState('personal');
   const [payments, setPayments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [applicationData, setApplicationData] = useState(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [newSchedule, setNewSchedule] = useState({
     startDate: '',
@@ -140,6 +144,9 @@ export default function ViewStudent() {
                   enrollment_id: enrollmentResponse.data.id,
                   payment_schedules: enrollmentResponse.data.payment_schedules || []
                 }));
+                
+                // Set account balance
+                setAccountBalance(enrollmentResponse.data.account_balance);
               }
             } catch (enrollmentError) {
               console.error('Error fetching enrollment:', enrollmentError);
@@ -149,6 +156,40 @@ export default function ViewStudent() {
         } catch (paymentsError) {
           console.error('Error fetching payments:', paymentsError);
           setPayments([]); // Set empty payments on error
+        }
+
+        // Fetch invoices
+        try {
+          const invoicesResponse = await axios.get(
+            `${BASE_URL}/students/${studentId}/invoices`,
+            getAuthHeaders()
+          );
+          setInvoices(invoicesResponse.data.invoices || []);
+        } catch (invoicesError) {
+          console.error('Error fetching invoices:', invoicesError);
+          setInvoices([]); // Set empty invoices on error
+        }
+
+        // Fetch application data for lease agreement
+        try {
+          console.log('Fetching application data for student:', studentResponse.data.full_name);
+          const applicationsResponse = await axios.get(`${BASE_URL}/applications`, {
+            ...getAuthHeaders(),
+            params: { student_name: studentResponse.data.full_name }
+          });
+          
+          console.log('Applications response:', applicationsResponse.data);
+          
+          if (applicationsResponse.data.applications && applicationsResponse.data.applications.length > 0) {
+            console.log('Found application data:', applicationsResponse.data.applications[0]);
+            setApplicationData(applicationsResponse.data.applications[0]);
+          } else {
+            console.log('No applications found for student:', studentResponse.data.full_name);
+            setApplicationData(null);
+          }
+        } catch (applicationError) {
+          console.error('Error fetching application data:', applicationError);
+          setApplicationData(null);
         }
         
         setLoading(false);
@@ -355,6 +396,10 @@ export default function ViewStudent() {
             <dd className="mt-1 text-sm text-gray-900">{student.full_name}</dd>
           </div>
           <div>
+            <dt className="text-sm font-medium text-gray-500">Student ID</dt>
+            <dd className="mt-1 text-sm text-gray-900 font-mono bg-gray-100 px-2 py-1 rounded">{student.student_id || 'Not assigned'}</dd>
+          </div>
+          <div>
             <dt className="text-sm font-medium text-gray-500">National ID</dt>
             <dd className="mt-1 text-sm text-gray-900">{student.national_id}</dd>
           </div>
@@ -500,66 +545,6 @@ export default function ViewStudent() {
           )}
         </div>
 
-        {/* Payment Schedule Section */}
-        {student.room_id && (
-          <div className="bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-xs font-medium text-gray-900">Payment Schedule</h4>
-              <button
-                onClick={() => setIsScheduleModalOpen(true)}
-                className="inline-flex items-center text-xs text-[#f58020] hover:text-[#f58020]/90"
-              >
-                <PlusIcon className="h-4 w-4 mr-1" />
-                Add Schedule
-              </button>
-            </div>
-            {student.payment_schedules?.length > 0 ? (
-              <div className="border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Period</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Start Date</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">End Date</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Amount</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {student.payment_schedules.map((schedule, index) => (
-                      <tr key={schedule.id}>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          Period {index + 1}
-                          {schedule.notes && (
-                            <p className="text-[10px] text-gray-500 mt-0.5">{schedule.notes}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {new Date(schedule.period_start_date).toLocaleDateString()}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {new Date(schedule.period_end_date).toLocaleDateString()}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {schedule.currency} {parseFloat(schedule.amount_due).toFixed(2)}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700">
-                            Active
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-xs text-gray-500">No payment schedule available</p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Documents Section */}
         <div className="bg-white">
@@ -592,6 +577,116 @@ export default function ViewStudent() {
             </div>
           ) : (
             <div className="text-sm text-gray-500 border border-gray-200 p-4">No documents uploaded</div>
+          )}
+        </div>
+
+        {/* Lease Agreement Section */}
+        <div className="bg-white">
+          <h4 className="text-sm font-medium text-gray-900 mb-4">Lease Agreement</h4>
+          
+          {student?.room_id ? (
+            <div className="border border-gray-200 rounded-lg p-4 space-y-4">
+              {/* Agreement Header */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h5 className="text-lg font-semibold text-blue-900 mb-3">STUDENT ACCOMMODATION LEASE AGREEMENT</h5>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-blue-800">Property:</span>
+                    <span className="ml-2 text-blue-700">{student.room_name || 'Assigned Room'}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800">Student:</span>
+                    <span className="ml-2 text-blue-700">{student.full_name}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800">National ID:</span>
+                    <span className="ml-2 text-blue-700">{student.national_id}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800">Phone:</span>
+                    <span className="ml-2 text-blue-700">{student.phone_number}</span>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="font-medium text-blue-800">Lease Period:</span>
+                    <span className="ml-2 text-blue-700">
+                      {student.start_date ? new Date(student.start_date).toLocaleDateString() : 'N/A'} to {student.expected_end_date ? new Date(student.expected_end_date).toLocaleDateString() : 'Ongoing'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms and Conditions */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h5 className="font-semibold text-gray-900 mb-3">TERMS AND CONDITIONS:</h5>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700 ml-4">
+                  <li>The student agrees to pay monthly rent as agreed upon enrollment.</li>
+                  <li>The student shall maintain the room in good condition and report any damages immediately.</li>
+                  <li>No smoking, alcohol, or illegal substances are permitted on the premises.</li>
+                  <li>Quiet hours are from 10 PM to 7 AM on weekdays and 11 PM to 8 AM on weekends.</li>
+                  <li>Visitors must be registered and are not permitted to stay overnight.</li>
+                  <li>The student is responsible for their personal belongings and security.</li>
+                  <li>Any breach of these terms may result in termination of the lease.</li>
+                </ol>
+              </div>
+
+              {/* Payment Terms */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h5 className="font-semibold text-gray-900 mb-3">PAYMENT TERMS:</h5>
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 ml-4">
+                  <li>Monthly rent: {student.currency} {student.agreed_amount}</li>
+                  <li>Admin fee: {student.currency} {student.admin_fee || '20.00'} (one-time)</li>
+                  <li>Security deposit: {student.currency} {student.security_deposit || '0.00'}</li>
+                  <li>Monthly rent is due on the 1st of each month</li>
+                  <li>Late payments may incur additional charges</li>
+                </ul>
+              </div>
+
+              {/* Digital Signature - Show if available */}
+              {applicationData?.signature_data && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h5 className="font-semibold text-green-900 mb-3">Digital Signature</h5>
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-white border border-green-200 rounded p-2">
+                      <img 
+                        src={applicationData.signature_data} 
+                        alt="Student Signature" 
+                        className="h-16 w-auto"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm text-green-800 font-medium">Signed by: {applicationData.student_name}</p>
+                      <p className="text-xs text-green-600">
+                        Signed on: {new Date(applicationData.created_at).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-green-600">
+                        Status: <span className="font-medium">{applicationData.status}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Agreement Footer */}
+              <div className="border-t pt-4">
+                <p className="text-xs text-gray-500 text-center">
+                  This lease agreement is legally binding. The student acknowledges that they have read, understood, 
+                  and agree to all terms and conditions of this lease agreement.
+                </p>
+                <p className="text-xs text-gray-400 text-center mt-2">
+                  Student Status: <span className="font-medium">{student.status}</span> | 
+                  Enrollment Date: {student.joined_at ? new Date(student.joined_at).toLocaleDateString() : 'N/A'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-lg p-4 text-center">
+              <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400 mb-2" />
+              <h3 className="text-sm font-medium text-gray-900 mb-1">No Room Assignment</h3>
+              <p className="text-xs text-gray-500">
+                This student does not have a room assignment yet. A lease agreement will be available once a room is assigned.
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -887,6 +982,64 @@ export default function ViewStudent() {
             />
           )}
 
+          {/* Invoices Section */}
+          <div className="mt-8">
+            <div className="border-t border-gray-200 pt-6">
+              <h3 className="text-base font-medium text-gray-900 mb-4">Invoices</h3>
+              {invoices && invoices.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Reference</th>
+                        <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Date</th>
+                        <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Description</th>
+                        <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Amount</th>
+                        <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Status</th>
+                        <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Room</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {invoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {invoice.reference_number || `INV-${invoice.id}`}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {new Date(invoice.invoice_date).toLocaleDateString()}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-900">
+                            {invoice.description}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
+                            {invoice.currency} {parseFloat(invoice.amount).toFixed(2)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium
+                              ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                invoice.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                invoice.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                                invoice.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
+                                'bg-gray-100 text-gray-800'}`}>
+                              {invoice.status ? invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1) : 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {invoice.room_name || 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">No invoices found</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Add Payment Form */}
           <div className="mt-8">
             <div className="border-t border-gray-200 pt-6">
@@ -895,7 +1048,6 @@ export default function ViewStudent() {
                 <AddPayment 
                   studentId={student.id}
                   studentName={student.full_name}
-                  paymentSchedules={student.payment_schedules || []}
                   feeTypes={[
                     { id: 'monthly_rent', label: 'Monthly Rent' },
                     { id: 'admin_fee', label: 'Admin Fee', amount: student.admin_fee },
@@ -1088,6 +1240,37 @@ export default function ViewStudent() {
           View detailed information for {student.full_name}
         </p>
       </div>
+
+      {/* Account Balance */}
+      {accountBalance && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <CreditCardIcon className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-blue-900">Account Balance</h3>
+                <p className="text-xs text-blue-600">Current student account balance</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className={`text-2xl font-bold ${
+                parseFloat(accountBalance.current_balance) >= 0 
+                  ? 'text-green-600' 
+                  : 'text-red-600'
+              }`}>
+                {parseFloat(accountBalance.current_balance) >= 0 ? '+' : ''}${parseFloat(accountBalance.current_balance || 0).toFixed(2)}
+              </div>
+              <p className="text-xs text-blue-600">
+                {parseFloat(accountBalance.current_balance) >= 0 ? 'Credit Balance' : 'Outstanding Balance'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">

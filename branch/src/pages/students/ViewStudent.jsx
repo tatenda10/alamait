@@ -13,26 +13,27 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
   NoSymbolIcon,
-  ClockIcon
+  ClockIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import AddPayment from '../payments/AddPayment';
 import Checkout from '../../components/Checkout';
 import EnrollmentHistory from './EnrollmentHistory';
 
 const TabButton = ({ active, icon: Icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-x-2 px-4 py-2 text-sm font-medium border-b-2 ${
+    className={`flex items-center gap-x-1 sm:gap-x-2 px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 ${
       active
         ? 'border-[#E78D69] text-[#E78D69]'
         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
     }`}
   >
-    <Icon className="h-5 w-5" />
-    {label}
+    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+    <span className="hidden sm:inline">{label}</span>
+    <span className="sm:hidden">{label.split(' ')[0]}</span>
   </button>
 );
 
@@ -71,8 +72,11 @@ export default function ViewStudent() {
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [accountBalance, setAccountBalance] = useState(null);
   const [activeTab, setActiveTab] = useState('personal');
   const [payments, setPayments] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [applicationData, setApplicationData] = useState(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [newSchedule, setNewSchedule] = useState({
     startDate: '',
@@ -108,6 +112,35 @@ export default function ViewStudent() {
     }
   });
 
+  const refreshPaymentData = async () => {
+    try {
+      // Fetch payments
+      const paymentsResponse = await axios.get(
+        `${BASE_URL}/payments/students/${studentId}`,
+        getAuthHeaders()
+      );
+      setPayments(paymentsResponse.data);
+      
+      // Fetch enrollment details for account balance
+      if (student?.room_id) {
+        try {
+          const enrollmentResponse = await axios.get(
+            `${BASE_URL}/students/${studentId}/enrollment`,
+            getAuthHeaders()
+          );
+
+          if (enrollmentResponse.data) {
+            setAccountBalance(enrollmentResponse.data.account_balance);
+          }
+        } catch (enrollmentError) {
+          console.error('Error fetching enrollment:', enrollmentError);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing payment data:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -140,6 +173,9 @@ export default function ViewStudent() {
                   enrollment_id: enrollmentResponse.data.id,
                   payment_schedules: enrollmentResponse.data.payment_schedules || []
                 }));
+                
+                // Set account balance
+                setAccountBalance(enrollmentResponse.data.account_balance);
               }
             } catch (enrollmentError) {
               console.error('Error fetching enrollment:', enrollmentError);
@@ -149,6 +185,40 @@ export default function ViewStudent() {
         } catch (paymentsError) {
           console.error('Error fetching payments:', paymentsError);
           setPayments([]); // Set empty payments on error
+        }
+
+        // Fetch invoices
+        try {
+          const invoicesResponse = await axios.get(
+            `${BASE_URL}/students/${studentId}/invoices`,
+            getAuthHeaders()
+          );
+          setInvoices(invoicesResponse.data.invoices || []);
+        } catch (invoicesError) {
+          console.error('Error fetching invoices:', invoicesError);
+          setInvoices([]); // Set empty invoices on error
+        }
+
+        // Fetch application data for lease agreement
+        try {
+          console.log('Fetching application data for student:', studentResponse.data.full_name);
+          const applicationsResponse = await axios.get(`${BASE_URL}/applications`, {
+            ...getAuthHeaders(),
+            params: { student_name: studentResponse.data.full_name }
+          });
+          
+          console.log('Applications response:', applicationsResponse.data);
+          
+          if (applicationsResponse.data.applications && applicationsResponse.data.applications.length > 0) {
+            console.log('Found application data:', applicationsResponse.data.applications[0]);
+            setApplicationData(applicationsResponse.data.applications[0]);
+          } else {
+            console.log('No applications found for student:', studentResponse.data.full_name);
+            setApplicationData(null);
+          }
+        } catch (applicationError) {
+          console.error('Error fetching application data:', applicationError);
+          setApplicationData(null);
         }
         
         setLoading(false);
@@ -160,6 +230,17 @@ export default function ViewStudent() {
     };
 
     fetchData();
+
+    // Add focus event listener to refresh data when page becomes visible
+    const handleFocus = () => {
+      refreshPaymentData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [studentId]);
 
   const handleAddPaymentSchedule = async (e) => {
@@ -345,14 +426,18 @@ export default function ViewStudent() {
 
   const renderPersonalInfo = () => (
     <div className="border border-gray-200">
-      <div className="p-6">
-        <h3 className="text-base font-medium text-gray-900 border-b border-gray-200 pb-2 mb-4">
+      <div className="p-4 sm:p-6">
+        <h3 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2 mb-4">
           Personal Information
         </h3>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <dt className="text-sm font-medium text-gray-500">Full Name</dt>
             <dd className="mt-1 text-sm text-gray-900">{student.full_name}</dd>
+          </div>
+          <div>
+            <dt className="text-sm font-medium text-gray-500">Student ID</dt>
+            <dd className="mt-1 text-sm text-gray-900 font-mono bg-gray-100 px-2 py-1 rounded">{student.student_id || 'Not assigned'}</dd>
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-500">National ID</dt>
@@ -389,13 +474,13 @@ export default function ViewStudent() {
 
   const renderRoomAssignment = () => (
     <div className="border border-gray-200">
-      <div className="p-6 space-y-8">
+      <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
         {/* Room Assignment Header */}
-        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-          <h3 className="text-base font-medium text-gray-900">Current Room Assignment</h3>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-gray-200 pb-2 gap-2">
+          <h3 className="text-sm sm:text-base font-medium text-gray-900">Current Room Assignment</h3>
           <button
             onClick={() => navigate(`/dashboard/students/assign-room/${student.id}`)}
-            className="text-sm text-[#E78D69] hover:text-[#E78D69]/80"
+            className="text-xs sm:text-sm text-[#E78D69] hover:text-[#E78D69]/80 self-start"
           >
             {student.room_id ? 'Change Room' : 'Assign Room'}
           </button>
@@ -426,7 +511,7 @@ export default function ViewStudent() {
               {/* Rent Breakdown */}
               <div>
                 <h5 className="text-xs font-medium text-gray-500 mb-2">Rent Breakdown</h5>
-                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   <div>
                     <dt className="text-xs text-gray-500">Monthly Rent</dt>
                     <dd className="mt-1 text-sm font-medium text-gray-900">
@@ -463,7 +548,7 @@ export default function ViewStudent() {
               {/* Lease Period */}
               <div>
                 <h5 className="text-xs font-medium text-gray-500 mb-2">Lease Period</h5>
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <dt className="text-xs text-gray-500">Start Date</dt>
                     <dd className="mt-1 text-sm font-medium text-gray-900">
@@ -500,88 +585,28 @@ export default function ViewStudent() {
           )}
         </div>
 
-        {/* Payment Schedule Section */}
-        {student.room_id && (
-          <div className="bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-xs font-medium text-gray-900">Payment Schedule</h4>
-              <button
-                onClick={() => setIsScheduleModalOpen(true)}
-                className="inline-flex items-center text-xs text-[#E78D69] hover:text-[#E78D69]/90"
-              >
-                <PlusIcon className="h-4 w-4 mr-1" />
-                Add Schedule
-              </button>
-            </div>
-            {student.payment_schedules?.length > 0 ? (
-              <div className="border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Period</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Start Date</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">End Date</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Amount</th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {student.payment_schedules.map((schedule, index) => (
-                      <tr key={schedule.id}>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          Period {index + 1}
-                          {schedule.notes && (
-                            <p className="text-[10px] text-gray-500 mt-0.5">{schedule.notes}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {new Date(schedule.period_start_date).toLocaleDateString()}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {new Date(schedule.period_end_date).toLocaleDateString()}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {schedule.currency} {parseFloat(schedule.amount_due).toFixed(2)}
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700">
-                            Active
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                <p className="text-xs text-gray-500">No payment schedule available</p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Documents Section */}
         <div className="bg-white">
-          <h4 className="text-sm font-medium text-gray-900 mb-4">Documents</h4>
+          <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-4">Documents</h4>
           {student.documents?.length > 0 ? (
             <div className="border border-gray-200">
               <ul className="divide-y divide-gray-200">
                 {student.documents.map((doc) => (
-                  <li key={doc.id} className="p-4 flex justify-between items-center">
+                  <li key={doc.id} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{doc.doc_type}</p>
-                      <p className="text-sm text-gray-500">{doc.file_path.split('/').pop()}</p>
+                      <p className="text-xs sm:text-sm font-medium text-gray-900">{doc.doc_type}</p>
+                      <p className="text-xs sm:text-sm text-gray-500">{doc.file_path.split('/').pop()}</p>
                     </div>
-                    <div className="flex items-center">
-                      <span className="text-xs text-gray-500 mr-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+                      <span className="text-xs text-gray-500">
                         Uploaded: {new Date(doc.uploaded_at).toLocaleDateString()}
                       </span>
                       <a 
                         href={`${BASE_URL}/${doc.file_path}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-900"
+                        className="text-xs sm:text-sm text-blue-600 hover:text-blue-900"
                       >
                         Download
                       </a>
@@ -591,7 +616,117 @@ export default function ViewStudent() {
               </ul>
             </div>
           ) : (
-            <div className="text-sm text-gray-500 border border-gray-200 p-4">No documents uploaded</div>
+            <div className="text-xs sm:text-sm text-gray-500 border border-gray-200 p-3 sm:p-4">No documents uploaded</div>
+          )}
+        </div>
+
+        {/* Lease Agreement Section */}
+        <div className="bg-white">
+          <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-4">Lease Agreement</h4>
+          
+          {student?.room_id ? (
+            <div className="border border-gray-200 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4">
+              {/* Agreement Header */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                <h5 className="text-sm sm:text-lg font-semibold text-blue-900 mb-2 sm:mb-3">STUDENT ACCOMMODATION LEASE AGREEMENT</h5>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
+                  <div>
+                    <span className="font-medium text-blue-800">Property:</span>
+                    <span className="ml-2 text-blue-700">{student.room_name || 'Assigned Room'}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800">Student:</span>
+                    <span className="ml-2 text-blue-700">{student.full_name}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800">National ID:</span>
+                    <span className="ml-2 text-blue-700">{student.national_id}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-800">Phone:</span>
+                    <span className="ml-2 text-blue-700">{student.phone_number}</span>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="font-medium text-blue-800">Lease Period:</span>
+                    <span className="ml-2 text-blue-700">
+                      {student.start_date ? new Date(student.start_date).toLocaleDateString() : 'N/A'} to {student.expected_end_date ? new Date(student.expected_end_date).toLocaleDateString() : 'Ongoing'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms and Conditions */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                <h5 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-xs sm:text-sm">TERMS AND CONDITIONS:</h5>
+                <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-700 ml-2 sm:ml-4">
+                  <li>The student agrees to pay monthly rent as agreed upon enrollment.</li>
+                  <li>The student shall maintain the room in good condition and report any damages immediately.</li>
+                  <li>No smoking, alcohol, or illegal substances are permitted on the premises.</li>
+                  <li>Quiet hours are from 10 PM to 7 AM on weekdays and 11 PM to 8 AM on weekends.</li>
+                  <li>Visitors must be registered and are not permitted to stay overnight.</li>
+                  <li>The student is responsible for their personal belongings and security.</li>
+                  <li>Any breach of these terms may result in termination of the lease.</li>
+                </ol>
+              </div>
+
+              {/* Payment Terms */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                <h5 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-xs sm:text-sm">PAYMENT TERMS:</h5>
+                <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm text-gray-700 ml-2 sm:ml-4">
+                  <li>Monthly rent: {student.currency} {student.agreed_amount}</li>
+                  <li>Admin fee: {student.currency} {student.admin_fee || '20.00'} (one-time)</li>
+                  <li>Security deposit: {student.currency} {student.security_deposit || '0.00'}</li>
+                  <li>Monthly rent is due on the 1st of each month</li>
+                  <li>Late payments may incur additional charges</li>
+                </ul>
+              </div>
+
+              {/* Digital Signature - Show if available */}
+              {applicationData?.signature_data && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
+                  <h5 className="font-semibold text-green-900 mb-2 sm:mb-3 text-xs sm:text-sm">Digital Signature</h5>
+                  <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                    <div className="bg-white border border-green-200 rounded p-2 self-start">
+                      <img 
+                        src={applicationData.signature_data} 
+                        alt="Student Signature" 
+                        className="h-12 sm:h-16 w-auto"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-xs sm:text-sm text-green-800 font-medium">Signed by: {applicationData.student_name}</p>
+                      <p className="text-xs text-green-600">
+                        Signed on: {new Date(applicationData.created_at).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-green-600">
+                        Status: <span className="font-medium">{applicationData.status}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Agreement Footer */}
+              <div className="border-t pt-3 sm:pt-4">
+                <p className="text-xs text-gray-500 text-center">
+                  This lease agreement is legally binding. The student acknowledges that they have read, understood, 
+                  and agree to all terms and conditions of this lease agreement.
+                </p>
+                <p className="text-xs text-gray-400 text-center mt-1 sm:mt-2">
+                  Student Status: <span className="font-medium">{student.status}</span> | 
+                  Enrollment Date: {student.joined_at ? new Date(student.joined_at).toLocaleDateString() : 'N/A'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="border border-gray-200 rounded-lg p-3 sm:p-4 text-center">
+              <DocumentTextIcon className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-gray-400 mb-2" />
+              <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1">No Room Assignment</h3>
+              <p className="text-xs text-gray-500">
+                This student does not have a room assignment yet. A lease agreement will be available once a room is assigned.
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -773,35 +908,44 @@ export default function ViewStudent() {
     
     return (
       <div className="border border-gray-200">
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="flex justify-between items-center border-b border-gray-200 pb-2 mb-4">
-            <h3 className="text-base font-medium text-gray-900">Payment History</h3>
+            <h3 className="text-sm sm:text-base font-medium text-gray-900">Payment History</h3>
+            <button
+              onClick={refreshPaymentData}
+              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
           </div>
           {payments && payments.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead>
                   <tr className="bg-gray-100">
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Reference</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Date</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Period</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Fee Type</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Method</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Amount</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Status</th>
-                    <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Actions</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Reference</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Date</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Period</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Fee Type</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Method</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Amount</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Status</th>
+                    <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {payments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                         {payment.reference_number || `PMT-${payment.id}`}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                         {new Date(payment.payment_date).toLocaleDateString()}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                         {payment.period_start_date && payment.period_end_date ? (
                           <>
                             {new Date(payment.period_start_date).toLocaleDateString()} -<br/>
@@ -809,16 +953,16 @@ export default function ViewStudent() {
                           </>
                         ) : 'One-time Payment'}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                         <span className="capitalize">{(payment.payment_type || 'monthly_rent').replace(/_/g, ' ')}</span>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                         <span className="capitalize">{payment.payment_method}</span>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
                         {payment.currency} {parseFloat(payment.amount).toFixed(2)}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium
                           ${payment.status === 'completed' ? 'bg-green-100 text-green-800' :
                             payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
@@ -827,8 +971,8 @@ export default function ViewStudent() {
                           {payment.status ? payment.status.charAt(0).toUpperCase() + payment.status.slice(1) : 'N/A'}
                         </span>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-xs">
-                        <div className="flex items-center space-x-2">
+                      <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs">
+                        <div className="flex items-center space-x-1 sm:space-x-2">
                           <button
                             onClick={() => {
                               setSelectedPayment(payment);
@@ -837,7 +981,7 @@ export default function ViewStudent() {
                             className="text-[#0a192f] hover:text-[#0a192f]/80 p-1 rounded-full hover:bg-gray-100"
                             title="View Details"
                           >
-                            <EyeIcon className="h-4 w-4" />
+                            <EyeIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                           </button>
                           {payment.receipt_path ? (
                             <a
@@ -847,7 +991,7 @@ export default function ViewStudent() {
                               className="text-[#0a192f] hover:text-[#0a192f]/80 p-1 rounded-full hover:bg-gray-100"
                               title="Download Receipt"
                             >
-                              <DocumentArrowDownIcon className="h-4 w-4" />
+                              <DocumentArrowDownIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                             </a>
                           ) : (
                             <label 
@@ -860,7 +1004,7 @@ export default function ViewStudent() {
                                 accept=".pdf,.jpg,.jpeg,.png"
                                 onChange={(e) => handleReceiptUpload(e, payment.id)}
                               />
-                              <DocumentArrowUpIcon className="h-4 w-4" />
+                              <DocumentArrowUpIcon className="h-3 w-3 sm:h-4 sm:w-4" />
                             </label>
                           )}
                         </div>
@@ -887,26 +1031,64 @@ export default function ViewStudent() {
             />
           )}
 
-          {/* Add Payment Form */}
-          <div className="mt-8">
-            <div className="border-t border-gray-200 pt-6">
-              <h4 className="text-xs font-medium text-gray-900 mb-4">Add New Payment</h4>
-              <AddPayment 
-                studentId={student.id}
-                studentName={student.full_name}
-                paymentSchedules={student.payment_schedules || []}
-                feeTypes={[
-                  { id: 'monthly_rent', label: 'Monthly Rent' },
-                  { id: 'admin_fee', label: 'Admin Fee', amount: student.admin_fee },
-                  { id: 'security_deposit', label: 'Security Deposit', amount: student.security_deposit },
-                  { id: 'additional_charges', label: 'Additional Charges' }
-                ]}
-                adminFee={student.admin_fee}
-                securityDeposit={student.security_deposit}
-                currency={student.currency}
-              />
+          {/* Invoices Section */}
+          <div className="mt-6 sm:mt-8">
+            <div className="border-t border-gray-200 pt-4 sm:pt-6">
+              <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-4">Invoices</h3>
+              {invoices && invoices.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Reference</th>
+                        <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Date</th>
+                        <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Description</th>
+                        <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Amount</th>
+                        <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Status</th>
+                        <th scope="col" className="px-2 sm:px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase">Room</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {invoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-gray-50">
+                          <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {invoice.reference_number || `INV-${invoice.id}`}
+                          </td>
+                          <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {new Date(invoice.invoice_date).toLocaleDateString()}
+                          </td>
+                          <td className="px-2 sm:px-3 py-2 text-xs text-gray-900">
+                            {invoice.description}
+                          </td>
+                          <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
+                            {invoice.currency} {parseFloat(invoice.amount).toFixed(2)}
+                          </td>
+                          <td className="px-2 sm:px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium
+                              ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                invoice.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                invoice.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                                invoice.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
+                                'bg-gray-100 text-gray-800'}`}>
+                              {invoice.status ? invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1) : 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-2 sm:px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                            {invoice.room_name || 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+            </div>
+              ) : (
+                <div className="text-center py-6 sm:py-8 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">No invoices found</p>
+                </div>
+              )}
             </div>
           </div>
+
         </div>
       </div>
     );
@@ -1075,18 +1257,60 @@ export default function ViewStudent() {
   );
 
   return (
-    <div className="px-4 mt-5 py-8 bg-white">
+    <div className="px-2 sm:px-4 mt-3 sm:mt-5 py-4 sm:py-8 bg-white">
       {/* Header */}
-      <div className="border-b border-gray-200 pb-3 mb-6">
-        <h2 className="text-base font-medium text-gray-900">Student Information</h2>
+      <div className="border-b border-gray-200 pb-2 sm:pb-3 mb-4 sm:mb-6">
+        <h2 className="text-sm sm:text-base font-medium text-gray-900">Student Information</h2>
         <p className="mt-1 text-xs text-gray-500">
           View detailed information for {student.full_name}
         </p>
       </div>
 
+      {/* Account Balance */}
+      {accountBalance && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <CreditCardIcon className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
+                </div>
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-medium text-blue-900">Account Balance</h3>
+                <p className="text-xs text-blue-600">Current student account balance</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={refreshPaymentData}
+                  className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded"
+                  title="Refresh balance"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <div className={`text-lg sm:text-2xl font-bold ${
+                  parseFloat(accountBalance.current_balance) >= 0 
+                    ? 'text-green-600' 
+                    : 'text-red-600'
+                }`}>
+                  {parseFloat(accountBalance.current_balance) >= 0 ? '+' : ''}{student.currency} {parseFloat(accountBalance.current_balance || 0).toFixed(2)}
+                </div>
+              </div>
+              <p className="text-xs text-blue-600">
+                {parseFloat(accountBalance.current_balance) >= 0 ? 'Credit Balance' : 'Outstanding Balance'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-8">
+      <div className="border-b border-gray-200 mb-4 sm:mb-6">
+        <nav className="-mb-px flex flex-wrap space-x-2 sm:space-x-8">
           <TabButton
             active={activeTab === 'personal'}
             icon={UserIcon}

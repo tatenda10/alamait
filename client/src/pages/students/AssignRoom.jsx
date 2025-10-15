@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeftIcon, DocumentArrowUpIcon, CheckCircleIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, DocumentArrowUpIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
+import BedSelector from '../../components/BedSelector';
 
 // Success Modal Component
 const SuccessModal = ({ isOpen, onClose, isUpdate }) => {
@@ -50,6 +51,7 @@ export default function AssignRoom() {
   const [student, setStudent] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState('');
+  const [selectedBed, setSelectedBed] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [monthlyRate, setMonthlyRate] = useState('');
@@ -60,9 +62,9 @@ export default function AssignRoom() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isUpdate, setIsUpdate] = useState(false);
   const [currentEnrollmentId, setCurrentEnrollmentId] = useState(null);
-  const [paymentSchedules, setPaymentSchedules] = useState([]);
   const [adminFee, setAdminFee] = useState('');
   const [securityDeposit, setSecurityDeposit] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
@@ -96,7 +98,7 @@ export default function AssignRoom() {
           setNotes(studentResponse.data.notes || '');
           
           try {
-            // Get current enrollment and payment schedules
+            // Get current enrollment details
             const enrollmentResponse = await axios.get(
               `${BASE_URL}/students/${studentId}/enrollment`,
               getAuthHeaders()
@@ -105,14 +107,6 @@ export default function AssignRoom() {
             
             if (enrollmentResponse.data) {
               setCurrentEnrollmentId(enrollmentResponse.data.id);
-              
-              // Fetch payment schedules
-              const schedulesResponse = await axios.get(
-                `${BASE_URL}/students/${studentId}/payment-schedules`,
-                getAuthHeaders()
-              );
-              console.log('Payment schedules response:', schedulesResponse.data);
-              setPaymentSchedules(schedulesResponse.data || []);
             }
           } catch (enrollmentError) {
             console.error('Error fetching enrollment details:', {
@@ -121,17 +115,6 @@ export default function AssignRoom() {
               status: enrollmentError.response?.status
             });
           }
-        } else {
-          // Initialize first payment schedule for new assignments
-          const defaultSchedule = {
-            id: Date.now(),
-            startDate: startDate || '',
-            endDate: endDate || '',
-            amount: monthlyRate || '',
-            currency: 'USD',
-            notes: ''
-          };
-          setPaymentSchedules([defaultSchedule]);
         }
 
         try {
@@ -171,46 +154,6 @@ export default function AssignRoom() {
     fetchData();
   }, [studentId, isUpdate, startDate, endDate, monthlyRate]);
 
-  // Update payment schedules when dates or rate changes
-  useEffect(() => {
-    if (!isUpdate && startDate && endDate && monthlyRate) {
-      const defaultSchedule = {
-        id: Date.now(),
-        startDate,
-        endDate,
-        amount: monthlyRate,
-        currency: 'USD',
-        notes: ''
-      };
-      setPaymentSchedules([defaultSchedule]);
-    }
-  }, [startDate, endDate, monthlyRate, isUpdate]);
-
-  const handleAddSchedule = () => {
-    const lastSchedule = paymentSchedules[paymentSchedules.length - 1];
-    const newSchedule = {
-      id: Date.now(),
-      startDate: lastSchedule ? lastSchedule.endDate : startDate,
-      endDate: endDate,
-      amount: monthlyRate,
-      currency: 'USD',
-      notes: ''
-    };
-    setPaymentSchedules([...paymentSchedules, newSchedule]);
-  };
-
-  const handleRemoveSchedule = (scheduleId) => {
-    setPaymentSchedules(paymentSchedules.filter(schedule => schedule.id !== scheduleId));
-  };
-
-  const handleScheduleChange = (index, field, value) => {
-    const updatedSchedules = [...paymentSchedules];
-    updatedSchedules[index] = {
-      ...updatedSchedules[index],
-      [field]: value
-    };
-    setPaymentSchedules(updatedSchedules);
-  };
 
   const calculateTotalInitialPayment = () => {
     const monthlyRent = parseFloat(monthlyRate) || 0;
@@ -220,6 +163,8 @@ export default function AssignRoom() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError(null);
     try {
       // Validation checks
       if (!selectedRoom) throw new Error('Please select a room');
@@ -227,14 +172,6 @@ export default function AssignRoom() {
       if (!endDate) throw new Error('Please select an end date');
       if (!monthlyRate) throw new Error('Please enter the monthly rate');
       if (!isUpdate && !leaseAgreement) throw new Error('Please upload the lease agreement');
-      if (paymentSchedules.length === 0) throw new Error('Please add at least one payment schedule');
-
-      // Validate payment schedules
-      for (const schedule of paymentSchedules) {
-        if (!schedule.startDate || !schedule.endDate || !schedule.amount) {
-          throw new Error('Please fill in all payment schedule fields');
-        }
-      }
 
       let documentId = null;
 
@@ -271,6 +208,7 @@ export default function AssignRoom() {
 
       const payload = {
         roomId: selectedRoom,
+        bedId: selectedBed,
         startDate,
         endDate: endDate,
         agreedAmount: parseFloat(monthlyRate),
@@ -278,13 +216,6 @@ export default function AssignRoom() {
         securityDeposit: parseFloat(securityDeposit || 0),
         currency: 'USD',
         notes,
-        paymentSchedule: paymentSchedules.map(schedule => ({
-          startDate: schedule.startDate,
-          endDate: schedule.endDate,
-          amount: parseFloat(schedule.amount),
-          currency: schedule.currency || 'USD',
-          notes: schedule.notes || null
-        })),
         ...(documentId && { documentId })
       };
 
@@ -322,6 +253,8 @@ export default function AssignRoom() {
         error.message || 
         'Failed to save room assignment. Please try again.'
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -449,6 +382,20 @@ export default function AssignRoom() {
           </div>
         </div>
 
+        {/* Bed Selection */}
+        {selectedRoom && (
+          <div className="border border-gray-200">
+            <div className="p-6">
+              <BedSelector
+                roomId={selectedRoom}
+                selectedBedId={selectedBed}
+                onBedSelect={setSelectedBed}
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Arrangement Terms */}
         <div className="border border-gray-200">
           <div className="p-6">
@@ -552,89 +499,6 @@ export default function AssignRoom() {
           </div>
         </div>
 
-        {/* Payment Schedules Section */}
-        <div className="border border-gray-200">
-          <div className="p-6">
-            <div className="flex justify-between items-center border-b border-gray-200 pb-2 mb-4">
-              <h3 className="text-base font-medium text-gray-900">
-                Payment Schedules
-              </h3>
-              <button
-                type="button"
-                onClick={handleAddSchedule}
-                className="inline-flex items-center text-sm text-[#f58020] hover:text-[#f58020]/90"
-              >
-                <PlusIcon className="h-5 w-5 mr-1" />
-                Add Schedule
-              </button>
-            </div>
-            <div className="space-y-4">
-              {paymentSchedules.map((schedule, index) => (
-                <div key={schedule.id} className="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 border border-gray-200 rounded-lg">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={schedule.startDate}
-                      onChange={(e) => handleScheduleChange(index, 'startDate', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={schedule.endDate}
-                      onChange={(e) => handleScheduleChange(index, 'endDate', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount (USD) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={schedule.amount}
-                      onChange={(e) => handleScheduleChange(index, 'amount', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <input
-                      type="text"
-                      value={schedule.notes}
-                      onChange={(e) => handleScheduleChange(index, 'notes', e.target.value)}
-                      className="block w-full border border-gray-200 px-4 py-2 text-sm focus:border-[#f58020] focus:ring-[#f58020]"
-                      placeholder="Optional notes..."
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    {paymentSchedules.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSchedule(schedule.id)}
-                        className="inline-flex items-center px-3 py-2 text-sm text-red-600 hover:text-red-800"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
 
         {/* Documents Section */}
         <div className="border border-gray-200">
@@ -715,9 +579,10 @@ export default function AssignRoom() {
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm font-semibold text-white bg-[#f58020] hover:bg-[#f58020]/90"
+            disabled={isSubmitting}
+            className="px-4 py-2 text-sm font-semibold text-white bg-[#f58020] hover:bg-[#f58020]/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isUpdate ? 'Update Assignment' : 'Assign Room'}
+            {isSubmitting ? 'Processing...' : (isUpdate ? 'Update Assignment' : 'Assign Room')}
           </button>
         </div>
       </form>

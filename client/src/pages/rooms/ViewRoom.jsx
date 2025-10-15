@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
+import BedManagement from '../../components/BedManagement';
 import {
   HomeIcon,
   BuildingOfficeIcon,
@@ -13,7 +14,8 @@ import {
   ClockIcon,
   PencilIcon,
   ChartBarIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  Squares2X2Icon
 } from '@heroicons/react/24/outline';
 
 export default function ViewRoom() {
@@ -126,6 +128,7 @@ export default function ViewRoom() {
 
   const tabs = [
     { id: 'details', name: 'Room Details', icon: HomeIcon },
+    { id: 'beds', name: 'Bed Management', icon: Squares2X2Icon },
     { id: 'actions', name: 'Quick Actions', icon: Cog6ToothIcon },
     { id: 'statistics', name: 'Statistics', icon: ChartBarIcon },
   ];
@@ -174,6 +177,47 @@ export default function ViewRoom() {
                     {room.currency || 'US$'} {parseFloat(room.monthly_rent || room.price_per_bed || 0).toFixed(2)}
                   </dd>
                 </div>
+
+                {room.bedInfo && (
+                  <>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500 flex items-center">
+                        <Squares2X2Icon className="h-4 w-4 mr-2" />
+                        Total Beds
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900">{room.bedInfo.totalBeds}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500 flex items-center">
+                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                        Available Beds
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900">{room.bedInfo.availableBeds}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500 flex items-center">
+                        <UserIcon className="h-4 w-4 mr-2" />
+                        Occupied Beds
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900">{room.bedInfo.occupiedBeds}</dd>
+                    </div>
+
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500 flex items-center">
+                        <CurrencyDollarIcon className="h-4 w-4 mr-2" />
+                        Price Range
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900">
+                        {room.bedInfo.minPrice === room.bedInfo.maxPrice 
+                          ? `${room.currency || 'US$'} ${room.bedInfo.minPrice.toFixed(2)}`
+                          : `${room.currency || 'US$'} ${room.bedInfo.minPrice.toFixed(2)} - ${room.bedInfo.maxPrice.toFixed(2)}`
+                        }
+                      </dd>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <dt className="text-sm font-medium text-gray-500 flex items-center">
@@ -225,6 +269,15 @@ export default function ViewRoom() {
               )}
             </div>
           </div>
+        );
+
+      case 'beds':
+        return (
+          <BedManagement 
+            roomId={room.id} 
+            roomName={room.room_name || room.name}
+            onBedUpdate={fetchRoom}
+          />
         );
 
       case 'actions':

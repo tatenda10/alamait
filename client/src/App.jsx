@@ -36,7 +36,10 @@ import BankReconciliation from './pages/accounting/BankReconciliation';
 import BankReconciliationDetail from './pages/accounting/BankReconciliationDetail';
 import BalanceBDCD from './pages/accounting/BalanceBDCD';
 import AccountLedger from './pages/accounting/AccountLedger';
+import Applications from './pages/applications/Applications';
 import TrialBalance from './pages/accounting/TrialBalance';
+import ExpenditureRequests from './pages/expenses/ExpenditureRequests';
+import BudgetRequests from './pages/expenses/BudgetRequests';
 
 const App = () => {
   return (
@@ -61,6 +64,9 @@ const App = () => {
         <Route path="students/payment-schedules" element={<div>Payment Schedules Page</div>} />
         <Route path="students/payments" element={<div>Student Payments Page</div>} />
         
+        {/* Applications Routes */}
+        <Route path="applications" element={<Applications />} />
+        
         {/* Accounting Routes */}
         <Route path="accounting/overview" element={<div>Accounting Overview Page</div>} />
         <Route path="chart-of-accounts" element={<COA />} />
@@ -75,6 +81,8 @@ const App = () => {
         <Route path="expenses/add" element={<AddExpense />} />
         <Route path="expenses/edit/:id" element={<EditExpense />} />
         <Route path="expenses/accounts-payable" element={<AccountsPayable />} />
+        <Route path="expenses/expenditure-requests" element={<ExpenditureRequests />} />
+        <Route path="expenses/budget-requests" element={<BudgetRequests />} />
         <Route path="income" element={<Income />} />
         <Route path="petty-cash" element={<PettyCash />} />
         <Route path="petty-cash/reconciliation" element={<PettyCashReconciliation />} />

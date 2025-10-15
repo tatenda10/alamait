@@ -36,7 +36,19 @@ import AddSupplier from './pages/suppliers/AddSupplier';
 // Import petty cash components
 import PettyCash from './pages/petty cash/PettyCash';
 import PettyCashLedger from './pages/petty cash/PettyCashLedger';
-import PettyCashReconciliation from './pages/petty cash/PettyCashReconciliation';
+
+// Import budget components
+import BudgetRequest from './pages/budget/BudgetRequest';
+import BudgetApproval from './pages/budget/BudgetApproval';
+import BudgetDashboard from './pages/budget/BudgetDashboard';
+
+// Import expenditure components
+import ExpenditureRequest from './pages/expenditure/ExpenditureRequest';
+import ExpenditureApproval from './pages/expenditure/ExpenditureApproval';
+
+// Import payment components
+import RecordPayment from './pages/payments/RecordPayment';
+import PaymentHistory from './pages/payments/PaymentHistory';
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }) => {
@@ -88,6 +100,12 @@ const App = () => {
           <Route path="rent-ledger" element={<RentLedger />} />
         </Route>
 
+        {/* Payment Routes */}
+        <Route path="payments">
+          <Route path="record" element={<RecordPayment />} />
+          <Route path="history" element={<PaymentHistory />} />
+        </Route>
+
         {/* Expense Management Routes */}
         <Route path="expenses">
           <Route index element={<ExpensesList />} />
@@ -103,11 +121,23 @@ const App = () => {
           <Route path=":id/edit" element={<div>Edit Supplier Page</div>} />
         </Route>
 
-        {/* Petty Cash Management Routes */}
+        {/* Petty Cash Routes */}
         <Route path="petty-cash">
           <Route index element={<PettyCash />} />
           <Route path="ledger/:accountId" element={<PettyCashLedger />} />
-          <Route path="reconciliation" element={<PettyCashReconciliation />} />
+        </Route>
+
+        {/* Budget Management Routes */}
+        <Route path="budget">
+          <Route index element={<BudgetDashboard />} />
+          <Route path="request" element={<BudgetRequest />} />
+          <Route path="approval" element={<BudgetApproval />} />
+        </Route>
+
+        {/* Expenditure Management Routes */}
+        <Route path="expenditure">
+          <Route path="request" element={<ExpenditureRequest />} />
+          <Route path="approval" element={<ExpenditureApproval />} />
         </Route>
 
         {/* Reports Routes */}

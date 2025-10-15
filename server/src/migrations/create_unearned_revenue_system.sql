@@ -1,0 +1,50 @@
+-- Create unearned_revenue table for prepayments
+CREATE TABLE IF NOT EXISTS unearned_revenue (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  student_id INT NOT NULL,
+  enrollment_id INT NOT NULL,
+  amount DECIMAL(15,2) NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  payment_date DATE NOT NULL,
+  service_period_start DATE NOT NULL,
+  service_period_end DATE NOT NULL,
+  status ENUM('unearned', 'partially_earned', 'fully_earned') DEFAULT 'unearned',
+  earned_amount DECIMAL(15,2) DEFAULT 0.00,
+  unearned_amount DECIMAL(15,2) NOT NULL,
+  currency VARCHAR(3) DEFAULT 'USD',
+  reference_number VARCHAR(100),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  FOREIGN KEY (enrollment_id) REFERENCES student_enrollments(id) ON DELETE CASCADE,
+  INDEX idx_unearned_student (student_id),
+  INDEX idx_unearned_enrollment (enrollment_id),
+  INDEX idx_unearned_status (status),
+  INDEX idx_unearned_service_period (service_period_start, service_period_end)
+);
+
+-- Create revenue_recognition table for earned revenue tracking
+CREATE TABLE IF NOT EXISTS revenue_recognition (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  unearned_revenue_id INT NOT NULL,
+  student_id INT NOT NULL,
+  enrollment_id INT NOT NULL,
+  amount DECIMAL(15,2) NOT NULL,
+  recognition_date DATE NOT NULL,
+  service_period_start DATE NOT NULL,
+  service_period_end DATE NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  reference_number VARCHAR(100),
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  FOREIGN KEY (unearned_revenue_id) REFERENCES unearned_revenue(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  FOREIGN KEY (enrollment_id) REFERENCES student_enrollments(id) ON DELETE CASCADE,
+  INDEX idx_recognition_student (student_id),
+  INDEX idx_recognition_enrollment (enrollment_id),
+  INDEX idx_recognition_date (recognition_date),
+  INDEX idx_recognition_period (service_period_start, service_period_end)
+);

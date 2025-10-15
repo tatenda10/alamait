@@ -31,6 +31,16 @@ const Dashboard = () => {
       stKilda: 2716.08,
       belvedere: 727.00
     },
+    roomOccupancy: {
+      totalRooms: 0,
+      availableRooms: 0,
+      partiallyOccupiedRooms: 0,
+      fullyOccupiedRooms: 0,
+      totalBeds: 0,
+      availableBeds: 0,
+      occupiedBeds: 0,
+      occupancyRate: 0
+    },
     monthlyRevenue: [],
     invoiceStatus: [],
     expenseCategories: [],
@@ -54,8 +64,8 @@ const Dashboard = () => {
         throw new Error('Authentication token not found');
       }
 
-      // Fetch all dashboard data except KPIs (using static data for KPIs only)
-      const [monthlyResponse, invoiceResponse, expensesResponse, paymentResponse, activitiesResponse] = await Promise.all([
+      // Fetch all dashboard data including room occupancy
+      const [monthlyResponse, invoiceResponse, expensesResponse, paymentResponse, activitiesResponse, roomsResponse] = await Promise.all([
         axios.get(`${BASE_URL}/dashboard/monthly-revenue`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
@@ -70,8 +80,33 @@ const Dashboard = () => {
         }),
         axios.get(`${BASE_URL}/dashboard/activities`, {
           headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        axios.get(`${BASE_URL}/rooms/all`, {
+          headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
+
+      // Calculate room occupancy data
+      const rooms = roomsResponse.data || [];
+      console.log('Rooms data from API:', rooms); // Debug log
+      
+      const roomOccupancy = {
+        totalRooms: rooms.length,
+        availableRooms: rooms.filter(room => room.status === 'Available').length,
+        partiallyOccupiedRooms: rooms.filter(room => room.status === 'Partially Occupied').length,
+        fullyOccupiedRooms: rooms.filter(room => room.status === 'Fully Occupied').length,
+        totalBeds: rooms.reduce((sum, room) => sum + (room.bedInfo?.totalBeds || 0), 0),
+        availableBeds: rooms.reduce((sum, room) => sum + (room.bedInfo?.availableBeds || 0), 0),
+        occupiedBeds: rooms.reduce((sum, room) => sum + (room.bedInfo?.occupiedBeds || 0), 0),
+        occupancyRate: 0
+      };
+      
+      console.log('Calculated room occupancy:', roomOccupancy); // Debug log
+      
+      // Calculate occupancy rate
+      if (roomOccupancy.totalBeds > 0) {
+        roomOccupancy.occupancyRate = Math.round((roomOccupancy.occupiedBeds / roomOccupancy.totalBeds) * 100);
+      }
 
       setDashboardData(prevData => ({
         ...prevData,
@@ -80,11 +115,27 @@ const Dashboard = () => {
         invoiceStatus: invoiceResponse.data,
         expenseCategories: expensesResponse.data,
         paymentMethods: paymentResponse.data,
-        recentActivities: activitiesResponse.data
+        recentActivities: activitiesResponse.data,
+        roomOccupancy: roomOccupancy
       }));
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setError('Failed to load dashboard data');
+      
+      // Set default room occupancy data on error
+      setDashboardData(prevData => ({
+        ...prevData,
+        roomOccupancy: {
+          totalRooms: 0,
+          availableRooms: 0,
+          partiallyOccupiedRooms: 0,
+          fullyOccupiedRooms: 0,
+          totalBeds: 0,
+          availableBeds: 0,
+          occupiedBeds: 0,
+          occupancyRate: 0
+        }
+      }));
     } finally {
       setLoading(false);
     }
@@ -189,6 +240,100 @@ const Dashboard = () => {
         </div>
       </div>
     </div>
+
+      {/* Room Occupancy Section */}
+      <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">Room Occupancy Overview</h3>
+          <div className="flex items-center space-x-2">
+            <FaBed className="h-5 w-5 text-blue-500" />
+            <span className="text-sm text-gray-600">Live Data</span>
+          </div>
+        </div>
+        
+        {/* Room Occupancy Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Total Rooms */}
+          <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-blue-600 mb-1">Total Rooms</p>
+                <p className="text-2xl font-bold text-blue-700">{dashboardData.roomOccupancy?.totalRooms || 0}</p>
+              </div>
+              <FaBuilding className="h-8 w-8 text-blue-500" />
+            </div>
+          </div>
+
+          {/* Available Rooms */}
+          <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-green-600 mb-1">Available Rooms</p>
+                <p className="text-2xl font-bold text-green-700">{dashboardData.roomOccupancy?.availableRooms || 0}</p>
+              </div>
+              <FaCheckCircle className="h-8 w-8 text-green-500" />
+            </div>
+          </div>
+
+          {/* Partially Occupied */}
+          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 p-4 rounded-lg border border-yellow-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-yellow-600 mb-1">Partially Occupied</p>
+                <p className="text-2xl font-bold text-yellow-700">{dashboardData.roomOccupancy?.partiallyOccupiedRooms || 0}</p>
+              </div>
+              <FaExclamationCircle className="h-8 w-8 text-yellow-500" />
+            </div>
+          </div>
+
+          {/* Fully Occupied */}
+          <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg border border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-red-600 mb-1">Fully Occupied</p>
+                <p className="text-2xl font-bold text-red-700">{dashboardData.roomOccupancy?.fullyOccupiedRooms || 0}</p>
+              </div>
+              <FaUsers className="h-8 w-8 text-red-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Bed Occupancy Details */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Total Beds */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Total Beds</p>
+                <p className="text-xl font-bold text-gray-800">{dashboardData.roomOccupancy?.totalBeds || 0}</p>
+              </div>
+              <FaBed className="h-6 w-6 text-gray-500" />
+            </div>
+          </div>
+
+          {/* Available Beds */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Available Beds</p>
+                <p className="text-xl font-bold text-gray-800">{dashboardData.roomOccupancy?.availableBeds || 0}</p>
+              </div>
+              <FaCheckCircle className="h-6 w-6 text-green-500" />
+            </div>
+          </div>
+
+          {/* Occupancy Rate */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">Occupancy Rate</p>
+                <p className="text-xl font-bold text-gray-800">{dashboardData.roomOccupancy?.occupancyRate || 0}%</p>
+              </div>
+              <FaChartPie className="h-6 w-6 text-blue-500" />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Monthly Revenue vs Expenses - Full Width */}
       <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">

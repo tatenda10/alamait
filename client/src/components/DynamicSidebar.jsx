@@ -13,6 +13,7 @@ import {
   FaClipboardList,
   FaCalendarAlt,
   FaMoneyBill,
+  FaInbox,
   
   // Accounting icons
   FaCalculator,
@@ -108,6 +109,13 @@ const DynamicSidebar = ({ currentSection }) => {
       >
         <FaUserPlus className="h-5 w-5 mr-3" /> Add Student
       </NavLink>
+      
+      <NavLink 
+        to="/dashboard/applications" 
+        className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10 border-b-[#f58020]' : 'text-gray-700'}`}
+      >
+        <FaInbox className="h-5 w-5 mr-3" /> Incoming Applications
+      </NavLink>
     </div>
   );
 
@@ -163,6 +171,18 @@ const DynamicSidebar = ({ currentSection }) => {
               className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10 border-b-[#f58020]' : 'text-gray-600'}`}
             >
               <FaExclamationTriangle className="h-4 w-4 mr-2" /> Accounts Payable
+            </NavLink>
+            <NavLink 
+              to="/dashboard/expenses/expenditure-requests" 
+              className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10 border-b-[#f58020]' : 'text-gray-600'}`}
+            >
+              <FaFileAlt className="h-4 w-4 mr-2" /> Expenditure Requests
+            </NavLink>
+            <NavLink 
+              to="/dashboard/expenses/budget-requests" 
+              className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10 border-b-[#f58020]' : 'text-gray-600'}`}
+            >
+              <FaChartLine className="h-4 w-4 mr-2" /> Budget Requests
             </NavLink>
           </div>
         )}

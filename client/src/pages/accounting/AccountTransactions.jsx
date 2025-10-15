@@ -179,6 +179,7 @@ const AccountTransactions = () => {
       );
 
       console.log('Transactions response:', response.data);
+      console.log('Pagination data:', response.data.pagination);
       setAccount(response.data.account);
       setTransactions(response.data.transactions || []);
       setPagination(response.data.pagination || {});
@@ -199,7 +200,8 @@ const AccountTransactions = () => {
     setFilters(prev => ({
       ...prev,
       [field]: value,
-      offset: 0 // Reset to first page when filters change
+      // Only reset offset to 0 when changing filters other than offset
+      ...(field !== 'offset' && { offset: 0 })
     }));
   };
 
@@ -659,7 +661,13 @@ const AccountTransactions = () => {
                         Previous
                       </button>
                       <button
-                        onClick={() => handleFilterChange('offset', filters.offset + filters.limit)}
+                        onClick={() => {
+                          console.log('Next button clicked');
+                          console.log('Current filters:', filters);
+                          console.log('Current pagination:', pagination);
+                          console.log('New offset will be:', filters.offset + filters.limit);
+                          handleFilterChange('offset', filters.offset + filters.limit);
+                        }}
                         disabled={!pagination.has_more}
                         className="px-4 py-2 text-xs border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-white"
                         style={{ backgroundColor: !pagination.has_more ? '#9CA3AF' : '#f58020' }}

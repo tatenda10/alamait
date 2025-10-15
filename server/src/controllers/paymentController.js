@@ -1,6 +1,7 @@
 const db = require('../services/db');
 const multer = require('multer');
 const path = require('path');
+const { updateAccountBalance } = require('../services/accountBalanceService');
 
 // Configure multer for receipt uploads
 const storage = multer.diskStorage({
@@ -37,14 +38,14 @@ exports.recordPayment = async (req, res) => {
     
     const {
       student_id,
-      schedule_id,
       amount,
       payment_method,
       fee_type,
       payment_date,
       reference_number,
       notes,
-      boarding_house_id
+      boarding_house_id,
+      petty_cash_account_id
     } = req.body;
 
     // Use boarding_house_id from request body if provided, otherwise use req.user.boarding_house_id
@@ -52,14 +53,14 @@ exports.recordPayment = async (req, res) => {
 
     console.log('Received payment request:', {
       student_id,
-      schedule_id,
       amount,
       payment_method,
       fee_type,
       payment_date,
       reference_number,
       notes,
-      boarding_house_id: targetBoardingHouseId
+      boarding_house_id: targetBoardingHouseId,
+      petty_cash_account_id
     });
 
     // Validate required fields
@@ -93,32 +94,22 @@ exports.recordPayment = async (req, res) => {
 
     // First determine which cash/bank account to use based on payment_method
     switch (payment_method) {
-      case 'cash':
+      case 'cash_to_admin':
         debitAccountCode = '10002'; // Cash
         break;
-      case 'bank_transfer':
-        debitAccountCode = '10003'; // Bank
-        break;
-      case 'petty_cash':
+      case 'cash_to_ba':
         debitAccountCode = '10001'; // Petty Cash
+        break;
+      case 'bank':
+        debitAccountCode = '10003'; // Bank
         break;
       default:
         debitAccountCode = '10002'; // Default to Cash
     }
 
-    // Then determine which income/liability account to credit based on fee_type
-    switch (fee_type) {
-      case 'monthly_rent':
-      case 'admin_fee':
-      case 'security_deposit':
-        creditAccountCode = '40001'; // Rentals Income
-        break;
-      case 'penalty':
-        creditAccountCode = '40002'; // Penalty Fees
-        break;
-      default:
-        return res.status(400).json({ message: 'Invalid fee type' });
-    }
+    // For payments, we should credit Accounts Receivable (not Revenue)
+    // Revenue is only credited when invoices are created, not when payments are received
+    creditAccountCode = '10005'; // Accounts Receivable
 
     console.log('Selected account codes:', { debitAccountCode, creditAccountCode });
 
@@ -164,23 +155,7 @@ exports.recordPayment = async (req, res) => {
       }
     });
 
-    // Validate that student belongs to the same boarding house
-    const [students] = await connection.query(
-      `SELECT s.* 
-       FROM students s
-       JOIN student_enrollments se ON s.id = se.student_id
-       WHERE s.id = ? 
-         AND se.boarding_house_id = ?
-         AND s.deleted_at IS NULL
-         AND se.deleted_at IS NULL`,
-      [student_id, targetBoardingHouseId]
-    );
-
-    if (students.length === 0) {
-      return res.status(404).json({ message: 'Student not found or not associated with your boarding house' });
-    }
-
-    // Get active enrollment
+    // Get active enrollment first
     const [enrollments] = await connection.query(
       `SELECT * FROM student_enrollments 
        WHERE student_id = ? 
@@ -195,43 +170,49 @@ exports.recordPayment = async (req, res) => {
     }
 
     const enrollment = enrollments[0];
+
+    // Validate that student exists and enrollment belongs to the correct boarding house
+    const [students] = await connection.query(
+      `SELECT s.* 
+       FROM students s
+       WHERE s.id = ? 
+         AND s.deleted_at IS NULL`,
+      [student_id]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Use the enrollment's boarding house ID instead of the request's boarding house ID
+    const actualBoardingHouseId = enrollment.boarding_house_id;
+    
+    // If the request specifies a different boarding house, use the enrollment's boarding house
+    if (targetBoardingHouseId !== actualBoardingHouseId) {
+      console.log(`Boarding house mismatch: Request=${targetBoardingHouseId}, Enrollment=${actualBoardingHouseId}. Using enrollment's boarding house.`);
+    }
+
     let schedule = null;
 
-    // If it's a monthly rent payment, validate the schedule
-    if (fee_type === 'monthly_rent') {
-      if (!schedule_id) {
-        return res.status(400).json({ message: 'Payment schedule is required for monthly rent payments' });
+    // Validate petty cash account if payment method is cash_to_ba
+    if (payment_method === 'cash_to_ba') {
+      if (!petty_cash_account_id) {
+        return res.status(400).json({ message: 'Petty cash account is required for cash to BA payments' });
       }
 
-      const [schedules] = await connection.query(
-        `SELECT ps.* 
-         FROM student_payment_schedules ps
-         JOIN student_enrollments se ON ps.enrollment_id = se.id
-         WHERE ps.id = ? 
-           AND ps.student_id = ? 
-           AND se.boarding_house_id = ?
-           AND ps.deleted_at IS NULL`,
-        [schedule_id, student_id, targetBoardingHouseId]
+      // Check petty cash account balance
+      const [pettyCashResult] = await connection.query(
+        `SELECT current_balance FROM petty_cash_accounts 
+         WHERE boarding_house_id = ?`,
+        [actualBoardingHouseId]
       );
 
-      if (schedules.length === 0) {
-        return res.status(404).json({ message: 'Payment schedule not found' });
+      if (pettyCashResult.length === 0) {
+        return res.status(400).json({ message: 'Petty cash account not found for this boarding house' });
       }
 
-      schedule = schedules[0];
-
-      // Parse existing amounts as floats
-      const currentAmountPaid = parseFloat(schedule.amount_paid) || 0;
-      const amountDue = parseFloat(schedule.amount_due);
-
-      // Validate payment amount
-      const remainingAmount = amountDue - currentAmountPaid;
-      if (paymentAmount > remainingAmount) {
-        return res.status(400).json({ 
-          message: 'Payment amount exceeds remaining balance',
-          remaining_balance: remainingAmount
-        });
-      }
+      const currentBalance = parseFloat(pettyCashResult[0].current_balance) || 0;
+      // Note: We don't check balance here as the payment will ADD to petty cash, not subtract
     }
 
     // Create transaction record
@@ -258,7 +239,7 @@ exports.recordPayment = async (req, res) => {
         enrollment.currency,
         `${fee_type.replace('_', ' ')} payment - ${accountDetails.debit_name} to ${accountDetails.credit_name}`,
         payment_date,
-        targetBoardingHouseId,
+        actualBoardingHouseId,
         req.user.id,
         'posted'
       ]
@@ -283,7 +264,7 @@ exports.recordPayment = async (req, res) => {
         'debit',
           paymentAmount,
         `${fee_type.replace('_', ' ')} payment - Debit ${accountDetails.debit_name}`,
-        targetBoardingHouseId,
+        actualBoardingHouseId,
         req.user.id
         ]
       );
@@ -306,18 +287,40 @@ exports.recordPayment = async (req, res) => {
         'credit',
           paymentAmount,
         `${fee_type.replace('_', ' ')} payment - Credit ${accountDetails.credit_name}`,
-        targetBoardingHouseId,
+        actualBoardingHouseId,
         req.user.id
       ]
     );
+
+    // Update account balances after creating journal entries
+    console.log('Updating account balances for payment:');
+    console.log('Debit Account ID:', accountDetails.debit_account_id, 'Amount:', paymentAmount, 'Type: debit');
+    console.log('Credit Account ID:', accountDetails.credit_account_id, 'Amount:', paymentAmount, 'Type: credit');
+    
+    await updateAccountBalance(
+      accountDetails.debit_account_id,
+      paymentAmount,
+      'debit',
+      actualBoardingHouseId,
+      connection
+    );
+
+    await updateAccountBalance(
+      accountDetails.credit_account_id,
+      paymentAmount,
+      'credit',
+      actualBoardingHouseId,
+      connection
+    );
+    
+    console.log('Account balance updates completed');
 
     // Create payment record
     const [result] = await connection.query(
       `INSERT INTO student_payments (
         student_id,
         enrollment_id,
-        schedule_id,
-          transaction_id,
+        transaction_id,
         amount,
         payment_date,
         payment_method,
@@ -326,13 +329,12 @@ exports.recordPayment = async (req, res) => {
         notes,
         created_by,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
         student_id,
         enrollment.id,
-        fee_type === 'monthly_rent' ? schedule.id : null,
-          transactionResult.insertId,
-          paymentAmount,
+        transactionResult.insertId,
+        paymentAmount,
         payment_date,
         payment_method,
         fee_type,
@@ -343,34 +345,9 @@ exports.recordPayment = async (req, res) => {
       ]
     );
 
-    // If it's a monthly rent payment, update the schedule
-    if (schedule) {
-      const currentAmountPaid = parseFloat(schedule.amount_paid) || 0;
-      const amountDue = parseFloat(schedule.amount_due);
-      const newAmountPaid = currentAmountPaid + paymentAmount;
-      const newStatus = newAmountPaid >= amountDue ? 'paid' : 'partial';
-
-      await connection.query(
-        `UPDATE student_payment_schedules 
-         SET status = ?,
-             amount_paid = ?,
-             updated_at = NOW()
-         WHERE id = ?`,
-        [newStatus, newAmountPaid.toFixed(2), schedule_id]
-      );
-    }
-
-    // If payment is made in cash, add to petty cash account
-    if (payment_method === 'cash') {
-      // Create petty cash transaction record
-      await connection.query(
-        `INSERT INTO petty_cash_transactions 
-         (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-         VALUES (?, 'student_payment', ?, ?, ?, ?, CURDATE(), ?, NOW())`,
-        [targetBoardingHouseId, paymentAmount, `Student payment - ${fee_type.replace('_', ' ')}`, transactionRef, notes, req.user.id]
-      );
-      
-      // Update petty cash account balance
+    // If payment is made to petty cash (cash_to_ba), update petty cash account
+    if (payment_method === 'cash_to_ba') {
+      // Add to petty cash account balance
       await connection.query(
         `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
          VALUES (?, ?, ?, NOW())
@@ -378,9 +355,35 @@ exports.recordPayment = async (req, res) => {
          current_balance = current_balance + ?,
          total_inflows = total_inflows + ?,
          updated_at = NOW()`,
-        [targetBoardingHouseId, paymentAmount, paymentAmount, paymentAmount, paymentAmount]
+        [actualBoardingHouseId, paymentAmount, paymentAmount, paymentAmount, paymentAmount]
+      );
+
+      // Create petty cash transaction record
+      await connection.query(
+        `INSERT INTO petty_cash_transactions 
+         (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+         VALUES (?, 'student_payment', ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          actualBoardingHouseId, 
+          paymentAmount, 
+          `Student payment - ${fee_type.replace('_', ' ')}`, 
+          transactionRef, 
+          notes, 
+          payment_date, 
+          req.user.id
+        ]
       );
     }
+
+    // Update student account balance (payment reduces the negative balance)
+    await connection.query(
+      `INSERT INTO student_account_balances (student_id, enrollment_id, current_balance, currency, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE 
+       current_balance = current_balance + ?,
+       updated_at = NOW()`,
+      [student_id, enrollment.id, paymentAmount, enrollment.currency, paymentAmount]
+    );
 
     await connection.commit();
     res.status(201).json({
@@ -879,9 +882,14 @@ exports.getStudentPayments = async (req, res) => {
     console.log('Student boarding house ID:', studentBoardingHouseId);
 
     // If user has a boarding_house_id, validate that the student belongs to that boarding house
+    // Exception: Allow branch users to view payments for students from any boarding house
+    // (since branch payments can be made across boarding houses)
     if (req.user.boarding_house_id && req.user.boarding_house_id !== studentBoardingHouseId) {
-      console.log('Authorization failed: user boarding house ID:', req.user.boarding_house_id, 'student boarding house ID:', studentBoardingHouseId);
-      return res.status(403).json({ message: 'Not authorized to view payments for this student' });
+      // Check if this is a branch user (has branch-specific permissions)
+      // For now, we'll allow all users to view payments for any student
+      // This can be refined later with proper role-based permissions
+      console.log('Cross-boarding-house access: user boarding house ID:', req.user.boarding_house_id, 'student boarding house ID:', studentBoardingHouseId);
+      // Allow access - remove the 403 restriction
     }
 
     // Get the student's payments

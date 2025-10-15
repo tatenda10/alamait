@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserIcon, PhoneIcon, MapPinIcon, TagIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
+import { UserIcon, PhoneIcon, MapPinIcon, TagIcon, CurrencyDollarIcon, PlusIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 import { useAuth } from '../../context/AuthContext';
+import AddAccountsPayableModal from './AddAccountsPayableModal';
 
 const ViewSupplier = () => {
   const { id } = useParams();
@@ -14,6 +15,7 @@ const ViewSupplier = () => {
   const [accountsPayable, setAccountsPayable] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showAddPayableModal, setShowAddPayableModal] = useState(false);
 
   useEffect(() => {
     fetchSupplierData();
@@ -43,8 +45,8 @@ const ViewSupplier = () => {
 
   const fetchAccountsPayable = async () => {
     try {
-      const response = await axios.get(`${BASE_URL}/suppliers/${id}/accounts-payable`);
-      setAccountsPayable(response.data || []);
+      const response = await axios.get(`${BASE_URL}/accounts-payable/supplier/${id}`);
+      setAccountsPayable(response.data.data || []);
     } catch (error) {
       console.error('Error fetching accounts payable:', error);
       setAccountsPayable([]);
@@ -74,6 +76,10 @@ const ViewSupplier = () => {
 
   const getTotalExpenses = () => {
     return supplierExpenses.reduce((total, expense) => total + (expense.amount || 0), 0);
+  };
+
+  const handleAddPayableSuccess = () => {
+    fetchAccountsPayable(); // Refresh the accounts payable data
   };
 
   if (loading) {
@@ -169,7 +175,16 @@ const ViewSupplier = () => {
 
       {/* Accounts Payable Section */}
       <div className="bg-white border border-gray-200 p-4 mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Outstanding Balance</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-900">Outstanding Balance</h2>
+          <button
+            onClick={() => setShowAddPayableModal(true)}
+            className="flex items-center px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon className="h-4 w-4 mr-1" />
+            Add Payable
+          </button>
+        </div>
         {accountsPayable.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -244,6 +259,15 @@ const ViewSupplier = () => {
           <p className="text-gray-500 text-center py-6 text-sm">No expenses found for this supplier.</p>
         )}
       </div>
+
+      {/* Add Accounts Payable Modal */}
+      {showAddPayableModal && (
+        <AddAccountsPayableModal
+          supplier={supplier}
+          onClose={() => setShowAddPayableModal(false)}
+          onSuccess={handleAddPayableSuccess}
+        />
+      )}
     </div>
   );
 };

@@ -9,7 +9,12 @@ import {
   BellIcon,
   UserGroupIcon,
   ClipboardDocumentListIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  CreditCardIcon,
+  WalletIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  HomeIcon
 } from '@heroicons/react/24/outline';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import BASE_URL from '../utils/api';
@@ -19,17 +24,63 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [accountBalance, setAccountBalance] = useState(null);
+  const [pettyCashTransactions, setPettyCashTransactions] = useState([]);
+  const [roomOccupancy, setRoomOccupancy] = useState(null);
+
+  const getAuthHeaders = () => ({
+    headers: {
+      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'boarding-house-id': localStorage.getItem('boarding_house_id')
+    }
+  });
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`${BASE_URL}/dashboard/stats`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      
+      // Fetch main dashboard stats
+      const dashboardResponse = await axios.get(`${BASE_URL}/dashboard/stats`, getAuthHeaders());
+      setDashboardData(dashboardResponse.data);
+
+      // Fetch user's petty cash account balance and transactions
+      try {
+        const pettyCashResponse = await axios.get(`${BASE_URL}/petty-cash/account`, getAuthHeaders());
+        if (pettyCashResponse.data && pettyCashResponse.data.success) {
+          setAccountBalance({
+            current_balance: pettyCashResponse.data.current_balance,
+            account_name: pettyCashResponse.data.account_name,
+            account_code: pettyCashResponse.data.account_code
+          });
+          setPettyCashTransactions(pettyCashResponse.data.transactions || []);
         }
-      });
-      setDashboardData(response.data);
+      } catch (pettyCashError) {
+        console.error('Error fetching petty cash account:', pettyCashError);
+        setAccountBalance(null);
+        setPettyCashTransactions([]);
+      }
+
+      // Fetch room occupancy
+      try {
+        const roomsResponse = await axios.get(`${BASE_URL}/rooms`, getAuthHeaders());
+        if (roomsResponse.data && Array.isArray(roomsResponse.data)) {
+          const totalRooms = roomsResponse.data.length;
+          const occupiedRooms = roomsResponse.data.filter(room => room.status === 'occupied').length;
+          const occupancyRate = totalRooms > 0 ? ((occupiedRooms / totalRooms) * 100).toFixed(1) : 0;
+          
+          setRoomOccupancy({
+            totalRooms,
+            occupiedRooms,
+            availableRooms: totalRooms - occupiedRooms,
+            occupancyRate: parseFloat(occupancyRate)
+          });
+        }
+      } catch (roomError) {
+        console.error('Error fetching room occupancy:', roomError);
+        setRoomOccupancy(null);
+      }
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setError('Failed to load dashboard data');
@@ -106,7 +157,65 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-1 sm:px-4 lg:px-1 py-4">
+      <div className="px-2 sm:px-4 lg:px-6 py-4">
+        {/* Petty Cash Account Balance Card - Full Width */}
+        {accountBalance && (
+          <div className="mb-4">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center space-x-2 sm:space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <WalletIcon className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-medium text-blue-900">Petty Cash Balance</h3>
+                    <p className="text-xs text-blue-600 truncate">{accountBalance.account_name}</p>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right">
+                  <div className={`text-lg sm:text-xl font-bold ${
+                    parseFloat(accountBalance.current_balance) >= 0 
+                      ? 'text-green-600' 
+                      : 'text-red-600'
+                  }`}>
+                    ${parseFloat(accountBalance.current_balance || 0).toFixed(2)}
+                  </div>
+                  <p className="text-xs text-blue-600">Current Balance</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Room Occupancy Card */}
+        {roomOccupancy && (
+          <div className="mb-4">
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center space-x-2 sm:space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <HomeIcon className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-medium text-green-900">Room Occupancy</h3>
+                    <p className="text-xs text-green-600">{roomOccupancy.occupiedRooms} of {roomOccupancy.totalRooms} rooms occupied</p>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right">
+                  <div className="text-lg sm:text-xl font-bold text-green-900">
+                    {roomOccupancy.occupancyRate}%
+                  </div>
+                  <p className="text-xs text-green-600">Occupancy Rate</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Primary Stats */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
           {primaryStats?.map((stat, index) => (
@@ -145,28 +254,69 @@ const Dashboard = () => {
           ))}
         </div>
 
-        {/* Charts Section */}
+        {/* Recent Petty Cash Transactions */}
         <div className="mb-4">
-          {/* Room Occupancy Trend */}
-          <div className="bg-white border border-gray-200 p-3">
-            <h3 className="text-xs font-semibold text-gray-900 mb-2">Room Occupancy Trend</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={charts?.occupancyTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} domain={[85, 95]} />
-                <Tooltip />
-                <Line 
-                  type="monotone" 
-                  dataKey="occupancy" 
-                  stroke="#4B5563" 
-                  strokeWidth={1.5}
-                  name="Occupancy %"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="bg-white border border-gray-200 p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center">
+                <WalletIcon className="h-4 w-4 mr-2 text-gray-600" />
+                Recent Petty Cash Transactions
+              </h3>
+              <a 
+                href="/dashboard/petty-cash" 
+                className="text-xs text-[#E78D69] hover:text-[#E78D69]/80"
+              >
+                View All
+              </a>
+            </div>
+            {pettyCashTransactions.length > 0 ? (
+              <div className="space-y-2">
+                {pettyCashTransactions.slice(0, 5).map((transaction) => (
+                  <div key={transaction.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                      <div className={`p-1 rounded-full ${
+                        transaction.transaction_type === 'expense' 
+                          ? 'bg-red-100' 
+                          : 'bg-green-100'
+                      }`}>
+                        {transaction.transaction_type === 'expense' ? (
+                          <ArrowDownIcon className="h-3 w-3 text-red-600" />
+                        ) : (
+                          <ArrowUpIcon className="h-3 w-3 text-green-600" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-900 truncate">{transaction.description}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {new Date(transaction.transaction_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-xs font-medium ${
+                        transaction.transaction_type === 'expense' 
+                          ? 'text-red-600' 
+                          : 'text-green-600'
+                      }`}>
+                        {transaction.transaction_type === 'expense' ? '-' : '+'}${parseFloat(transaction.amount).toFixed(2)}
+                      </p>
+                      <p className="text-[10px] text-gray-500">
+                        Balance: ${parseFloat(transaction.running_balance || 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <WalletIcon className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                <p className="text-xs text-gray-500">No petty cash transactions found</p>
+                <p className="text-[10px] text-gray-400 mt-1">Transactions will appear here once you start using petty cash</p>
+              </div>
+            )}
           </div>
         </div>
+
 
         {/* Secondary Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

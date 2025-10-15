@@ -373,34 +373,34 @@ router.get('/statistics', authenticate, async (req, res) => {
   }
 });
 
-// Get all petty cash users for admin management
+// Get all petty cash accounts for admin management
 router.get('/users', authenticate, async (req, res) => {
   try {
-  
-
-    const [users] = await db.query(
-      `SELECT pcu.*, 
-              pcb.current_balance,
-              pcb.last_replenishment_date,
-              pcb.total_expenses_month,
-              pcb.total_expenses_year
-       FROM petty_cash_users pcu
-       LEFT JOIN petty_cash_balances pcb ON pcu.id = pcb.petty_cash_user_id
-       ORDER BY pcu.created_at DESC`
+    const [accounts] = await db.query(
+      `SELECT pca.*, 
+              u.username,
+              u.email,
+              u.phone_number,
+              bh.name as boarding_house_name
+       FROM petty_cash_accounts pca
+       LEFT JOIN users u ON pca.user_id = u.id
+       LEFT JOIN boarding_houses bh ON pca.boarding_house_id = bh.id
+       WHERE pca.deleted_at IS NULL
+       ORDER BY pca.created_at DESC`
     );
 
     res.json({
       success: true,
-      users
+      users: accounts
     });
 
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Error fetching petty cash accounts:', error);
     console.log('=== RESPONSE STATUS 500 - GET /users ===');
-    console.log('Internal server error during users fetch');
+    console.log('Internal server error during accounts fetch');
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch users'
+      message: 'Failed to fetch petty cash accounts'
     });
   }
 });

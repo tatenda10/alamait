@@ -12,5 +12,15 @@ NODE_ENV=development
 JWT_SECRET=your_jwt_secret_here
 JWT_EXPIRES_IN=24h
 
+# Email Configuration (RPS Server)
+SMTP_HOST=rps.co.zw
+SMTP_PORT=465
+SMTP_USER=noreply@rps.co.zw
+SMTP_PASS=your_email_password_here
+SMTP_FROM=noreply@rps.co.zw
+
+# Test Email (for testing purposes)
+TEST_EMAIL=your-test-email@gmail.com
+
 # Other Configuration
 CORS_ORIGIN=http://localhost:5173,http://localhost:5174,http://localhost:3002

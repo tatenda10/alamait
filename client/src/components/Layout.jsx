@@ -12,7 +12,7 @@ const Layout = ({ children }) => {
     const path = location.pathname;
     if (path === '/dashboard' || path === '/dashboard/') {
       setCurrentSection('dashboard');
-    } else if (path.includes('/students')) {
+    } else if (path.includes('/students') || path.includes('/applications')) {
       setCurrentSection('students');
     } else if (path.includes('/reports')) {
       setCurrentSection('reports');

@@ -1,12 +1,21 @@
 const db = require('../services/db');
 
-// Get petty cash account data for a boarding house
+// Get petty cash account data for a specific user
 exports.getPettyCashAccount = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
+    // Use user-id header if provided (for admin viewing other users), otherwise use logged-in user
+    const userId = req.headers['user-id'] || req.user.id;
     const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
     
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required' 
+      });
+    }
+
     if (!boardingHouseId) {
       return res.status(400).json({ 
         success: false, 
@@ -14,23 +23,29 @@ exports.getPettyCashAccount = async (req, res) => {
       });
     }
 
-    // Get current petty cash balance
+    // Get current petty cash balance for the specific user
     const [balanceResult] = await connection.query(
       `SELECT 
         COALESCE(current_balance, 0) as current_balance,
         COALESCE(beginning_balance, 0) as beginning_balance,
         COALESCE(total_inflows, 0) as total_inflows,
-        COALESCE(total_outflows, 0) as total_outflows
+        COALESCE(total_outflows, 0) as total_outflows,
+        account_name,
+        account_code,
+        status
        FROM petty_cash_accounts 
-       WHERE boarding_house_id = ?`,
-      [boardingHouseId]
+       WHERE user_id = ? AND boarding_house_id = ?`,
+      [userId, boardingHouseId]
     );
 
     let accountData = {
       current_balance: 0,
       beginning_balance: 0,
       total_inflows: 0,
-      total_outflows: 0
+      total_outflows: 0,
+      account_name: `Petty Cash - ${req.user.username}`,
+      account_code: `PC-${userId.toString().padStart(3, '0')}`,
+      status: 'active'
     };
 
     if (balanceResult.length > 0) {
@@ -39,13 +54,13 @@ exports.getPettyCashAccount = async (req, res) => {
       // Create account if it doesn't exist
       await connection.query(
         `INSERT INTO petty_cash_accounts 
-         (boarding_house_id, current_balance, beginning_balance, total_inflows, total_outflows, created_at) 
-         VALUES (?, 0, 0, 0, 0, NOW())`,
-        [boardingHouseId]
+         (user_id, boarding_house_id, account_name, account_code, current_balance, beginning_balance, total_inflows, total_outflows, status, created_by) 
+         VALUES (?, ?, ?, ?, 0, 0, 0, 0, 'active', ?)`,
+        [userId, boardingHouseId, accountData.account_name, accountData.account_code, userId]
       );
     }
 
-    // Get recent transactions
+    // Get recent transactions for the specific user (by user_id only)
     const [transactionsResult] = await connection.query(
       `SELECT 
         id,
@@ -57,26 +72,33 @@ exports.getPettyCashAccount = async (req, res) => {
         notes,
         created_at
        FROM petty_cash_transactions 
-       WHERE boarding_house_id = ? 
+       WHERE user_id = ? 
        ORDER BY transaction_date DESC, id DESC 
        LIMIT 50`,
-      [boardingHouseId]
+      [userId]
     );
+    
+    console.log('Fetching transactions for user:', userId, '(no boarding house filter)');
+    console.log('Found transactions:', transactionsResult.length);
+    console.log('Transaction types found:', transactionsResult.map(t => t.transaction_type));
+    console.log('Transaction IDs found:', transactionsResult.map(t => t.id));
 
-    // Calculate running balance for transactions
+    // Calculate running balance for transactions (most recent first)
     let runningBalance = parseFloat(accountData.current_balance);
     const transactionsWithBalance = transactionsResult.map(transaction => {
       const amount = parseFloat(transaction.amount);
       if (transaction.transaction_type === 'cash_inflow' || transaction.transaction_type === 'student_payment') {
-        runningBalance -= amount; // Subtract because we're going backwards
+        runningBalance -= amount; // Subtract inflows to get balance before this transaction
+      } else if (transaction.transaction_type === 'cash_outflow' || transaction.transaction_type === 'withdrawal' || transaction.transaction_type === 'expense') {
+        runningBalance += amount; // Add outflows to get balance before this transaction
       } else {
-        runningBalance += amount; // Add because we're going backwards
+        runningBalance += amount; // Add outflows to get balance before this transaction
       }
       return {
         ...transaction,
         running_balance: runningBalance + amount // Add back the current transaction amount
       };
-    }).reverse(); // Reverse to show in chronological order
+    });
 
     res.json({
       success: true,
@@ -105,15 +127,47 @@ exports.addCash = async (req, res) => {
   try {
     await connection.beginTransaction();
     
-    const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
-    const { amount, description, transaction_date, reference_number, notes, source_account } = req.body;
+    const { amount, description, transaction_date, reference_number, notes, source_account, user_id, account_id } = req.body;
     const created_by = req.user.id;
     
-    if (!boardingHouseId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Boarding house ID is required' 
+    // Use provided user_id for admin operations, otherwise use logged-in user
+    const targetUserId = user_id || req.user.id;
+    
+    // Get boarding house ID from the target user
+    const [userCheck] = await connection.query(
+      'SELECT id, boarding_house_id FROM users WHERE id = ? AND deleted_at IS NULL',
+      [targetUserId]
+    );
+    
+    if (userCheck.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID provided'
       });
+    }
+    
+    const boardingHouseId = userCheck[0].boarding_house_id;
+    
+    if (!boardingHouseId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User does not have an assigned boarding house'
+      });
+    }
+    
+    // If account_id is provided, verify it belongs to the user
+    if (account_id) {
+      const [accountCheck] = await connection.query(
+        'SELECT id FROM petty_cash_accounts WHERE id = ? AND user_id = ?',
+        [account_id, targetUserId]
+      );
+      
+      if (accountCheck.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid account ID provided'
+        });
+      }
     }
     
     if (!amount || amount <= 0) {
@@ -191,21 +245,64 @@ exports.addCash = async (req, res) => {
     // Create petty cash transaction record
     const [transactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
-       (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-       VALUES (?, 'cash_inflow', ?, ?, ?, ?, ?, ?, NOW())`,
-      [boardingHouseId, cashAmount, description, reference_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
+       (user_id, boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+       VALUES (?, ?, 'cash_inflow', ?, ?, ?, ?, ?, ?, NOW())`,
+      [targetUserId, boardingHouseId, cashAmount, description, reference_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
     );
     
-    // Update petty cash account balance
-    await connection.query(
-      `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
-       VALUES (?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE 
-       current_balance = current_balance + ?,
-       total_inflows = total_inflows + ?,
-       updated_at = NOW()`,
-      [boardingHouseId, cashAmount, cashAmount, cashAmount, cashAmount]
+    console.log('Created petty cash transaction with ID:', transactionResult.insertId);
+    console.log('Transaction details - User ID:', targetUserId, 'Amount:', cashAmount, 'Type: cash_inflow');
+    console.log('Transaction boarding house ID:', boardingHouseId);
+    
+    // Get user details for account name
+    const [userDetails] = await connection.query(
+      'SELECT username FROM users WHERE id = ?',
+      [targetUserId]
     );
+    
+    const accountName = `Petty Cash - ${userDetails[0]?.username || 'User'}`;
+    const accountCode = `PC-${targetUserId.toString().padStart(3, '0')}`;
+    
+    // Update the specific petty cash account
+    if (account_id) {
+      // Update existing specific account
+      console.log('Updating specific account ID:', account_id);
+      await connection.query(
+        `UPDATE petty_cash_accounts 
+         SET current_balance = current_balance + ?,
+             total_inflows = total_inflows + ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [cashAmount, cashAmount, account_id]
+      );
+    } else {
+      // Fallback: find or create account for user
+      const [existingAccount] = await connection.query(
+        'SELECT id, current_balance FROM petty_cash_accounts WHERE user_id = ? AND boarding_house_id = ?',
+        [targetUserId, boardingHouseId]
+      );
+      
+      if (existingAccount.length > 0) {
+        // Update first found account
+        console.log('Updating first found account for user');
+        await connection.query(
+          `UPDATE petty_cash_accounts 
+           SET current_balance = current_balance + ?,
+               total_inflows = total_inflows + ?,
+               updated_at = NOW()
+           WHERE id = ?`,
+          [cashAmount, cashAmount, existingAccount[0].id]
+        );
+      } else {
+        // Create new account
+        console.log('Creating new account for user');
+        await connection.query(
+          `INSERT INTO petty_cash_accounts (user_id, boarding_house_id, account_name, account_code, current_balance, total_inflows, created_at, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)`,
+          [targetUserId, boardingHouseId, accountName, accountCode, cashAmount, cashAmount, created_by]
+        );
+      }
+    }
 
     // Create journal entries for proper double-entry bookkeeping
     // 1. Debit petty cash account
@@ -303,6 +400,20 @@ exports.addCash = async (req, res) => {
       ]
     );
     
+    // Verify the balance was updated correctly
+    let verificationQuery, verificationParams;
+    if (account_id) {
+      verificationQuery = 'SELECT current_balance FROM petty_cash_accounts WHERE id = ?';
+      verificationParams = [account_id];
+    } else {
+      verificationQuery = 'SELECT current_balance FROM petty_cash_accounts WHERE user_id = ? AND boarding_house_id = ?';
+      verificationParams = [targetUserId, boardingHouseId];
+    }
+    
+    const [updatedAccount] = await connection.query(verificationQuery, verificationParams);
+    
+    console.log('Updated account balance:', updatedAccount[0]?.current_balance);
+    
     await connection.commit();
     
     res.json({
@@ -335,20 +446,53 @@ exports.withdrawCash = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
+    console.log('=== WITHDRAW CASH REQUEST ===');
+    console.log('Request body:', req.body);
+    console.log('User:', req.user);
+    console.log('Headers:', req.headers);
+    console.log('=============================');
+    
     await connection.beginTransaction();
     
-    const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
-    const { amount, purpose, transaction_date, reference_number, notes, destination_account } = req.body;
+    const { amount, purpose, transaction_date, reference_number, notes, destination_account, user_id, account_id } = req.body;
     const created_by = req.user.id;
     
-    if (!boardingHouseId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Boarding house ID is required' 
+    // Use provided user_id for admin operations, otherwise use logged-in user
+    const targetUserId = user_id || req.user.id;
+    
+    // Get boarding house ID from the target user
+    const [userCheck] = await connection.query(
+      'SELECT id, boarding_house_id FROM users WHERE id = ? AND deleted_at IS NULL',
+      [targetUserId]
+    );
+    
+    if (userCheck.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID provided'
       });
     }
     
+    const boardingHouseId = userCheck[0].boarding_house_id;
+    console.log('User boarding house ID:', boardingHouseId);
+    
+    if (!boardingHouseId) {
+      console.log('ERROR: User has no boarding house assigned');
+      return res.status(400).json({
+        success: false,
+        message: 'User does not have an assigned boarding house'
+      });
+    }
+    
+    console.log('Validation checks:');
+    console.log('- amount:', amount);
+    console.log('- purpose:', purpose);
+    console.log('- destination_account:', destination_account);
+    console.log('- user_id:', user_id);
+    console.log('- targetUserId:', targetUserId);
+    
     if (!amount || amount <= 0) {
+      console.log('ERROR: Invalid amount:', amount);
       return res.status(400).json({ 
         success: false, 
         message: 'Valid amount is required' 
@@ -356,6 +500,7 @@ exports.withdrawCash = async (req, res) => {
     }
     
     if (!purpose) {
+      console.log('ERROR: Purpose is missing');
       return res.status(400).json({ 
         success: false, 
         message: 'Purpose is required' 
@@ -363,6 +508,7 @@ exports.withdrawCash = async (req, res) => {
     }
 
     if (!destination_account) {
+      console.log('ERROR: Destination account is missing');
       return res.status(400).json({ 
         success: false, 
         message: 'Destination account is required. Where is the withdrawn money going?' 
@@ -370,14 +516,31 @@ exports.withdrawCash = async (req, res) => {
     }
 
     const withdrawAmount = parseFloat(amount);
+    console.log('Withdraw amount parsed:', withdrawAmount);
     
-    // Check current balance
-    const [balanceResult] = await connection.query(
-      `SELECT current_balance FROM petty_cash_accounts WHERE boarding_house_id = ?`,
-      [boardingHouseId]
-    );
+    // Check current balance for the specific account
+    console.log('Checking balance for account_id:', account_id, 'user:', targetUserId);
+    let balanceResult;
+    let currentBalance = 0;
     
-    const currentBalance = balanceResult.length > 0 ? parseFloat(balanceResult[0].current_balance) : 0;
+    if (account_id) {
+      // Use specific account_id if provided
+      [balanceResult] = await connection.query(
+        `SELECT current_balance FROM petty_cash_accounts WHERE id = ? AND user_id = ?`,
+        [account_id, targetUserId]
+      );
+      console.log('Balance query result (by account_id):', balanceResult);
+    } else {
+      // Fallback to user_id and boarding_house_id
+      [balanceResult] = await connection.query(
+        `SELECT current_balance FROM petty_cash_accounts WHERE user_id = ? AND boarding_house_id = ?`,
+        [targetUserId, boardingHouseId]
+      );
+      console.log('Balance query result (by user_id):', balanceResult);
+    }
+    
+    currentBalance = balanceResult.length > 0 ? parseFloat(balanceResult[0].current_balance) : 0;
+    console.log('Current balance:', currentBalance, 'Withdraw amount:', withdrawAmount);
     
     if (currentBalance < withdrawAmount) {
       return res.status(400).json({
@@ -438,21 +601,44 @@ exports.withdrawCash = async (req, res) => {
     // Create petty cash transaction record
     const [pettyCashTransactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
-       (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-       VALUES (?, 'withdrawal', ?, ?, ?, ?, ?, ?, NOW())`,
-      [boardingHouseId, withdrawAmount, purpose, reference_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
+       (user_id, boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+       VALUES (?, ?, 'cash_outflow', ?, ?, ?, ?, ?, ?, NOW())`,
+      [targetUserId, boardingHouseId, withdrawAmount, purpose, reference_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
     );
     
-    // Update petty cash account balance
-    await connection.query(
-      `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_outflows, created_at)
-       VALUES (?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE 
-       current_balance = current_balance - ?,
-       total_outflows = total_outflows + ?,
-       updated_at = NOW()`,
-      [boardingHouseId, currentBalance - withdrawAmount, withdrawAmount, withdrawAmount, withdrawAmount]
+    // Get user details for account name
+    const [userDetails] = await connection.query(
+      'SELECT username FROM users WHERE id = ?',
+      [targetUserId]
     );
+    
+    const accountName = `Petty Cash - ${userDetails[0]?.username || 'User'}`;
+    const accountCode = `PC-${targetUserId.toString().padStart(3, '0')}`;
+    
+    // Update petty cash account balance for the specific account
+    if (account_id) {
+      // Update specific account by account_id
+      console.log('Updating specific account ID:', account_id);
+      await connection.query(
+        `UPDATE petty_cash_accounts 
+         SET current_balance = current_balance - ?,
+             total_outflows = total_outflows + ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [withdrawAmount, withdrawAmount, account_id]
+      );
+    } else {
+      // Fallback: Update or create account by user_id and boarding_house_id
+      await connection.query(
+        `INSERT INTO petty_cash_accounts (user_id, boarding_house_id, account_name, account_code, current_balance, total_outflows, created_at, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance - ?,
+         total_outflows = total_outflows + ?,
+         updated_at = NOW()`,
+        [targetUserId, boardingHouseId, accountName, accountCode, currentBalance - withdrawAmount, withdrawAmount, created_by, withdrawAmount, withdrawAmount]
+      );
+    }
 
     // Create journal entries for proper double-entry bookkeeping
     // 1. Debit the destination account (Cash, Bank, etc.)
@@ -569,10 +755,17 @@ exports.withdrawCash = async (req, res) => {
 
   } catch (error) {
     await connection.rollback();
-    console.error('Error withdrawing cash:', error);
+    console.error('=== ERROR in withdrawCash ===');
+    console.error('Error details:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
+    console.error('User:', req.user);
+    console.error('===============================');
     res.status(500).json({
       success: false,
-      message: 'Failed to withdraw cash from petty cash account'
+      message: 'Failed to withdraw cash from petty cash account',
+      error: error.message
     });
   } finally {
     connection.release();
@@ -586,6 +779,7 @@ exports.addExpense = async (req, res) => {
   try {
     await connection.beginTransaction();
     
+    const userId = req.user.id;
     const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
     const { 
       amount, 
@@ -597,6 +791,13 @@ exports.addExpense = async (req, res) => {
       notes 
     } = req.body;
     const created_by = req.user.id;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required' 
+      });
+    }
     
     if (!boardingHouseId) {
       return res.status(400).json({ 
@@ -621,10 +822,10 @@ exports.addExpense = async (req, res) => {
 
     const expenseAmount = parseFloat(amount);
     
-    // Check current balance
+    // Check current balance for the specific user
     const [balanceResult] = await connection.query(
-      `SELECT current_balance FROM petty_cash_accounts WHERE boarding_house_id = ?`,
-      [boardingHouseId]
+      `SELECT current_balance FROM petty_cash_accounts WHERE user_id = ? AND boarding_house_id = ?`,
+      [userId, boardingHouseId]
     );
     
     const currentBalance = balanceResult.length > 0 ? parseFloat(balanceResult[0].current_balance) : 0;
@@ -639,20 +840,19 @@ exports.addExpense = async (req, res) => {
     // Create transaction record
     const [transactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
-       (boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
-       VALUES (?, 'expense', ?, ?, ?, ?, ?, ?, NOW())`,
-      [boardingHouseId, expenseAmount, description, receipt_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
+       (user_id, boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
+       VALUES (?, ?, 'expense', ?, ?, ?, ?, ?, ?, NOW())`,
+      [userId, boardingHouseId, expenseAmount, description, receipt_number, notes, transaction_date || new Date().toISOString().split('T')[0], created_by]
     );
     
-    // Update account balance
+    // Update account balance for the specific user
     await connection.query(
-      `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_outflows, created_at)
-       VALUES (?, ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE 
-       current_balance = current_balance - ?,
-       total_outflows = total_outflows + ?,
-       updated_at = NOW()`,
-      [boardingHouseId, currentBalance - expenseAmount, expenseAmount, expenseAmount, expenseAmount]
+      `UPDATE petty_cash_accounts 
+       SET current_balance = current_balance - ?,
+           total_outflows = total_outflows + ?,
+           updated_at = NOW()
+       WHERE user_id = ? AND boarding_house_id = ?`,
+      [expenseAmount, expenseAmount, userId, boardingHouseId]
     );
     
     // Also create an expense record for reporting

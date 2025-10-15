@@ -30,6 +30,9 @@ const upload = multer({
   }
 });
 
+// Student login (public endpoint)
+router.post('/login', studentController.studentLogin);
+
 // Get all students for a boarding house
 router.get('/boarding-house/:boardingHouseId', studentController.getStudentsByBoardingHouse);
 
@@ -62,5 +65,23 @@ router.get('/:id/enrollments', studentController.getEnrollmentHistory);
 
 // Update student enrollment
 router.put('/:studentId/enrollment/:enrollmentId', studentController.updateEnrollment);
+
+// Record student payment
+router.post('/payments', studentController.recordStudentPayment);
+
+// Record student invoice/charge
+router.post('/invoices', studentController.recordStudentInvoice);
+
+// Get student invoices
+router.get('/:studentId/invoices', studentController.getStudentInvoices);
+
+// Get student payments (for student dashboard)
+router.get('/:studentId/payments', studentController.getStudentPayments);
+
+// Get student invoices (for student dashboard)
+router.get('/:studentId/invoices-dashboard', studentController.getStudentInvoicesForDashboard);
+
+// Submit lease signature
+router.post('/:studentId/sign-lease', studentController.submitLeaseSignature);
 
 module.exports = router; 

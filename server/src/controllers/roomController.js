@@ -1,6 +1,6 @@
 const db = require('../services/db');
 
-// Get rooms by boarding house
+// Get rooms by boarding house with bed information
 const getRoomsByBoardingHouse = async (req, res) => {
   try {
     const { id } = req.params; // boarding house id
@@ -13,12 +13,20 @@ const getRoomsByBoardingHouse = async (req, res) => {
           WHEN r.available_beds = r.capacity THEN 'Available'
           WHEN r.available_beds = 0 THEN 'Fully Occupied'
           WHEN r.available_beds < r.capacity THEN 'Partially Occupied'
-        END as occupancy_status
+        END as occupancy_status,
+        COUNT(b.id) as total_beds,
+        COUNT(CASE WHEN b.status = 'available' THEN 1 END) as available_beds_count,
+        COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count,
+        AVG(b.price) as average_bed_price,
+        MIN(b.price) as min_bed_price,
+        MAX(b.price) as max_bed_price
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
+      LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
       WHERE r.boarding_house_id = ? 
         AND r.deleted_at IS NULL
         AND r.status = 'active'
+      GROUP BY r.id
       ORDER BY r.name`,
       [id]
     );
@@ -30,13 +38,21 @@ const getRoomsByBoardingHouse = async (req, res) => {
       capacity: room.capacity,
       currentOccupants: room.capacity - room.available_beds,
       rent: parseFloat(room.price_per_bed || 0),
-      adminFee: 0, // These will be set during student enrollment
-      securityDeposit: 0,
-      additionalRent: 0,
+      adminFee: parseFloat(room.admin_fee || 0), // Include room's admin fee
+      securityDeposit: parseFloat(room.security_deposit || 0),
+      additionalRent: parseFloat(room.additional_rent || 0),
       description: room.description,
       status: room.occupancy_status,
       boarding_house_name: room.boarding_house_name,
-      boarding_house_id: room.boarding_house_id
+      boarding_house_id: room.boarding_house_id,
+      bedInfo: {
+        totalBeds: room.total_beds || 0,
+        availableBeds: room.available_beds_count || 0,
+        occupiedBeds: room.occupied_beds_count || 0,
+        averagePrice: parseFloat(room.average_bed_price || 0),
+        minPrice: parseFloat(room.min_bed_price || 0),
+        maxPrice: parseFloat(room.max_bed_price || 0)
+      }
     }));
 
     res.json(transformedRooms);
@@ -476,15 +492,47 @@ const getAllRooms = async (req, res) => {
           WHEN r.available_beds = r.capacity THEN 'Available'
           WHEN r.available_beds = 0 THEN 'Fully Occupied'
           WHEN r.available_beds < r.capacity THEN 'Partially Occupied'
-        END as occupancy_status
+        END as occupancy_status,
+        COUNT(b.id) as total_beds,
+        COUNT(CASE WHEN b.status = 'available' THEN 1 END) as available_beds_count,
+        COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count,
+        AVG(b.price) as average_bed_price,
+        MIN(b.price) as min_bed_price,
+        MAX(b.price) as max_bed_price
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
+      LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
       WHERE r.deleted_at IS NULL 
         AND r.status = 'active'
+      GROUP BY r.id
       ORDER BY bh.name, r.name`
     );
 
-    res.json(rooms);
+    // Transform the data to match frontend expectations
+    const transformedRooms = rooms.map(room => ({
+      id: room.id,
+      name: room.name,
+      capacity: room.capacity,
+      currentOccupants: room.capacity - room.available_beds,
+      rent: parseFloat(room.price_per_bed || 0),
+      adminFee: parseFloat(room.admin_fee || 0), // Include room's admin fee
+      securityDeposit: parseFloat(room.security_deposit || 0),
+      additionalRent: parseFloat(room.additional_rent || 0),
+      description: room.description,
+      status: room.occupancy_status,
+      boarding_house_name: room.boarding_house_name,
+      boarding_house_id: room.boarding_house_id,
+      bedInfo: {
+        totalBeds: room.total_beds || 0,
+        availableBeds: room.available_beds_count || 0,
+        occupiedBeds: room.occupied_beds_count || 0,
+        averagePrice: parseFloat(room.average_bed_price || 0),
+        minPrice: parseFloat(room.min_bed_price || 0),
+        maxPrice: parseFloat(room.max_bed_price || 0)
+      }
+    }));
+
+    res.json(transformedRooms);
   } catch (error) {
     console.error('Error in getAllRooms:', error);
     res.status(500).json({ message: 'Internal server error' });
