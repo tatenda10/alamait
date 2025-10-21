@@ -16,17 +16,21 @@ const getTrialBalance = async (req, res) => {
         coa.type as account_type,
         COALESCE(cab.current_balance, 0) as current_balance,
         CASE 
-          WHEN coa.type IN ('Asset', 'Expense') THEN 
+          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) > 0 THEN 
+            COALESCE(cab.current_balance, 0)
+          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) < 0 THEN 
             ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as debit_balance,
         CASE 
-          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN 
+          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) > 0 THEN 
+            COALESCE(cab.current_balance, 0)
+          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) < 0 THEN 
             ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as credit_balance
       FROM chart_of_accounts coa
-      LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+      LEFT JOIN current_account_balances cab ON coa.code = cab.account_code
       WHERE coa.deleted_at IS NULL
     `;
     
@@ -103,17 +107,21 @@ const getTrialBalanceByBoardingHouse = async (req, res) => {
         coa.type as account_type,
         COALESCE(cab.current_balance, 0) as current_balance,
         CASE 
-          WHEN coa.type IN ('Asset', 'Expense') THEN 
+          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) > 0 THEN 
+            COALESCE(cab.current_balance, 0)
+          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) < 0 THEN 
             ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as debit_balance,
         CASE 
-          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN 
+          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) > 0 THEN 
+            COALESCE(cab.current_balance, 0)
+          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) < 0 THEN 
             ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as credit_balance
       FROM chart_of_accounts coa
-      LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+      LEFT JOIN current_account_balances cab ON coa.code = cab.account_code
       WHERE coa.deleted_at IS NULL
     `;
     
@@ -175,17 +183,21 @@ const exportTrialBalance = async (req, res) => {
         coa.type as account_type,
         COALESCE(cab.current_balance, 0) as current_balance,
         CASE 
-          WHEN coa.type IN ('Asset', 'Expense') THEN 
+          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) > 0 THEN 
+            COALESCE(cab.current_balance, 0)
+          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) < 0 THEN 
             ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as debit_balance,
         CASE 
-          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN 
+          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) > 0 THEN 
+            COALESCE(cab.current_balance, 0)
+          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) < 0 THEN 
             ABS(COALESCE(cab.current_balance, 0))
           ELSE 0
         END as credit_balance
       FROM chart_of_accounts coa
-      LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+      LEFT JOIN current_account_balances cab ON coa.code = cab.account_code
       WHERE coa.deleted_at IS NULL
     `;
     

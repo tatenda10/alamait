@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate } = require('../middleware/auth');
 const reportsController = require('../controllers/reportsController');
 const incomeStatementController = require('../controllers/incomeStatementController');
+const balanceSheetController = require('../controllers/balanceSheetController');
 
 // Cashflow report routes
 router.get('/cashflow', authenticate, reportsController.getCashflowReport);
@@ -19,5 +20,9 @@ router.get('/debtors/export', authenticate, reportsController.exportDebtorsRepor
 // Income projection routes
 router.get('/income-projection', authenticate, reportsController.getIncomeProjection);
 router.get('/income-projection/export', authenticate, reportsController.exportIncomeProjection);
+
+// Balance sheet routes
+router.get('/balance-sheet', authenticate, balanceSheetController.getBalanceSheet);
+router.get('/balance-sheet/export', authenticate, balanceSheetController.exportBalanceSheet);
 
 module.exports = router;

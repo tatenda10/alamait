@@ -754,13 +754,17 @@ const assignRoom = async (req, res) => {
     if (adminFee && parseFloat(adminFee) > 0) {
       // Create transaction for admin fee
       const transactionRef = `ADMIN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Date admin fee at the start of the month (same as rent invoice)
+      const startMonthDateObj = new Date(startDate);
+      const adminFeeDate = new Date(startMonthDateObj.getFullYear(), startMonthDateObj.getMonth(), 1);
       const [adminFeeTransaction] = await connection.query(
         `INSERT INTO transactions (
           transaction_type, transaction_date, reference, description, 
           amount, currency, status, boarding_house_id, created_by
-        ) VALUES (?, CURDATE(), ?, ?, ?, ?, 'posted', ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, 'posted', ?, ?)`,
         [
           'admin_fee',
+          adminFeeDate,
           transactionRef,
           `Admin fee for student enrollment - ${id}`,
           parseFloat(adminFee),
@@ -977,12 +981,12 @@ const assignRoom = async (req, res) => {
     const invoiceDate = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), 1); // First day of the month
     const invoiceRef = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Calculate total for first invoice (monthly rent + admin fee)
+    // Calculate total for first invoice: RENT ONLY (admin fee handled separately)
     const monthlyRent = parseFloat(agreedAmount);
     const adminFeeAmount = parseFloat(adminFee || 0);
-    const firstInvoiceTotal = monthlyRent + adminFeeAmount;
+    const firstInvoiceTotal = monthlyRent;
     
-    // Create invoice for first month (rent + admin fee)
+    // Create invoice for first month (rent only)
     const [invoiceResult] = await connection.query(
       `INSERT INTO student_invoices (
         student_id,
@@ -999,10 +1003,10 @@ const assignRoom = async (req, res) => {
         id,
         enrollmentId,
         firstInvoiceTotal,
-        `First month rent + admin fee for ${startDateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
+        `First month rent for ${startDateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
         invoiceDate,
         invoiceRef,
-        `Initial invoice: Monthly rent (${currency} ${monthlyRent.toFixed(2)}) + Admin fee (${currency} ${adminFeeAmount.toFixed(2)})`,
+        `Initial invoice: Monthly rent (${currency} ${monthlyRent.toFixed(2)})`,
         'pending'
       ]
     );

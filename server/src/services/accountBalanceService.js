@@ -52,24 +52,24 @@ const updateAccountBalance = async (accountId, amount, entryType, boardingHouseI
     // Update balance based on entry type and account type
     const amountValue = parseFloat(amount);
     
-    // For liability accounts, the balance logic is reversed
-    if (account.type === 'Liability') {
+    // For liability, equity, and revenue accounts, credits increase and debits decrease
+    if (account.type === 'Liability' || account.type === 'Equity' || account.type === 'Revenue') {
       if (entryType === 'debit') {
-        currentBalance -= amountValue; // Debit reduces liability
+        currentBalance -= amountValue; // Debit reduces liability/equity/revenue
         totalDebits += amountValue;
       } else if (entryType === 'credit') {
-        currentBalance += amountValue; // Credit increases liability
+        currentBalance += amountValue; // Credit increases liability/equity/revenue
         totalCredits += amountValue;
       } else {
         throw new Error(`Invalid entry type: ${entryType}`);
       }
     } else {
-      // For asset accounts (normal logic)
+      // For asset and expense accounts (debits increase, credits decrease)
       if (entryType === 'debit') {
-        currentBalance += amountValue; // Debit increases asset
+        currentBalance += amountValue; // Debit increases asset/expense
         totalDebits += amountValue;
       } else if (entryType === 'credit') {
-        currentBalance -= amountValue; // Credit reduces asset
+        currentBalance -= amountValue; // Credit reduces asset/expense
         totalCredits += amountValue;
       } else {
         throw new Error(`Invalid entry type: ${entryType}`);
@@ -179,20 +179,28 @@ const recalculateAllAccountBalances = async (boardingHouseId = null, connection 
         coa.type as account_type,
         COALESCE(SUM(
           CASE 
-            WHEN je.entry_type = 'debit' THEN je.amount
-            WHEN je.entry_type = 'credit' THEN -je.amount
-            ELSE 0
+            WHEN coa.type IN ('Liability', 'Equity', 'Revenue') THEN
+              CASE 
+                WHEN je.entry_type = 'debit' THEN -je.amount
+                WHEN je.entry_type = 'credit' THEN je.amount
+                ELSE 0
+              END
+            ELSE
+              CASE 
+                WHEN je.entry_type = 'debit' THEN je.amount
+                WHEN je.entry_type = 'credit' THEN -je.amount
+                ELSE 0
+              END
           END
         ), 0) as current_balance,
         COALESCE(SUM(CASE WHEN je.entry_type = 'debit' THEN je.amount ELSE 0 END), 0) as total_debits,
         COALESCE(SUM(CASE WHEN je.entry_type = 'credit' THEN je.amount ELSE 0 END), 0) as total_credits,
         COUNT(je.id) as transaction_count,
-        MAX(t.transaction_date) as last_transaction_date,
+        CURDATE() as last_transaction_date,
         NOW() as created_at,
         NOW() as updated_at
       FROM chart_of_accounts coa
       LEFT JOIN journal_entries je ON coa.id = je.account_id AND je.deleted_at IS NULL
-      LEFT JOIN transactions t ON je.transaction_id = t.id AND t.deleted_at IS NULL
       WHERE coa.deleted_at IS NULL
     `;
     

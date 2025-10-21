@@ -170,6 +170,8 @@ const AddExpense = () => {
   useEffect(() => {
     fetchBoardingHouses();
     fetchSuppliers();
+    // Fetch accounts immediately so the dropdown shows options even before BH selection
+    fetchAccounts();
     
     // Try to fetch accounts with default boarding house ID if available
     const defaultBoardingHouseId = localStorage.getItem('boarding_house_id');

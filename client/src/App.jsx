@@ -40,6 +40,7 @@ import Applications from './pages/applications/Applications';
 import TrialBalance from './pages/accounting/TrialBalance';
 import ExpenditureRequests from './pages/expenses/ExpenditureRequests';
 import BudgetRequests from './pages/expenses/BudgetRequests';
+import BalanceSheet from './pages/reports/BalanceSheet';
 
 const App = () => {
   return (
@@ -99,6 +100,7 @@ const App = () => {
         <Route path="reports/debtors" element={<DebtorsReport />} />
         <Route path="reports/creditors" element={<CreditorsReport />} />
         <Route path="reports/expenses" element={<ExpensesReport />} />
+        <Route path="reports/balance-sheet" element={<BalanceSheet />} />
         <Route path="reports/student-payments" element={<div>Student Payments Report Page</div>} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />

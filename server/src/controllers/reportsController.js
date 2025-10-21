@@ -107,9 +107,16 @@ const getCashflowReport = async (req, res) => {
       if (cashAccountIds.includes(debit_account_id)) {
         let category = 'Other Income';
         
+        // Skip internal transfers between cash accounts
+        if (cashAccountIds.includes(credit_account_id)) {
+          return; // Skip internal transfers
+        }
+        
         // Determine category based on credit account
         if (credit_account_code?.startsWith('4')) {
           category = credit_account_name || 'Revenue';
+        } else if (credit_account_code === '10005') {
+          category = 'Student Rent Payments';
         } else if (credit_account_code?.startsWith('2')) {
           category = 'Loan/Advance';
         } else if (credit_account_code?.startsWith('3')) {
@@ -126,6 +133,11 @@ const getCashflowReport = async (req, res) => {
       // For cash outflows: when a cash account is credited (money going out)
       else if (cashAccountIds.includes(credit_account_id)) {
         let category = 'Other Expenses';
+        
+        // Skip internal transfers between cash accounts
+        if (cashAccountIds.includes(debit_account_id)) {
+          return; // Skip internal transfers
+        }
         
         // Determine category based on debit account
         if (debit_account_code?.startsWith('5')) {

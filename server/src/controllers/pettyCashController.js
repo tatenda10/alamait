@@ -921,7 +921,127 @@ exports.setBeginningBalance = async (req, res) => {
       [boardingHouseId, balance, balance, balance]
     );
     
-    // Create transaction record for beginning balance
+    // Create main transaction record for proper double-entry bookkeeping
+    const [mainTransactionResult] = await connection.query(
+      `INSERT INTO transactions (
+        transaction_type,
+        reference,
+        amount,
+        currency,
+        description,
+        transaction_date,
+        boarding_house_id,
+        created_by,
+        created_at,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'posted')`,
+      [
+        'beginning_balance',
+        `BB-${Date.now()}`,
+        balance,
+        'USD',
+        `Beginning Balance Set: Petty Cash`,
+        new Date().toISOString().split('T')[0],
+        boardingHouseId,
+        created_by
+      ]
+    );
+
+    // Get Petty Cash account ID from chart of accounts
+    const [pettyCashAccountResult] = await connection.query(
+      `SELECT id FROM chart_of_accounts WHERE code = '10001' AND deleted_at IS NULL`
+    );
+
+    if (pettyCashAccountResult.length === 0) {
+      throw new Error('Petty Cash account (10001) not found in chart of accounts');
+    }
+
+    const pettyCashAccountId = pettyCashAccountResult[0].id;
+
+    // Create journal entries for proper double-entry bookkeeping
+    // 1. Debit the Petty Cash account (money arrives)
+    await connection.query(
+      `INSERT INTO journal_entries (
+        transaction_id,
+        account_id,
+        entry_type,
+        amount,
+        description,
+        boarding_house_id,
+        created_by,
+        created_at
+      ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
+      [
+        mainTransactionResult.insertId,
+        pettyCashAccountId,
+        balance,
+        `Beginning Balance Set: Petty Cash`,
+        boardingHouseId,
+        created_by
+      ]
+    );
+
+    // 2. Credit Opening Balance Equity account (30004)
+    const [equityAccountResult] = await connection.query(
+      `SELECT id FROM chart_of_accounts WHERE code = '30004' AND deleted_at IS NULL`
+    );
+
+    let equityAccountId;
+    if (equityAccountResult.length === 0) {
+      // Create Opening Balance Equity account if it doesn't exist
+      const [newEquityAccount] = await connection.query(
+        `INSERT INTO chart_of_accounts (code, name, type, is_category, created_by, created_at, updated_at) 
+         VALUES (?, 'Opening Balance Equity', 'Equity', false, ?, NOW(), NOW())`,
+        ['30004', created_by]
+      );
+      equityAccountId = newEquityAccount.insertId;
+    } else {
+      equityAccountId = equityAccountResult[0].id;
+    }
+
+    await connection.query(
+      `INSERT INTO journal_entries (
+        transaction_id,
+        account_id,
+        entry_type,
+        amount,
+        description,
+        boarding_house_id,
+        created_by,
+        created_at
+      ) VALUES (?, ?, 'credit', ?, ?, ?, ?, NOW())`,
+      [
+        mainTransactionResult.insertId,
+        equityAccountId,
+        balance,
+        `Beginning Balance for Petty Cash`,
+        boardingHouseId,
+        created_by
+      ]
+    );
+
+    // Update current account balances for Petty Cash
+    await connection.query(
+      `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+       VALUES (?, '10001', 'Petty Cash', 'Asset', ?, ?, 0, 1, ?)
+       ON DUPLICATE KEY UPDATE 
+       current_balance = ?,
+       total_debits = ?,
+       transaction_count = transaction_count + 1,
+       last_transaction_date = ?,
+       updated_at = NOW()`,
+      [
+        pettyCashAccountId,
+        balance,
+        balance,
+        new Date().toISOString().split('T')[0],
+        balance,
+        balance,
+        new Date().toISOString().split('T')[0]
+      ]
+    );
+
+    // Create petty cash transaction record for tracking
     await connection.query(
       `INSERT INTO petty_cash_transactions 
        (boarding_house_id, transaction_type, amount, description, transaction_date, created_by, created_at)

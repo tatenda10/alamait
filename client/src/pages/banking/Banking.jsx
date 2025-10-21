@@ -28,7 +28,7 @@ const Banking = () => {
 
   const [addBalanceForm, setAddBalanceForm] = useState({
     account_code: '10002',
-    source_account: '30001', // Default to Owner's Equity
+    source_account: '30004', // Default to Opening Balance Equity
     amount: '',
     description: '',
     transaction_date: new Date().toISOString().split('T')[0],
@@ -414,11 +414,7 @@ const Banking = () => {
                     onChange={(e) => setAddBalanceForm({...addBalanceForm, source_account: e.target.value})}
                     className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="30001">30001 - Owner's Equity</option>
-                    <option value="30002">30002 - Retained Earnings</option>
-                    <option value="30003">30003 - Capital Contributions</option>
-                    <option value="40001">40001 - Revenue</option>
-                    <option value="50001">50001 - Other Income</option>
+                    <option value="30004">30004 - Opening Balance Equity</option>
                   </select>
                 </div>
                 <div className="mb-4">
