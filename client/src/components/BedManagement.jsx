@@ -41,16 +41,26 @@ const BedManagement = ({ roomId, roomName, onBedUpdate }) => {
   const handleAddBed = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${BASE_URL}/beds`, {
+      console.log('Creating bed with data:', {
         roomId,
         bedNumber: newBed.bedNumber,
         price: parseFloat(newBed.price),
         notes: newBed.notes
+      });
+      
+      const response = await axios.post(`${BASE_URL}/beds`, {
+        room_id: roomId,
+        bed_number: newBed.bedNumber,
+        price: parseFloat(newBed.price),
+        notes: newBed.notes,
+        status: 'available'
       }, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
       });
+      
+      console.log('Bed created successfully:', response.data);
       
       setNewBed({ bedNumber: '', price: '', notes: '' });
       setShowAddBed(false);
@@ -58,7 +68,9 @@ const BedManagement = ({ roomId, roomName, onBedUpdate }) => {
       if (onBedUpdate) onBedUpdate();
     } catch (error) {
       console.error('Error adding bed:', error);
-      alert('Failed to add bed');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alert(`Failed to add bed: ${error.response?.data?.message || error.message}`);
     }
   };
 

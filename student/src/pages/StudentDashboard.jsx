@@ -118,22 +118,32 @@ const StudentDashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading your dashboard...</h2>
+          <p className="text-gray-600">Please wait while we fetch your information</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-red-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="h-10 w-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Oops! Something went wrong</h2>
+          <p className="text-red-600 mb-6">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl"
           >
-            Retry
+            Try Again
           </button>
         </div>
       </div>
@@ -143,31 +153,87 @@ const StudentDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">Student Portal</h1>
+          {/* Mobile Layout */}
+          <div className="block sm:hidden">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-lg">
+                  <UserIcon className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">Student Portal</h1>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {/* Mobile Settings Dropdown */}
+                <div className="relative group">
+                  <button className="flex items-center space-x-1 text-white hover:text-blue-100 bg-white/10 px-2 py-1 rounded-lg transition-all duration-200 hover:bg-white/20">
+                    <CogIcon className="h-4 w-4" />
+                  </button>
+                  
+                  {/* Dropdown Menu */}
+                  <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-xl py-2 z-50 border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                    <button
+                      onClick={() => setShowChangePassword(true)}
+                      className="flex items-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 transition-colors duration-200"
+                    >
+                      <LockClosedIcon className="h-4 w-4 mr-2 text-blue-600" />
+                      Change Password
+                    </button>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center space-x-1 text-white hover:text-red-200 bg-red-500/20 px-2 py-1 rounded-lg transition-all duration-200 hover:bg-red-500/30"
+                >
+                  <ArrowRightOnRectangleIcon className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-600">
-                Welcome, <span className="font-medium">{student?.full_name}</span>
+            
+            {/* Mobile User Info */}
+            <div className="pb-4">
+              <div className="text-white font-semibold text-sm">{student?.full_name}</div>
+              <div className="text-blue-100 text-xs">ID: {student?.student_id}</div>
+            </div>
+          </div>
+
+          {/* Desktop Layout */}
+          <div className="hidden sm:flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-lg">
+                  <UserIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">Student Portal</h1>
+                  <p className="text-blue-100 text-sm">Accommodation Management System</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-6">
+              <div className="text-right">
+                <div className="text-white font-semibold">{student?.full_name}</div>
+                <div className="text-blue-100 text-sm">ID: {student?.student_id}</div>
               </div>
               
               {/* Settings Dropdown */}
               <div className="relative group">
-                <button className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
+                <button className="flex items-center space-x-2 text-white hover:text-blue-100 bg-white/10 px-4 py-2 rounded-lg transition-all duration-200 hover:bg-white/20">
                   <CogIcon className="h-5 w-5" />
                   <span>Settings</span>
                 </button>
                 
                 {/* Dropdown Menu */}
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl py-2 z-50 border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                   <button
                     onClick={() => setShowChangePassword(true)}
-                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 transition-colors duration-200"
                   >
-                    <LockClosedIcon className="h-4 w-4 mr-3" />
+                    <LockClosedIcon className="h-4 w-4 mr-3 text-blue-600" />
                     Change Password
                   </button>
                 </div>
@@ -175,7 +241,7 @@ const StudentDashboard = () => {
               
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
+                className="flex items-center space-x-2 text-white hover:text-red-200 bg-red-500/20 px-4 py-2 rounded-lg transition-all duration-200 hover:bg-red-500/30"
               >
                 <ArrowRightOnRectangleIcon className="h-5 w-5" />
                 <span>Logout</span>
@@ -186,39 +252,49 @@ const StudentDashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Welcome Section */}
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {student?.full_name?.split(' ')[0] || 'Student'}!
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600">Here's your accommodation overview and recent activity.</p>
+        </div>
+
         {/* Student Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Personal Info Card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-blue-200">
+            <div className="flex items-center mb-3 sm:mb-4">
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <UserIcon className="h-6 w-6 text-blue-600" />
+                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <UserIcon className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
                 </div>
               </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
-                <p className="text-sm text-gray-500">Student ID: {student?.student_id}</p>
+              <div className="ml-3 sm:ml-4">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Personal Information</h3>
+                <p className="text-xs sm:text-sm text-blue-600 font-medium">ID: {student?.student_id}</p>
               </div>
             </div>
-            <div className="mt-4 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Name:</span>
-                <span className="text-sm font-medium">{student?.full_name}</span>
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-blue-200">
+                <span className="text-xs sm:text-sm font-medium text-gray-600">Name:</span>
+                <span className="text-xs sm:text-sm font-semibold text-gray-900 break-words">{student?.full_name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">National ID:</span>
-                <span className="text-sm font-medium">{student?.national_id}</span>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-blue-200">
+                <span className="text-xs sm:text-sm font-medium text-gray-600">National ID:</span>
+                <span className="text-xs sm:text-sm font-semibold text-gray-900 break-all">{student?.national_id}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Phone:</span>
-                <span className="text-sm font-medium">{student?.phone_number || 'Not provided'}</span>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-blue-200">
+                <span className="text-xs sm:text-sm font-medium text-gray-600">Phone:</span>
+                <span className="text-xs sm:text-sm font-semibold text-gray-900">{student?.phone_number || 'Not provided'}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Status:</span>
-                <span className={`text-sm font-medium ${
-                  student?.status === 'Active' ? 'text-green-600' : 'text-gray-600'
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2">
+                <span className="text-xs sm:text-sm font-medium text-gray-600">Status:</span>
+                <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold mt-1 sm:mt-0 ${
+                  student?.status === 'Active' 
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                    : 'bg-gray-100 text-gray-800 border border-gray-200'
                 }`}>
                   {student?.status}
                 </span>
@@ -227,106 +303,130 @@ const StudentDashboard = () => {
           </div>
 
           {/* Room Assignment Card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-green-200">
+            <div className="flex items-center mb-3 sm:mb-4">
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <HomeIcon className="h-6 w-6 text-green-600" />
+                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg">
+                  <HomeIcon className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
                 </div>
               </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Room Assignment</h3>
-                <p className="text-sm text-gray-500">Current accommodation</p>
+              <div className="ml-3 sm:ml-4">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Room Assignment</h3>
+                <p className="text-xs sm:text-sm text-green-600 font-medium">Current accommodation</p>
               </div>
             </div>
-            <div className="mt-4 space-y-2">
+            <div className="space-y-2 sm:space-y-3">
               {student?.room_name ? (
                 <>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">Room:</span>
-                    <span className="text-sm font-medium">{student.room_name}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-green-200">
+                    <span className="text-xs sm:text-sm font-medium text-gray-600">Room:</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">{student.room_name}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">Monthly Rent:</span>
-                    <span className="text-sm font-medium">{student.currency} {student.agreed_amount}</span>
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b border-green-200">
+                    <span className="text-xs sm:text-sm font-medium text-gray-600">Monthly Rent:</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">{student.currency} {student.agreed_amount}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-500">Start Date:</span>
-                    <span className="text-sm font-medium">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2">
+                    <span className="text-xs sm:text-sm font-medium text-gray-600">Start Date:</span>
+                    <span className="text-xs sm:text-sm font-semibold text-gray-900">
                       {student.start_date ? new Date(student.start_date).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-gray-500">No room assigned</p>
+                <div className="text-center py-3 sm:py-4">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2 sm:mb-3">
+                    <HomeIcon className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-500 font-medium">No room assigned</p>
+                  <p className="text-xs text-gray-400 mt-1">Contact administration for room assignment</p>
+                </div>
               )}
             </div>
           </div>
 
           {/* Account Balance Card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-4 sm:p-6 border border-purple-200 sm:col-span-2 lg:col-span-1">
+            <div className="flex items-center mb-3 sm:mb-4">
               <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                  <CreditCardIcon className="h-6 w-6 text-purple-600" />
+                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                  <CreditCardIcon className="h-5 w-5 sm:h-7 sm:w-7 text-white" />
                 </div>
               </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Account Balance</h3>
-                <p className="text-sm text-gray-500">Current balance</p>
+              <div className="ml-3 sm:ml-4">
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Account Balance</h3>
+                <p className="text-xs sm:text-sm text-purple-600 font-medium">Current balance</p>
               </div>
             </div>
-            <div className="mt-4">
-              <div className="text-2xl font-bold text-gray-900">
+            <div className="text-center">
+              <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
                 {student?.currency || 'USD'} {student?.account_balance || '0.00'}
               </div>
-              <p className={`text-sm ${
-                parseFloat(student?.account_balance || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+              <div className={`inline-flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-semibold ${
+                parseFloat(student?.account_balance || 0) >= 0 
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : 'bg-red-100 text-red-800 border border-red-200'
               }`}>
+                <div className={`w-2 h-2 rounded-full mr-2 ${
+                  parseFloat(student?.account_balance || 0) >= 0 ? 'bg-green-500' : 'bg-red-500'
+                }`}></div>
                 {parseFloat(student?.account_balance || 0) >= 0 ? 'Credit Balance' : 'Outstanding Balance'}
-              </p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Payment History */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Payment History</h3>
-            <p className="text-sm text-gray-500">Your recent payments and transactions</p>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-6 sm:mb-8">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
+            <div className="flex items-center">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3">
+                <CheckCircleIcon className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Payment History</h3>
+                <p className="text-xs sm:text-sm text-green-600 font-medium">Your recent payments and transactions</p>
+              </div>
+            </div>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {payments.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {payments.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-4">
+                  <div key={payment.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-5 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-0">
                       <div className="flex-shrink-0">
-                        <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                          <CheckCircleIcon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{payment.notes || payment.payment_type || 'Payment'}</p>
-                        <p className="text-sm text-gray-500">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{payment.notes || payment.payment_type || 'Payment'}</p>
+                        <p className="text-xs sm:text-sm text-gray-600 flex items-center">
+                          <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                           {new Date(payment.payment_date).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">
+                    <div className="text-left sm:text-right">
+                      <p className="text-lg sm:text-lg font-bold text-gray-900">
                         {student?.currency || 'USD'} {payment.amount}
                       </p>
-                      <p className="text-xs text-green-600">
+                      <div className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 border border-green-200">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
                         Completed
-                      </p>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <CurrencyDollarIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No payments found</h3>
-                <p className="mt-1 text-sm text-gray-500">
+              <div className="text-center py-8 sm:py-12">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <CurrencyDollarIcon className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
+                </div>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">No payments found</h3>
+                <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto">
                   Your payment history will appear here once payments are recorded.
                 </p>
               </div>
@@ -335,50 +435,67 @@ const StudentDashboard = () => {
         </div>
 
         {/* Invoices */}
-        <div className="bg-white rounded-lg shadow mt-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Invoices</h3>
-            <p className="text-sm text-gray-500">Your billing invoices and charges</p>
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="flex items-center">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-2 sm:mr-3">
+                <DocumentTextIcon className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Invoices</h3>
+                <p className="text-xs sm:text-sm text-blue-600 font-medium">Your billing invoices and charges</p>
+              </div>
+            </div>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {invoices.length > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {invoices.map((invoice) => (
-                  <div key={invoice.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-4">
+                  <div key={invoice.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-0">
                       <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-sm font-medium text-blue-600">
-                            #{invoice.reference_number}
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 rounded-full flex items-center justify-center shadow-lg">
+                          <span className="text-xs sm:text-sm font-bold text-white">
+                            #{invoice.reference_number?.slice(-4) || 'INV'}
                           </span>
                         </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{invoice.description}</p>
-                        <p className="text-sm text-gray-500">
-                          Date: {new Date(invoice.invoice_date).toLocaleDateString()}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{invoice.description}</p>
+                        <p className="text-xs sm:text-sm text-gray-600 flex items-center">
+                          <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                          {new Date(invoice.invoice_date).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">
+                    <div className="text-left sm:text-right">
+                      <p className="text-lg font-bold text-gray-900">
                         {student?.currency || 'USD'} {invoice.amount}
                       </p>
-                      <p className={`text-xs ${
-                        invoice.status === 'paid' ? 'text-green-600' : 
-                        invoice.status === 'overdue' ? 'text-red-600' : 'text-yellow-600'
+                      <div className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-semibold ${
+                        invoice.status === 'paid' 
+                          ? 'bg-green-100 text-green-800 border border-green-200' 
+                          : invoice.status === 'overdue' 
+                          ? 'bg-red-100 text-red-800 border border-red-200' 
+                          : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                       }`}>
-                        {invoice.status}
-                      </p>
+                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                          invoice.status === 'paid' ? 'bg-green-500' : 
+                          invoice.status === 'overdue' ? 'bg-red-500' : 'bg-yellow-500'
+                        }`}></div>
+                        {invoice.status?.charAt(0).toUpperCase() + invoice.status?.slice(1)}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <CurrencyDollarIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No invoices found</h3>
-                <p className="mt-1 text-sm text-gray-500">
+              <div className="text-center py-8 sm:py-12">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <DocumentTextIcon className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
+                </div>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">No invoices found</h3>
+                <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto">
                   Your invoices will appear here once they are generated.
                 </p>
               </div>

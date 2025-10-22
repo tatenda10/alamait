@@ -14,8 +14,6 @@ import {
   XCircleIcon,
   ClockIcon,
   PencilIcon,
-  ChartBarIcon,
-  Cog6ToothIcon,
   Squares2X2Icon,
   PhotoIcon
 } from '@heroicons/react/24/outline';
@@ -132,8 +130,6 @@ export default function ViewRoom() {
     { id: 'details', name: 'Room Details', icon: HomeIcon },
     { id: 'beds', name: 'Bed Management', icon: Squares2X2Icon },
     { id: 'images', name: 'Room Images', icon: PhotoIcon },
-    { id: 'actions', name: 'Quick Actions', icon: Cog6ToothIcon },
-    { id: 'statistics', name: 'Statistics', icon: ChartBarIcon },
   ];
 
   const renderTabContent = () => {
@@ -146,7 +142,7 @@ export default function ViewRoom() {
                 Room Information
               </h3>
               
-              <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-4 sm:gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <dt className="text-sm font-medium text-gray-500 flex items-center">
                     <HomeIcon className="h-4 w-4 mr-2" />
@@ -292,91 +288,6 @@ export default function ViewRoom() {
           />
         );
 
-      case 'actions':
-        return (
-          <div className="bg-white shadow">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Quick Actions
-              </h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
-                  onClick={() => navigate(`/dashboard/rooms/${room.id}/edit`)}
-                  className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
-                >
-                  <PencilIcon className="h-4 w-4 mr-2" />
-                  Edit Room Details
-                </button>
-
-                {room.status === 'available' && (
-                  <button
-                    onClick={() => navigate(`/dashboard/students/add?room_id=${room.id}`)}
-                    className="inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                  >
-                    <UserIcon className="h-4 w-4 mr-2" />
-                    Assign Student
-                  </button>
-                )}
-
-                {room.current_student && (
-                  <button
-                    onClick={() => navigate(`/dashboard/students/${room.current_student_id}`)}
-                    className="inline-flex justify-center items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <UserIcon className="h-4 w-4 mr-2" />
-                    View Student
-                  </button>
-                )}
-
-                <button
-                  onClick={() => navigate('/dashboard/rooms')}
-                  className="inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
-                >
-                  <HomeIcon className="h-4 w-4 mr-2" />
-                  Back to Rooms
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'statistics':
-        return (
-          <div className="bg-white shadow">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Room Statistics
-              </h3>
-              
-              <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <dt className="text-sm font-medium text-gray-500">Occupancy Rate</dt>
-                  <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                    {room.status === 'occupied' ? '100%' : '0%'}
-                  </dd>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <dt className="text-sm font-medium text-gray-500">Monthly Revenue</dt>
-                  <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                    {room.status === 'occupied' 
-                      ? `${room.currency || 'US$'} ${parseFloat(room.monthly_rent || room.price_per_bed || 0).toFixed(2)}`
-                      : `${room.currency || 'US$'} 0.00`
-                    }
-                  </dd>
-                </div>
-                
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <dt className="text-sm font-medium text-gray-500">Available Spots</dt>
-                  <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                    {room.status === 'occupied' ? 0 : room.capacity}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-        );
 
       default:
         return null;
@@ -384,19 +295,28 @@ export default function ViewRoom() {
   };
 
   return (
-    <div className="p-6 max-w-full">
+    <div className="p-4 sm:p-6 max-w-full">
+      <style jsx>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">{room.room_name}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div className="flex-1">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{room.room_name}</h1>
             <p className="mt-1 text-sm text-gray-500">
               Room details and information
             </p>
           </div>
           <button
             onClick={() => navigate(`/dashboard/rooms/${room.id}/edit`)}
-            className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020]"
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#f58020] rounded-lg transition-colors duration-200 w-full sm:w-auto"
           >
             <PencilIcon className="h-4 w-4 mr-2" />
             Edit Room
@@ -407,7 +327,7 @@ export default function ViewRoom() {
       {/* Tabs */}
       <div className="mb-6">
         <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <nav className="-mb-px flex space-x-2 sm:space-x-8 overflow-x-auto scrollbar-hide" aria-label="Tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -418,10 +338,11 @@ export default function ViewRoom() {
                     activeTab === tab.id
                       ? 'border-[#f58020] text-[#f58020]'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm flex items-center`}
+                  } whitespace-nowrap py-3 px-3 sm:px-1 border-b-2 font-medium text-sm flex items-center min-w-fit transition-colors duration-200`}
                 >
-                  <Icon className="h-4 w-4 mr-2" />
-                  {tab.name}
+                  <Icon className="h-4 w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{tab.name}</span>
+                  <span className="sm:hidden">{tab.name.split(' ')[0]}</span>
                 </button>
               );
             })}

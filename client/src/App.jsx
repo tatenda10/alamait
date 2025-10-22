@@ -24,6 +24,7 @@ import IncomeStatement from './pages/reports/IncomeStatement';
 import CashflowReport from './pages/reports/CashflowReport';
 import DebtorsReport from './pages/reports/DebtorsReport';
 import CreditorsReport from './pages/reports/CreditorsReport';
+import StudentPrepaymentsReport from './pages/reports/StudentPrepaymentsReport';
 import ExpensesReport from './pages/reports/ExpensesReport';
 import Rooms from './pages/rooms/Rooms';
 import AddRoom from './pages/rooms/AddRoom';
@@ -99,6 +100,7 @@ const App = () => {
         <Route path="reports/cashflow" element={<CashflowReport />} />
         <Route path="reports/debtors" element={<DebtorsReport />} />
         <Route path="reports/creditors" element={<CreditorsReport />} />
+        <Route path="reports/student-prepayments" element={<StudentPrepaymentsReport />} />
         <Route path="reports/expenses" element={<ExpensesReport />} />
         <Route path="reports/balance-sheet" element={<BalanceSheet />} />
         <Route path="reports/student-payments" element={<div>Student Payments Report Page</div>} />

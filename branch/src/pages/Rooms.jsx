@@ -1,5 +1,6 @@
 import React, { useState, Fragment, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
+import { useNavigate } from 'react-router-dom';
 import {
   PlusIcon,
   XMarkIcon,
@@ -7,11 +8,14 @@ import {
   ChevronRightIcon,
   HomeIcon,
   UserIcon,
+  EyeIcon,
+  PencilIcon,
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../utils/api';
 
 export default function Rooms() {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +132,7 @@ export default function Rooms() {
   };
 
   const handleEdit = (room) => {
+    console.log('Editing room:', room);
     setEditingRoom({
       ...room,
       rent: room.rent?.toString() || '',
@@ -273,9 +278,6 @@ export default function Rooms() {
                     Capacity
                   </th>
                   <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
-                    Occupants
-                  </th>
-                  <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
                     Monthly Rent
                   </th>
                   <th scope="col" className="px-3 py-2.5 text-left text-xs font-medium text-gray-900 uppercase tracking-wider">
@@ -312,7 +314,7 @@ export default function Rooms() {
                       <React.Fragment key={room.id}>
                         {/* Room Row */}
                         <tr className="hover:bg-gray-50">
-                          <td className="py-2 pl-4 pr-3 text-xs text-gray-900 sm:pl-4 border-x border-gray-200">
+                      <td className="py-2 pl-4 pr-3 text-xs text-gray-900 sm:pl-4 border-x border-gray-200">
                             <div className="flex items-center">
                               <button
                                 onClick={() => toggleRoomExpansion(room.id)}
@@ -333,44 +335,58 @@ export default function Rooms() {
                                 )}
                               </div>
                             </div>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                            {room.capacity}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                            {room.currentOccupants || occupiedBeds}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                            US${(room.rent || 0).toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                            US${(room.adminFee || 0).toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                            US${(room.securityDeposit || 0).toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2 text-xs border-r border-gray-200">
-                            <span className={`inline-flex items-center px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusColor(room.status || 'Available')}`}>
-                              {room.status || 'Available'}
-                            </span>
-                          </td>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                        {room.capacity}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                        US${(room.rent || 0).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                        US${(room.adminFee || 0).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
+                        US${(room.securityDeposit || 0).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs border-r border-gray-200">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusColor(room.status || 'Available')}`}>
+                          {room.status || 'Available'}
+                        </span>
+                      </td>
                           <td className="relative py-2 pl-3 pr-4 text-right text-xs font-medium sm:pr-4 border-r border-gray-200">
-                            <button 
-                              onClick={() => handleEdit(room)}
-                              className="text-blue-600 hover:text-blue-900 mr-3"
-                            >
-                              Edit
-                            </button>
-                            <button className="text-red-600 hover:text-red-900">
-                              Delete
-                            </button>
+                            <div className="flex items-center justify-end space-x-2">
+                              <button 
+                                onClick={() => {
+                                  console.log('Navigating to room:', room.id, 'Room object:', room);
+                                  console.log('Current URL:', window.location.href);
+                                  navigate(`/dashboard/rooms/${room.id}`);
+                                  console.log('Navigation called');
+                                }}
+                                className="text-green-600 hover:text-green-900 flex items-center"
+                                title="View room details"
+                              >
+                                <EyeIcon className="h-3 w-3 mr-1" />
+                                View
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  console.log('Edit button clicked for room:', room.id);
+                                  handleEdit(room);
+                                }}
+                                className="text-blue-600 hover:text-blue-900 flex items-center"
+                                title="Edit room"
+                              >
+                                <PencilIcon className="h-3 w-3 mr-1" />
+                                Edit
+                              </button>
+                            </div>
                           </td>
-                        </tr>
+                    </tr>
                         
                         {/* Beds Row */}
                         {isExpanded && (
                           <tr className="bg-gray-50">
-                            <td colSpan="8" className="px-4 py-3 border-x border-gray-200">
+                            <td colSpan="7" className="px-4 py-3 border-x border-gray-200">
                               <div className="space-y-2">
                                 <div className="text-xs font-medium text-gray-700 mb-2 flex items-center">
                                   <HomeIcon className="h-3 w-3 mr-1" />
@@ -424,7 +440,7 @@ export default function Rooms() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="8" className="px-3 py-4 text-sm text-center text-gray-500">
+                    <td colSpan="7" className="px-3 py-4 text-sm text-center text-gray-500">
                       No rooms available
                     </td>
                   </tr>

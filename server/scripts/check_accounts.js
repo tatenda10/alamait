@@ -1,45 +1,26 @@
 const mysql = require('mysql2/promise');
-
-const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'password123',
-  database: 'alamait'
-};
+require('dotenv').config();
 
 async function checkAccounts() {
-  const connection = await mysql.createConnection(dbConfig);
-  
+  const connection = await mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'alamait_db'
+  });
+
   try {
-    console.log('🔍 Checking Chart of Accounts...\n');
+    const [accounts] = await connection.execute(`
+      SELECT account_code, account_name, account_type, current_balance
+      FROM chart_of_accounts 
+      WHERE account_name LIKE '%cash%' OR account_name LIKE '%receivable%' OR account_code LIKE '1%'
+      ORDER BY account_code
+    `);
     
-    const [accounts] = await connection.query(
-      `SELECT id, code, name, type 
-       FROM chart_of_accounts 
-       WHERE name LIKE '%Petty%' OR name LIKE '%Student%' OR code LIKE '%100%' OR code LIKE '%400%' 
-       ORDER BY code`
-    );
-    
-    console.log('📋 Relevant Accounts:');
-    accounts.forEach(acc => {
-      console.log(`   ${acc.code} - ${acc.name} (${acc.type}) [ID: ${acc.id}]`);
-    });
-    
-    // Check for Cash accounts
-    const [cashAccounts] = await connection.query(
-      `SELECT id, code, name, type 
-       FROM chart_of_accounts 
-       WHERE name LIKE '%Cash%' 
-       ORDER BY code`
-    );
-    
-    console.log('\n💰 Cash Accounts:');
-    cashAccounts.forEach(acc => {
-      console.log(`   ${acc.code} - ${acc.name} (${acc.type}) [ID: ${acc.id}]`);
-    });
-    
+    console.log('Current accounts:');
+    console.table(accounts);
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('Error:', error);
   } finally {
     await connection.end();
   }

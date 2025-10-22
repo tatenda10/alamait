@@ -18,9 +18,10 @@ import * as XLSX from 'xlsx';
 const CreditorsReport = () => {
   const [creditorsData, setCreditorsData] = useState({
     summary: {
-      total_outstanding: 0,
-      total_invoices: 0,
-      pending_amount: 0,
+      total_credit: 0,
+      high_credit_accounts: 0,
+      inactive_accounts: 0,
+      avg_credit_balance: 0,
       total_creditors: 0
     },
     creditors: []

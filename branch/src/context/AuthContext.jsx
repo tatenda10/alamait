@@ -47,13 +47,15 @@ export const AuthProvider = ({ children }) => {
       // Set the token in axios defaults
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
-      const response = await api.get('/boarding-house/auth/profile');
+      const response = await api.get('/pettycash/auth/profile');
       const userData = response.data.data;
       
       // Store user data
       localStorage.setItem('user', JSON.stringify(userData));
       localStorage.setItem('boarding_house_id', userData.boarding_house_id?.toString() || '');
       localStorage.setItem('boarding_house_name', userData.boarding_house_name || '');
+      localStorage.setItem('petty_cash_account_id', userData.petty_cash_account_id?.toString() || '');
+      localStorage.setItem('account_name', userData.account_name || '');
       setUser(userData);
     } catch (err) {
       console.error('Auth check failed:', err);
@@ -71,7 +73,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       setError(null);
-      const response = await api.post('/boarding-house/auth/login', credentials);
+      const response = await api.post('/pettycash/auth/login', credentials);
       const { data } = response.data; // Note: response.data contains the wrapper object
       
       if (!data) {
@@ -90,6 +92,8 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('boarding_house_id', userData.boarding_house_id?.toString() || '');
         localStorage.setItem('boarding_house_name', userData.boarding_house_name || '');
+        localStorage.setItem('petty_cash_account_id', userData.petty_cash_account_id?.toString() || '');
+        localStorage.setItem('account_name', userData.account_name || '');
         setUser(userData);
       }
       
@@ -103,7 +107,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await api.post('/boarding-house/auth/logout');
+      await api.post('/pettycash/auth/logout');
     } catch (err) {
       console.error('Logout error:', err);
     } finally {

@@ -11,7 +11,7 @@ const getBedsByRoom = async (req, res) => {
     
     console.log(`Fetching beds for room ID: ${roomId}`);
     
-    const [beds] = await db.query(
+        const [beds] = await db.query(
       `SELECT 
         b.*,
         s.full_name as student_name,
@@ -124,27 +124,33 @@ const createBed = async (req, res) => {
   try {
     await connection.beginTransaction();
     
-    const { roomId, bedNumber, price, notes } = req.body;
+    const { room_id, bed_number, price, notes, status } = req.body;
+    
+    console.log('Creating bed with data:', { room_id, bed_number, price, notes, status });
     
     // Validate required fields
-    if (!roomId || !bedNumber || !price) {
+    if (!room_id || !bed_number || !price) {
+      console.log('Validation failed:', { room_id, bed_number, price });
       return res.status(400).json({ message: 'Room ID, bed number, and price are required' });
     }
     
     // Check if room exists
     const [room] = await connection.query(
       'SELECT id, name, capacity FROM rooms WHERE id = ? AND deleted_at IS NULL',
-      [roomId]
+      [room_id]
     );
     
+    console.log('Room check result:', room);
+    
     if (room.length === 0) {
+      console.log('Room not found for ID:', room_id);
       return res.status(404).json({ message: 'Room not found' });
     }
     
     // Check if bed number already exists in this room
     const [existingBed] = await connection.query(
       'SELECT id FROM beds WHERE room_id = ? AND bed_number = ? AND deleted_at IS NULL',
-      [roomId, bedNumber]
+      [room_id, bed_number]
     );
     
     if (existingBed.length > 0) {
@@ -152,17 +158,20 @@ const createBed = async (req, res) => {
     }
     
     // Create the bed
+    console.log('Inserting bed with values:', [room_id, bed_number, price, notes, status || 'available']);
     const [result] = await connection.query(
       `INSERT INTO beds (
         room_id, bed_number, price, status, notes, bed_image, created_at, updated_at
-      ) VALUES (?, ?, ?, 'available', ?, NULL, NOW(), NOW())`,
-      [roomId, bedNumber, price, notes]
+      ) VALUES (?, ?, ?, ?, ?, NULL, NOW(), NOW())`,
+      [room_id, bed_number, price, status || 'available', notes]
     );
+    
+    console.log('Bed insert result:', result);
     
     // Update room bed count
     await connection.query(
       'UPDATE rooms SET bed_count = bed_count + 1, updated_at = NOW() WHERE id = ?',
-      [roomId]
+      [room_id]
     );
     
     const [newBed] = await connection.query(

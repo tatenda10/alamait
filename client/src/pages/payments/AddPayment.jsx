@@ -55,27 +55,32 @@ export default function AddPayment({
       if (boardingHouseId) {
         try {
           const response = await axios.get(
-            `${BASE_URL}/petty-cash/account`,
+            `${BASE_URL}/petty-cash-admin/users`,
             {
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                'Content-Type': 'application/json',
-                'boarding-house-id': boardingHouseId
+                'Content-Type': 'application/json'
               }
             }
           );
           
-          // For now, we'll use the boarding house as the petty cash account
-          // In the future, this could be expanded to show multiple petty cash accounts
           if (response.data.success) {
-            setPettyCashAccounts([{
-              id: boardingHouseId,
-              name: 'Petty Cash Account',
-              current_balance: response.data.current_balance
-            }]);
+            // Filter accounts for this boarding house and map to the expected format
+            const accounts = response.data.users
+              .filter(account => account.boarding_house_id == boardingHouseId)
+              .map(account => ({
+                id: account.id,
+                name: `${account.account_name} (${account.username})`,
+                current_balance: parseFloat(account.current_balance) || 0,
+                boarding_house_name: account.boarding_house_name
+              }));
+            
+            setPettyCashAccounts(accounts);
           }
         } catch (err) {
           console.error('Error fetching petty cash accounts:', err);
+          // Fallback to empty array if API fails
+          setPettyCashAccounts([]);
         }
       }
     };
@@ -238,7 +243,7 @@ export default function AddPayment({
             id="amount"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
+            className="block w-full border border-gray-200 rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             required
             min="0"
             step="0.01"
@@ -283,7 +288,7 @@ export default function AddPayment({
               <option value="">Select petty cash account</option>
               {pettyCashAccounts.map((account) => (
                 <option key={account.id} value={account.id}>
-                  {account.name} (Balance: ${account.current_balance?.toFixed(2) || '0.00'})
+                  {account.name} (Balance: ${(account.current_balance || 0).toFixed(2)})
                 </option>
               ))}
             </select>

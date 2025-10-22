@@ -36,6 +36,7 @@ const expenditureRequestRoutes = require('./routes/expenditureRequests');
 const branchPaymentRoutes = require('./routes/branchPayment');
 const testEmailRoutes = require('./routes/testEmail');
 const roomImageRoutes = require('./routes/roomImages');
+const roomRoutes = require('./routes/room');
 
 // Enable CORS
 app.use(cors({
@@ -80,6 +81,7 @@ app.use('/api/budget-requests', budgetRequestRoutes);
 app.use('/api/expenditure-requests', expenditureRequestRoutes);
 app.use('/api/branch-payments', branchPaymentRoutes);
 app.use('/api/test-email', testEmailRoutes);
+app.use('/api/rooms', roomRoutes);
 app.use('/api/rooms', roomImageRoutes);
 
 const swaggerDefinition = {

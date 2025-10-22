@@ -378,12 +378,10 @@ router.get('/users', authenticate, async (req, res) => {
   try {
     const [accounts] = await db.query(
       `SELECT pca.*, 
-              u.username,
-              u.email,
-              u.phone_number,
+              pcu.username,
               bh.name as boarding_house_name
        FROM petty_cash_accounts pca
-       LEFT JOIN users u ON pca.user_id = u.id
+       LEFT JOIN petty_cash_users pcu ON pca.petty_cash_user_id = pcu.id
        LEFT JOIN boarding_houses bh ON pca.boarding_house_id = bh.id
        WHERE pca.deleted_at IS NULL
        ORDER BY pca.created_at DESC`

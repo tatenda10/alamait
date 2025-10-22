@@ -17,6 +17,10 @@ router.get('/income-statement/export', authenticate, reportsController.exportInc
 router.get('/debtors', authenticate, reportsController.getDebtorsReport);
 router.get('/debtors/export', authenticate, reportsController.exportDebtorsReport);
 
+// Creditors report routes
+router.get('/creditors', authenticate, reportsController.getCreditorsReport);
+router.get('/creditors/export', authenticate, reportsController.exportCreditorsReport);
+
 // Income projection routes
 router.get('/income-projection', authenticate, reportsController.getIncomeProjection);
 router.get('/income-projection/export', authenticate, reportsController.exportIncomeProjection);

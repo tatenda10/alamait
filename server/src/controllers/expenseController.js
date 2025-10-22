@@ -528,13 +528,13 @@ exports.updateExpense = async (req, res) => {
       
       // Update petty cash account balance (add back the amount)
       await connection.query(
-        `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
-         VALUES (?, ?, ?, NOW())
+        `INSERT INTO petty_cash_accounts (boarding_house_id, account_name, account_code, current_balance, total_inflows, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE 
          current_balance = current_balance + ?,
          total_inflows = total_inflows + ?,
          updated_at = NOW()`,
-        [boardingHouseId, oldAmount, oldAmount, oldAmount, oldAmount]
+        [boardingHouseId, 'Petty Cash Account', 'PC-001', oldAmount, oldAmount, userId, oldAmount, oldAmount]
       );
     }
     // If payment method is still petty cash but amount changed
@@ -570,13 +570,13 @@ exports.updateExpense = async (req, res) => {
         );
         
         await connection.query(
-          `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
-           VALUES (?, ?, ?, NOW())
+          `INSERT INTO petty_cash_accounts (boarding_house_id, account_name, account_code, current_balance, total_inflows, created_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, NOW())
            ON DUPLICATE KEY UPDATE 
            current_balance = current_balance + ?,
            total_inflows = total_inflows + ?,
            updated_at = NOW()`,
-          [boardingHouseId, refundAmount, refundAmount, refundAmount, refundAmount]
+          [boardingHouseId, 'Petty Cash Account', 'PC-001', refundAmount, refundAmount, userId, refundAmount, refundAmount]
         );
       }
     }

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Dialog, Transition } from '@headlessui/react';
 import {
-  PlusIcon,
   HomeIcon,
   EyeIcon,
   PencilIcon,
@@ -157,16 +156,6 @@ export default function Students() {
           <p className="mt-1 text-xs leading-6 text-gray-500">
             Manage student information and room assignments
           </p>
-        </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="block bg-[#E78D69] px-3 py-1.5 text-center text-xs font-semibold text-white shadow-sm hover:bg-[#E78D69]/90"
-          >
-            <PlusIcon className="inline-block h-4 w-4 mr-1" />
-            Add Student
-          </button>
         </div>
       </div>
 

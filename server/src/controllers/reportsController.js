@@ -635,8 +635,8 @@ const getDebtorsReport = async (req, res) => {
       queryParams.push(boarding_house_id);
     }
 
-    // Get all active enrolled students
-    const [activeStudents] = await connection.query(
+    // Get students with negative balances (they owe money)
+    const [debtors] = await connection.query(
       `SELECT 
         s.id as student_id,
         s.full_name as student_name,
@@ -647,114 +647,29 @@ const getDebtorsReport = async (req, res) => {
         se.expected_end_date as enrollment_end,
         r.name as room_number,
         bh.name as boarding_house_name,
-        s.status as student_status
+        s.status as student_status,
+        sab.current_balance,
+        sab.updated_at as last_balance_update
       FROM students s
       JOIN student_enrollments se ON s.id = se.student_id
       JOIN rooms r ON se.room_id = r.id
       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
         AND se.deleted_at IS NULL
-        AND s.status = 'Active'
-        AND se.start_date <= CURRENT_DATE
+        AND (s.status = 'Active' OR s.status IS NULL)
         AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance > 0
+        AND sab.deleted_at IS NULL
         ${whereClause}
-      ORDER BY bh.name, s.full_name`,
+      ORDER BY sab.current_balance ASC, bh.name, s.full_name`,
       queryParams
     );
 
-    const debtors = [];
+    // Process debtors data - students with negative balances
+    const processedDebtors = [];
 
-    // For each active student, calculate their debts
-    for (const student of activeStudents) {
-      let totalDebt = 0;
-      let adminFeeDebt = 0;
-      let securityDepositDebt = 0;
-      let rentDebt = 0;
-      let earliestOverdueDate = null;
-      let lastPaymentDate = null;
-
-      // Check admin fee payment
-      if (student.admin_fee > 0) {
-        const [adminFeePayments] = await connection.query(
-          `SELECT COALESCE(SUM(amount), 0) as total_paid
-           FROM student_payments
-           WHERE student_id = ? 
-             AND enrollment_id = ?
-             AND payment_type = 'admin_fee'
-             AND status = 'completed'
-             AND deleted_at IS NULL`,
-          [student.student_id, student.enrollment_id]
-        );
-
-        const adminFeePaid = parseFloat(adminFeePayments[0].total_paid) || 0;
-        adminFeeDebt = Math.max(0, student.admin_fee - adminFeePaid);
-        totalDebt += adminFeeDebt;
-        
-        if (adminFeeDebt > 0 && (!earliestOverdueDate || student.enrollment_start < earliestOverdueDate)) {
-          earliestOverdueDate = student.enrollment_start;
-        }
-      }
-
-      // Check security deposit payment
-      if (student.security_deposit > 0) {
-        const [securityDepositPayments] = await connection.query(
-          `SELECT COALESCE(SUM(amount), 0) as total_paid
-           FROM student_payments
-           WHERE student_id = ? 
-             AND enrollment_id = ?
-             AND payment_type = 'security_deposit'
-             AND status = 'completed'
-             AND deleted_at IS NULL`,
-          [student.student_id, student.enrollment_id]
-        );
-
-        const securityDepositPaid = parseFloat(securityDepositPayments[0].total_paid) || 0;
-        securityDepositDebt = Math.max(0, student.security_deposit - securityDepositPaid);
-        totalDebt += securityDepositDebt;
-        
-        if (securityDepositDebt > 0 && (!earliestOverdueDate || student.enrollment_start < earliestOverdueDate)) {
-          earliestOverdueDate = student.enrollment_start;
-        }
-      }
-
-      // Check rent payment schedules for overdue/unpaid amounts
-      const [rentSchedules] = await connection.query(
-        `SELECT 
-          sps.id,
-          sps.period_start_date,
-          sps.period_end_date,
-          sps.amount_due,
-          sps.amount_paid,
-          sps.status
-        FROM student_payment_schedules sps
-        WHERE sps.student_id = ?
-          AND sps.enrollment_id = ?
-          AND sps.deleted_at IS NULL
-          AND (sps.status = 'pending' OR sps.status = 'partial' OR 
-               (sps.status = 'paid' AND sps.amount_paid < sps.amount_due))
-        ORDER BY sps.period_start_date`,
-        [student.student_id, student.enrollment_id]
-      );
-
-      for (const schedule of rentSchedules) {
-        const scheduleRentDebt = schedule.amount_due - (schedule.amount_paid || 0);
-        
-        if (scheduleRentDebt > 0) {
-          // Check if this rent period is overdue (past the end date)
-          const isOverdue = new Date(schedule.period_end_date) < new Date();
-          
-          if (isOverdue || schedule.status === 'partial') {
-            rentDebt += scheduleRentDebt;
-
-            if (isOverdue && (!earliestOverdueDate || schedule.period_end_date < earliestOverdueDate)) {
-              earliestOverdueDate = schedule.period_end_date;
-            }
-          }
-        }
-      }
-
-      totalDebt += rentDebt;
-
+    for (const debtor of debtors) {
       // Get last payment date for this student
       const [lastPayment] = await connection.query(
         `SELECT payment_date
@@ -765,63 +680,57 @@ const getDebtorsReport = async (req, res) => {
            AND deleted_at IS NULL
          ORDER BY payment_date DESC
          LIMIT 1`,
-        [student.student_id, student.enrollment_id]
+        [debtor.student_id, debtor.enrollment_id]
       );
 
-      if (lastPayment.length > 0) {
-        lastPaymentDate = lastPayment[0].payment_date;
+      const lastPaymentDate = lastPayment.length > 0 ? lastPayment[0].payment_date : null;
+
+      // Calculate days overdue based on enrollment start date
+      const daysOverdue = Math.max(0, Math.floor((new Date() - new Date(debtor.enrollment_start)) / (1000 * 60 * 60 * 24)));
+
+      // Determine status based on balance and overdue status
+      let studentStatus = 'pending';
+      if (daysOverdue > 30) {
+        studentStatus = 'overdue';
+      } else if (daysOverdue > 0) {
+        studentStatus = 'partial';
       }
 
-      // If student has any debt, add to debtors list
-      if (totalDebt > 0) {
-        const daysOverdue = earliestOverdueDate 
-          ? Math.max(0, Math.floor((new Date() - new Date(earliestOverdueDate)) / (1000 * 60 * 60 * 24)))
-          : 0;
-
-        // Determine status based on debt types and overdue status
-        let studentStatus = 'pending';
-        if (daysOverdue > 0) {
-          studentStatus = 'overdue';
-        } else if (rentDebt > 0 && (adminFeeDebt > 0 || securityDepositDebt > 0)) {
-          studentStatus = 'partial';
-        }
-        
-        // Filter by status only (no day filters)
-        if (status !== 'all') {
-          if (status === 'overdue' && studentStatus !== 'overdue') continue;
-          if (status === 'partial' && studentStatus !== 'partial') continue;
-        }
-
-        debtors.push({
-          student_id: student.student_id,
-          student_name: student.student_name,
-          room_number: student.room_number,
-          boarding_house_name: student.boarding_house_name,
-          total_due: totalDebt,
-          debt_breakdown: {
-            admin_fee: adminFeeDebt,
-            security_deposit: securityDepositDebt,
-            rent: rentDebt
-          },
-          days_overdue: daysOverdue,
-          last_payment: lastPaymentDate,
-          status: studentStatus,
-          earliest_overdue_date: earliestOverdueDate
-        });
+      // Filter by status
+      if (status !== 'all') {
+        if (status === 'overdue' && studentStatus !== 'overdue') continue;
+        if (status === 'partial' && studentStatus !== 'partial') continue;
       }
+
+      processedDebtors.push({
+        student_id: debtor.student_id,
+        student_name: debtor.student_name,
+        room_number: debtor.room_number,
+        boarding_house_name: debtor.boarding_house_name,
+        total_due: Math.abs(debtor.current_balance), // Convert negative to positive for display
+        debt_breakdown: {
+          admin_fee: debtor.admin_fee || 0,
+          security_deposit: debtor.security_deposit || 0,
+          rent: Math.abs(debtor.current_balance) - (debtor.admin_fee || 0) - (debtor.security_deposit || 0)
+        },
+        days_overdue: daysOverdue,
+        last_payment: lastPaymentDate,
+        status: studentStatus,
+        current_balance: debtor.current_balance
+      });
     }
 
     // Calculate summary statistics
-    const totalOutstanding = debtors.reduce((sum, debtor) => sum + debtor.total_due, 0);
-    const overdueAccounts = debtors.filter(d => d.status === 'overdue').length;
-    const avgDaysOverdue = debtors.length > 0 
-      ? Math.round(debtors.reduce((sum, d) => sum + d.days_overdue, 0) / debtors.length)
+    const totalOutstanding = processedDebtors.reduce((sum, debtor) => sum + debtor.total_due, 0);
+    const overdueAccounts = processedDebtors.filter(d => d.status === 'overdue').length;
+    const avgDaysOverdue = processedDebtors.length > 0 
+      ? Math.round(processedDebtors.reduce((sum, d) => sum + d.days_overdue, 0) / processedDebtors.length)
       : 0;
 
     // Calculate debt breakdown totals
-    const totalAdminFeeDebt = debtors.reduce((sum, d) => sum + d.debt_breakdown.admin_fee, 0);
-    const totalSecurityDepositDebt = debtors.reduce((sum, d) => sum + d.debt_breakdown.security_deposit, 0);
-    const totalRentDebt = debtors.reduce((sum, d) => sum + d.debt_breakdown.rent, 0);
+    const totalAdminFeeDebt = processedDebtors.reduce((sum, d) => sum + d.debt_breakdown.admin_fee, 0);
+    const totalSecurityDepositDebt = processedDebtors.reduce((sum, d) => sum + d.debt_breakdown.security_deposit, 0);
+    const totalRentDebt = processedDebtors.reduce((sum, d) => sum + d.debt_breakdown.rent, 0);
 
     // Format the response
     const response = {
@@ -829,20 +738,320 @@ const getDebtorsReport = async (req, res) => {
         total_outstanding: totalOutstanding,
         overdue_accounts: overdueAccounts,
         avg_days_overdue: avgDaysOverdue,
-        total_debtors: debtors.length,
+        total_debtors: processedDebtors.length,
         debt_breakdown: {
           admin_fee: totalAdminFeeDebt,
           security_deposit: totalSecurityDepositDebt,
           rent: totalRentDebt
         }
       },
-      debtors: debtors
+      debtors: processedDebtors
     };
 
     res.json(response);
 
   } catch (error) {
     console.error('Error in getDebtorsReport:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+const getCreditorsReport = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { boarding_house_id, status = 'all' } = req.query;
+    
+    let whereClause = '';
+    let queryParams = [];
+    
+    // Handle consolidated vs specific boarding house
+    if (boarding_house_id && boarding_house_id !== 'all') {
+      whereClause = 'AND se.boarding_house_id = ?';
+      queryParams.push(boarding_house_id);
+    }
+
+    // Get students with positive balances (they have credit/overpaid)
+    const [creditors] = await connection.query(
+      `SELECT 
+        s.id as student_id,
+        s.full_name as student_name,
+        se.id as enrollment_id,
+        se.admin_fee,
+        se.security_deposit,
+        se.start_date as enrollment_start,
+        se.expected_end_date as enrollment_end,
+        r.name as room_number,
+        bh.name as boarding_house_name,
+        s.status as student_status,
+        sab.current_balance,
+        sab.updated_at as last_balance_update
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN rooms r ON se.room_id = r.id
+      JOIN boarding_houses bh ON se.boarding_house_id = bh.id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND se.deleted_at IS NULL
+        AND (s.status = 'Active' OR s.status IS NULL)
+        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance > 0
+        AND sab.deleted_at IS NULL
+        ${whereClause}
+      ORDER BY sab.current_balance DESC, bh.name, s.full_name`,
+      queryParams
+    );
+
+    // Process creditors data - students with positive balances
+    const processedCreditors = [];
+
+    for (const creditor of creditors) {
+      // Get last payment date for this student
+      const [lastPayment] = await connection.query(
+        `SELECT payment_date
+         FROM student_payments
+         WHERE student_id = ?
+           AND enrollment_id = ?
+           AND status = 'completed'
+           AND deleted_at IS NULL
+         ORDER BY payment_date DESC
+         LIMIT 1`,
+        [creditor.student_id, creditor.enrollment_id]
+      );
+
+      const lastPaymentDate = lastPayment.length > 0 ? lastPayment[0].payment_date : null;
+
+      // Calculate days since last payment
+      const daysSinceLastPayment = lastPaymentDate 
+        ? Math.floor((new Date() - new Date(lastPaymentDate)) / (1000 * 60 * 60 * 24))
+        : 0;
+
+      // Determine status based on credit amount and recency
+      let studentStatus = 'current';
+      if (creditor.current_balance > 1000) {
+        studentStatus = 'high_credit';
+      } else if (daysSinceLastPayment > 90) {
+        studentStatus = 'inactive';
+      }
+
+      // Filter by status
+      if (status !== 'all') {
+        if (status === 'high_credit' && studentStatus !== 'high_credit') continue;
+        if (status === 'inactive' && studentStatus !== 'inactive') continue;
+        if (status === 'current' && studentStatus !== 'current') continue;
+      }
+
+      processedCreditors.push({
+        student_id: creditor.student_id,
+        student_name: creditor.student_name,
+        room_number: creditor.room_number,
+        boarding_house_name: creditor.boarding_house_name,
+        credit_balance: creditor.current_balance,
+        last_payment: lastPaymentDate,
+        days_since_last_payment: daysSinceLastPayment,
+        status: studentStatus,
+        current_balance: creditor.current_balance
+      });
+    }
+
+    // Calculate summary statistics
+    const totalCredit = processedCreditors.reduce((sum, creditor) => sum + parseFloat(creditor.credit_balance), 0);
+    const highCreditAccounts = processedCreditors.filter(c => c.status === 'high_credit').length;
+    const inactiveAccounts = processedCreditors.filter(c => c.status === 'inactive').length;
+    const avgCreditBalance = processedCreditors.length > 0 
+      ? Math.round(processedCreditors.reduce((sum, c) => sum + parseFloat(c.credit_balance), 0) / processedCreditors.length)
+      : 0;
+
+    // Format the response
+    const response = {
+      summary: {
+        total_credit: totalCredit,
+        high_credit_accounts: highCreditAccounts,
+        inactive_accounts: inactiveAccounts,
+        avg_credit_balance: avgCreditBalance,
+        total_creditors: processedCreditors.length
+      },
+      creditors: processedCreditors
+    };
+
+    console.log('🔍 CREDITORS API RESPONSE DEBUG:');
+    console.log('Total Credit (raw):', totalCredit);
+    console.log('Total Credit (type):', typeof totalCredit);
+    console.log('Processed Creditors Count:', processedCreditors.length);
+    console.log('First 3 creditors:', processedCreditors.slice(0, 3).map(c => ({
+      name: c.student_name,
+      balance: c.credit_balance,
+      type: typeof c.credit_balance
+    })));
+    console.log('Summary object:', response.summary);
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('Error in getCreditorsReport:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+const exportCreditorsReport = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    const { boarding_house_id, status = 'all' } = req.query;
+    
+    let whereClause = '';
+    let queryParams = [];
+    let reportTitle = 'Consolidated Creditors Report';
+    
+    // Handle consolidated vs specific boarding house
+    if (boarding_house_id && boarding_house_id !== 'all') {
+      whereClause = 'AND se.boarding_house_id = ?';
+      queryParams.push(boarding_house_id);
+      
+      // Get boarding house details
+      const [boardingHouse] = await connection.query(
+        'SELECT name FROM boarding_houses WHERE id = ?',
+        [boarding_house_id]
+      );
+      
+      if (boardingHouse.length > 0) {
+        reportTitle = `${boardingHouse[0].name} - Creditors Report`;
+      }
+    }
+
+    // Get students with positive balances (they have credit/overpaid)
+    const [creditors] = await connection.query(
+      `SELECT 
+        s.id as student_id,
+        s.full_name as student_name,
+        se.id as enrollment_id,
+        se.admin_fee,
+        se.security_deposit,
+        se.start_date as enrollment_start,
+        se.expected_end_date as enrollment_end,
+        r.name as room_number,
+        bh.name as boarding_house_name,
+        s.status as student_status,
+        sab.current_balance,
+        sab.updated_at as last_balance_update
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN rooms r ON se.room_id = r.id
+      JOIN boarding_houses bh ON se.boarding_house_id = bh.id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND se.deleted_at IS NULL
+        AND (s.status = 'Active' OR s.status IS NULL)
+        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance > 0
+        AND sab.deleted_at IS NULL
+        ${whereClause}
+      ORDER BY sab.current_balance DESC, bh.name, s.full_name`,
+      queryParams
+    );
+
+    // Process creditors data
+    const processedCreditors = [];
+
+    for (const creditor of creditors) {
+      // Get last payment date for this student
+      const [lastPayment] = await connection.query(
+        `SELECT payment_date
+         FROM student_payments
+         WHERE student_id = ?
+           AND enrollment_id = ?
+           AND status = 'completed'
+           AND deleted_at IS NULL
+         ORDER BY payment_date DESC
+         LIMIT 1`,
+        [creditor.student_id, creditor.enrollment_id]
+      );
+
+      const lastPaymentDate = lastPayment.length > 0 ? lastPayment[0].payment_date : null;
+
+      // Calculate days since last payment
+      const daysSinceLastPayment = lastPaymentDate 
+        ? Math.floor((new Date() - new Date(lastPaymentDate)) / (1000 * 60 * 60 * 24))
+        : 0;
+
+      // Determine status based on credit amount and recency
+      let studentStatus = 'current';
+      if (creditor.current_balance > 1000) {
+        studentStatus = 'high_credit';
+      } else if (daysSinceLastPayment > 90) {
+        studentStatus = 'inactive';
+      }
+
+      // Filter by status
+      if (status !== 'all') {
+        if (status === 'high_credit' && studentStatus !== 'high_credit') continue;
+        if (status === 'inactive' && studentStatus !== 'inactive') continue;
+        if (status === 'current' && studentStatus !== 'current') continue;
+      }
+
+      processedCreditors.push({
+        student_name: creditor.student_name,
+        room_number: creditor.room_number,
+        boarding_house_name: creditor.boarding_house_name,
+        credit_balance: creditor.current_balance,
+        last_payment: lastPaymentDate,
+        days_since_last_payment: daysSinceLastPayment,
+        status: studentStatus
+      });
+    }
+
+    // Calculate summary statistics
+    const totalCredit = processedCreditors.reduce((sum, creditor) => sum + creditor.credit_balance, 0);
+    const highCreditAccounts = processedCreditors.filter(c => c.status === 'high_credit').length;
+    const inactiveAccounts = processedCreditors.filter(c => c.status === 'inactive').length;
+
+    // Set response headers for Excel download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="creditors-report-${new Date().toISOString().split('T')[0]}.xlsx"`);
+
+    // Create Excel workbook
+    const XLSX = require('xlsx');
+    const wb = XLSX.utils.book_new();
+
+    // Summary sheet
+    const summaryData = [
+      ['Creditors Report Summary'],
+      [''],
+      ['Report Title:', reportTitle],
+      ['Generated Date:', new Date().toLocaleDateString()],
+      ['Total Credit Outstanding:', `$${totalCredit.toFixed(2)}`],
+      ['High Credit Accounts:', highCreditAccounts],
+      ['Inactive Accounts:', inactiveAccounts],
+      ['Total Creditors:', processedCreditors.length]
+    ];
+
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+    // Creditors data sheet
+    const creditorsData = processedCreditors.map(creditor => ({
+      'Student Name': creditor.student_name,
+      'Room Number': creditor.room_number,
+      'Boarding House': creditor.boarding_house_name,
+      'Credit Balance': creditor.credit_balance,
+      'Last Payment': creditor.last_payment ? new Date(creditor.last_payment).toLocaleDateString() : 'N/A',
+      'Days Since Last Payment': creditor.days_since_last_payment,
+      'Status': creditor.status
+    }));
+
+    const creditorsWs = XLSX.utils.json_to_sheet(creditorsData);
+    XLSX.utils.book_append_sheet(wb, creditorsWs, 'Creditors');
+
+    // Write to response
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Error in exportCreditorsReport:', error);
     res.status(500).json({ message: 'Internal server error' });
   } finally {
     connection.release();
@@ -894,8 +1103,7 @@ const exportDebtorsReport = async (req, res) => {
       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
       WHERE s.deleted_at IS NULL
         AND se.deleted_at IS NULL
-        AND s.status = 'Active'
-        AND se.start_date <= CURRENT_DATE
+        AND (s.status = 'Active' OR s.status IS NULL)
         AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
         ${whereClause}
       ORDER BY bh.name, s.full_name`,
@@ -1392,6 +1600,8 @@ module.exports = {
   exportIncomeStatement,
   getDebtorsReport,
   exportDebtorsReport,
+  getCreditorsReport,
+  exportCreditorsReport,
   getIncomeProjection,
   exportIncomeProjection
 };

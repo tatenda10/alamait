@@ -72,7 +72,7 @@ const ChangePassword = ({ onClose }) => {
         throw new Error('New password does not meet requirements');
       }
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('studentToken');
       if (!token) {
         throw new Error('You must be logged in to change your password');
       }

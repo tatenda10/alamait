@@ -365,7 +365,7 @@ const RecordPayment = () => {
                               name="amount"
                               value={paymentForm.amount}
                               onChange={handleInputChange}
-                              className="w-full border border-gray-300 px-3 py-2 text-sm focus:ring-1 focus:ring-[#E78D69] focus:border-transparent"
+                              className="w-full border border-gray-300 px-3 py-2 text-sm focus:ring-1 focus:ring-[#E78D69] focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             />
                           </div>
                           <div>

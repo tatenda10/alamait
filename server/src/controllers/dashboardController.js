@@ -624,18 +624,17 @@ const getPettyCashBalances = async (req, res) => {
     // Get petty cash balances by individual users
     const [pettyCashResult] = await connection.query(`
       SELECT 
-        u.username as user,
+        pcu.username as user,
         bh.name as location,
         COALESCE(pca.current_balance, 0) as balance
-      FROM users u
-      LEFT JOIN boarding_houses bh ON u.boarding_house_id = bh.id
-      LEFT JOIN petty_cash_accounts pca ON u.id = pca.user_id 
+      FROM petty_cash_users pcu
+      LEFT JOIN boarding_houses bh ON pcu.boarding_house_id = bh.id
+      LEFT JOIN petty_cash_accounts pca ON pcu.id = pca.petty_cash_user_id 
         AND pca.deleted_at IS NULL 
         AND pca.status = 'active'
-      WHERE u.role = 'petty_cash_user' 
-        AND u.deleted_at IS NULL
+      WHERE pcu.deleted_at IS NULL
         AND bh.deleted_at IS NULL
-      ORDER BY u.username
+      ORDER BY pcu.username
     `);
 
     console.log('💰 Petty cash balances:', pettyCashResult);

@@ -129,12 +129,15 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">Room Images - {roomName}</h3>
+    <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 space-y-3 sm:space-y-0">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Room Images</h3>
+          <p className="text-sm text-gray-600">Manage images for {roomName}</p>
+        </div>
         <button
           onClick={() => setShowUploadModal(true)}
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center"
+          className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 flex items-center justify-center w-full sm:w-auto transition-colors duration-200"
         >
           <PlusIcon className="h-4 w-4 mr-2" />
           Add Images
@@ -142,14 +145,14 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
       </div>
 
       {images.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {images.map((image) => (
-            <div key={image.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="relative">
+            <div key={image.id} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-all duration-200 bg-white">
+              <div className="relative mb-3">
                 <img 
                   src={getImageUrl(image.id)} 
                   alt={`Room image ${image.id}`}
-                  className="w-full h-32 object-cover rounded-lg"
+                  className="w-full h-32 sm:h-40 object-cover rounded-lg"
                   onError={(e) => {
                     e.target.style.display = 'none';
                   }}
@@ -157,18 +160,18 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
                 
                 {/* Display Image Badge */}
                 {image.is_display_image && (
-                  <div className="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center">
+                  <div className="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center shadow-sm">
                     <StarIcon className="h-3 w-3 mr-1" />
                     Display
                   </div>
                 )}
               </div>
               
-              <div className="mt-3 flex space-x-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 {!image.is_display_image ? (
                   <button
                     onClick={() => handleSetDisplayImage(image.id)}
-                    className="flex-1 bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600 flex items-center justify-center"
+                    className="flex-1 bg-yellow-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-yellow-600 flex items-center justify-center transition-colors duration-200 min-h-[44px]"
                   >
                     <StarIcon className="h-4 w-4 mr-1" />
                     Set Display
@@ -176,7 +179,7 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
                 ) : (
                   <button
                     onClick={() => handleSetDisplayImage(image.id)}
-                    className="flex-1 bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700 flex items-center justify-center"
+                    className="flex-1 bg-yellow-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-yellow-700 flex items-center justify-center transition-colors duration-200 min-h-[44px]"
                   >
                     <StarIcon className="h-4 w-4 mr-1" />
                     Change Display
@@ -185,7 +188,7 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
                 
                 <button
                   onClick={() => handleDeleteImage(image.id)}
-                  className="flex-1 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 flex items-center justify-center"
+                  className="flex-1 bg-red-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-red-600 flex items-center justify-center transition-colors duration-200 min-h-[44px]"
                 >
                   <TrashIcon className="h-4 w-4 mr-1" />
                   Delete
@@ -195,60 +198,72 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
           ))}
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-500">
-          <PhotoIcon className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-          <p>No images uploaded yet.</p>
-          <p className="text-sm text-gray-400 mt-1">Add images to showcase this room</p>
+        <div className="text-center py-12 px-4">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <PhotoIcon className="h-8 w-8 text-gray-400" />
+          </div>
+          <h4 className="text-lg font-medium text-gray-900 mb-2">No images found</h4>
+          <p className="text-sm text-gray-500 mb-6">Add images to showcase this room.</p>
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600 flex items-center justify-center mx-auto transition-colors duration-200"
+          >
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Add First Image
+          </button>
         </div>
       )}
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Upload Room Images</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Upload Room Images</h3>
               <button
                 onClick={() => setShowUploadModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 p-1"
               >
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
             
             <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Images
+              </label>
               <input
                 type="file"
                 accept="image/*"
                 multiple
                 onChange={handleFileSelect}
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 disabled={uploading}
               />
-              <p className="text-xs text-gray-500 mt-1">You can select multiple images at once</p>
+              <p className="text-xs text-gray-500 mt-2">You can select multiple images at once</p>
             </div>
             
             {/* Image Previews */}
             {imagePreviews.length > 0 && (
               <div className="mb-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Preview:</h4>
-                <div className="grid grid-cols-2 gap-2">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Preview ({imagePreviews.length} images):</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
                   {imagePreviews.map((preview, index) => (
                     <img 
                       key={index}
                       src={preview} 
                       alt={`Preview ${index + 1}`} 
-                      className="w-full h-20 object-cover rounded border"
+                      className="w-full h-16 sm:h-20 object-cover rounded-lg border border-gray-200"
                     />
                   ))}
                 </div>
               </div>
             )}
             
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button
                 onClick={() => setShowUploadModal(false)}
-                className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                className="flex-1 bg-gray-500 text-white px-4 py-3 rounded-lg hover:bg-gray-600 transition-colors duration-200 min-h-[44px]"
                 disabled={uploading}
               >
                 Cancel
@@ -256,7 +271,7 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
               {selectedFiles.length > 0 && (
                 <button
                   onClick={handleUpload}
-                  className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                  className="flex-1 bg-orange-500 text-white px-4 py-3 rounded-lg hover:bg-orange-600 transition-colors duration-200 min-h-[44px]"
                   disabled={uploading}
                 >
                   {uploading ? 'Uploading...' : 'Upload Images'}
@@ -265,7 +280,8 @@ const RoomImageManagement = ({ roomId, roomName, onImageUpdate }) => {
             </div>
             
             {uploading && (
-              <div className="mt-4 text-center text-blue-600">
+              <div className="mt-4 text-center text-orange-600">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600 mx-auto mb-2"></div>
                 Uploading images...
               </div>
             )}

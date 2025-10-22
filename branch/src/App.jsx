@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import Login from './pages/auth/Login';
 import Dashboard from './pages/Dashboard';
 import Rooms from './pages/Rooms';
+import ViewRoom from './pages/ViewRoom';
 import Students from './pages/students/Students';
 import AddStudent from './pages/students/AddStudent';
 import AssignRoom from './pages/students/AssignRoom';
@@ -77,6 +78,7 @@ const App = () => {
       >
         <Route index element={<Dashboard />} />
         <Route path="rooms" element={<Rooms />} />
+        <Route path="rooms/:id" element={<ViewRoom />} />
         <Route path="students">
           <Route index element={<Students />} />
           <Route path="add" element={<AddStudent />} />

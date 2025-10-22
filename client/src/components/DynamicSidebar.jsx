@@ -10,6 +10,7 @@ import {
   // Students icons
   FaUserGraduate,
   FaUserPlus,
+  FaUserCheck,
   FaClipboardList,
   FaCalendarAlt,
   FaMoneyBill,
@@ -260,6 +261,13 @@ const DynamicSidebar = ({ currentSection }) => {
         className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10 border-b-[#f58020]' : 'text-gray-700'}`}
       >
         <FaTruck className="h-5 w-5 mr-3" /> Creditors Report
+      </NavLink>
+      
+      <NavLink 
+        to="/dashboard/reports/student-prepayments" 
+        className={({ isActive }) => `flex items-center px-3 py-3 transition font-medium border-b border-gray-200 ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10 border-b-[#f58020]' : 'text-gray-700'}`}
+      >
+        <FaUserCheck className="h-5 w-5 mr-3" /> Student Prepayments
       </NavLink>
       
       <NavLink 

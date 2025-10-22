@@ -12,6 +12,7 @@ import {
   FaChartBar,
   FaBars,
   FaUserGraduate,
+  FaUserCheck,
   FaMoneyBill,
   FaReceipt,
   FaWallet,
@@ -200,6 +201,12 @@ const Sidebar = () => {
                 className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
               >
                 <FaTruck className="h-4 w-4 mr-2" /> Creditors Report
+              </NavLink>
+              <NavLink 
+                to="/dashboard/reports/student-prepayments" 
+                className={({ isActive }) => `flex items-center px-3 py-1 transition font-medium rounded-md ${HOVER_COLOR} ${isActive ? 'text-[#f58020] font-bold bg-[#f58020]/10' : 'text-gray-600'}`}
+              >
+                <FaUserCheck className="h-4 w-4 mr-2" /> Student Prepayments
               </NavLink>
               {/* <NavLink 
                 to="/dashboard/reports/expenses" 

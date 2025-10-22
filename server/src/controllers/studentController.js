@@ -75,7 +75,7 @@ const studentLogin = async (req, res) => {
         student_id: student.student_id,
         boardingHouseId: student.boarding_house_id
       },
-      process.env.JWT_SECRET || 'your-secret-key',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -2025,6 +2025,14 @@ const changeStudentPassword = async (req, res) => {
     
     const { currentPassword, newPassword, confirmPassword } = req.body;
     const studentId = req.user.studentId; // From JWT token
+    
+    // Check if this is a student token or admin token
+    if (!studentId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid token - please login as a student' 
+      });
+    }
 
     // Validate input
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -2087,7 +2095,7 @@ const changeStudentPassword = async (req, res) => {
 
     // Update password in database
     await connection.query(
-      'UPDATE students SET password = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE students SET password = ? WHERE id = ?',
       [hashedNewPassword, studentId]
     );
 

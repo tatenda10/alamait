@@ -48,6 +48,9 @@ exports.recordPayment = async (req, res) => {
       petty_cash_account_id
     } = req.body;
 
+    // Get created_by from the authenticated user
+    const created_by = req.user.id;
+
     // Use boarding_house_id from request body if provided, otherwise use req.user.boarding_house_id
     const targetBoardingHouseId = boarding_house_id || req.user.boarding_house_id;
 
@@ -349,13 +352,13 @@ exports.recordPayment = async (req, res) => {
     if (payment_method === 'cash_to_ba') {
       // Add to petty cash account balance
       await connection.query(
-        `INSERT INTO petty_cash_accounts (boarding_house_id, current_balance, total_inflows, created_at)
-         VALUES (?, ?, ?, NOW())
+        `INSERT INTO petty_cash_accounts (boarding_house_id, account_name, account_code, current_balance, total_inflows, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE 
          current_balance = current_balance + ?,
          total_inflows = total_inflows + ?,
          updated_at = NOW()`,
-        [actualBoardingHouseId, paymentAmount, paymentAmount, paymentAmount, paymentAmount]
+        [actualBoardingHouseId, 'Petty Cash Account', 'PC-001', paymentAmount, paymentAmount, created_by, paymentAmount, paymentAmount]
       );
 
       // Create petty cash transaction record
