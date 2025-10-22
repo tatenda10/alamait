@@ -11,9 +11,12 @@ import {
   CheckCircleIcon,
   ClockIcon,
   DocumentTextIcon,
-  PencilIcon
+  PencilIcon,
+  CogIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 import BASE_URL from '../utils/api';
+import ChangePassword from '../components/ChangePassword';
 
 const StudentDashboard = () => {
   const [payments, setPayments] = useState([]);
@@ -23,6 +26,7 @@ const StudentDashboard = () => {
   const [showLeaseAgreement, setShowLeaseAgreement] = useState(false);
   const [signature, setSignature] = useState(null);
   const [signatureSubmitted, setSignatureSubmitted] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const { student, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -149,6 +153,26 @@ const StudentDashboard = () => {
               <div className="text-sm text-gray-600">
                 Welcome, <span className="font-medium">{student?.full_name}</span>
               </div>
+              
+              {/* Settings Dropdown */}
+              <div className="relative group">
+                <button className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
+                  <CogIcon className="h-5 w-5" />
+                  <span>Settings</span>
+                </button>
+                
+                {/* Dropdown Menu */}
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                  <button
+                    onClick={() => setShowChangePassword(true)}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    <LockClosedIcon className="h-4 w-4 mr-3" />
+                    Change Password
+                  </button>
+                </div>
+              </div>
+              
               <button
                 onClick={handleLogout}
                 className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
@@ -583,6 +607,11 @@ const StudentDashboard = () => {
           </div>
         )}
       </main>
+
+      {/* Change Password Modal */}
+      {showChangePassword && (
+        <ChangePassword onClose={() => setShowChangePassword(false)} />
+      )}
     </div>
   );
 };

@@ -33,6 +33,9 @@ const upload = multer({
 // Student login (public endpoint)
 router.post('/login', studentController.studentLogin);
 
+// Change student password (authenticated)
+router.post('/change-password', authenticate, studentController.changeStudentPassword);
+
 // Get all students for a boarding house
 router.get('/boarding-house/:boardingHouseId', studentController.getStudentsByBoardingHouse);
 

@@ -24,8 +24,7 @@ const Dashboard = () => {
     kpis: {
       cashPosition: 1732,
       accountsReceivable: 0,
-      accountsPayable: 0,
-      workingCapital: 0
+      totalPettyCash: 0
     },
     pettyCash: {
       stKilda: 2716.08,
@@ -64,8 +63,14 @@ const Dashboard = () => {
         throw new Error('Authentication token not found');
       }
 
-      // Fetch all dashboard data including room occupancy
-      const [monthlyResponse, invoiceResponse, expensesResponse, paymentResponse, activitiesResponse, roomsResponse] = await Promise.all([
+      // Fetch all dashboard data including real-time KPIs and petty cash
+      const [kpisResponse, pettyCashResponse, monthlyResponse, invoiceResponse, expensesResponse, paymentResponse, activitiesResponse, roomsResponse] = await Promise.all([
+        axios.get(`${BASE_URL}/dashboard/kpis`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        axios.get(`${BASE_URL}/dashboard/petty-cash-balances`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
         axios.get(`${BASE_URL}/dashboard/monthly-revenue`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
@@ -110,7 +115,9 @@ const Dashboard = () => {
 
       setDashboardData(prevData => ({
         ...prevData,
-        // Keep static KPI data, update other data from API
+        // Update with real-time data from API
+        kpis: kpisResponse.data,
+        pettyCash: pettyCashResponse.data,
         monthlyRevenue: monthlyResponse.data,
         invoiceStatus: invoiceResponse.data,
         expenseCategories: expensesResponse.data,
@@ -184,7 +191,7 @@ const Dashboard = () => {
     </div>
 
     {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Cash Position */}
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
@@ -207,39 +214,32 @@ const Dashboard = () => {
           </div>
         </div>
         
-        {/* Accounts Payable */}
+        {/* Total Petty Cash */}
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Accounts Payable</p>
-              <p className="text-xl font-bold text-[#f58020]">{formatCurrency(dashboardData.kpis?.accountsPayable || 0)}</p>
+              <p className="text-xs font-medium text-gray-600 mb-1">Total Petty Cash</p>
+              <p className="text-xl font-bold text-purple-600">{formatCurrency(dashboardData.kpis?.totalPettyCash || 0)}</p>
+            </div>
+            <FaMoneyBillWave className="h-8 w-8 text-purple-500" />
           </div>
-            <FaCreditCard className="h-8 w-8 text-[#f58020]" />
-          </div>
-        </div>
-        
-        {/* St Kilda Petty Cash */}
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">St Kilda Petty Cash</p>
-              <p className="text-xl font-bold text-purple-600">{formatCurrency(dashboardData.pettyCash?.stKilda || 0)}</p>
-          </div>
-            <FaBuilding className="h-8 w-8 text-purple-500" />
         </div>
       </div>
       
-        {/* Belvedere Petty Cash */}
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Belvedere Petty Cash</p>
-              <p className="text-xl font-bold text-indigo-600">{formatCurrency(dashboardData.pettyCash?.belvedere || 0)}</p>
-        </div>
-            <FaBuilding className="h-8 w-8 text-indigo-500" />
-        </div>
+      {/* Individual Petty Cash Balances - Dynamic */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        {Object.entries(dashboardData.pettyCash || {}).map(([userLocation, balance], index) => (
+          <div key={userLocation} className="bg-white p-4 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600 mb-1">{userLocation} Petty Cash</p>
+                <p className="text-xl font-bold text-purple-600">{formatCurrency(balance)}</p>
+              </div>
+              <FaBuilding className="h-8 w-8 text-purple-500" />
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
 
       {/* Room Occupancy Section */}
       <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">

@@ -16,7 +16,7 @@ import AddStudent from './pages/students/AddStudent';
 import EditStudent from './pages/students/EditStudent';
 import ViewStudent from './pages/students/ViewStudent';
 import AssignRoom from './pages/students/AssignRoom';
-import PettyCash from './pages/pettycash/PettyCash';
+import PettyCash from './pages/pettycash/Pettycash';
 import PettyCashReconciliation from './pages/pettycash/PettyCashReconciliation';
 import PendingExpenses from './pages/pettycash/PendingExpenses';
 import Banking from './pages/banking/Banking';

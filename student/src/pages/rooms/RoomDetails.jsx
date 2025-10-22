@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
   HomeIcon, 
   UserIcon, 
@@ -19,120 +19,14 @@ import BASE_URL from '../../utils/api';
 
 const RoomDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [room, setRoom] = useState(null);
   const [beds, setBeds] = useState([]);
   const [selectedBed, setSelectedBed] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [roomImages, setRoomImages] = useState([]);
 
-  // Sample data for demonstration
-  const sampleRoomData = {
-    1: {
-      id: 1,
-      name: "Executive Suite",
-      boarding_house_name: "Belvedere House",
-      capacity: 1,
-      description: "Luxury single occupancy room with private bathroom and modern amenities. Perfect for students who prefer privacy and comfort.",
-      amenities: "Private Bathroom, Air Conditioning, Study Desk, Wardrobe, Mini Fridge, Wi-Fi",
-      images: [
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop"
-      ],
-      beds: [
-        { id: 1, bedNumber: 1, price: 200, status: 'available', studentId: null }
-      ]
-    },
-    2: {
-      id: 2,
-      name: "Standard Double",
-      boarding_house_name: "St. Kilda House",
-      capacity: 2,
-      description: "Comfortable double occupancy room with shared facilities. Great for students who enjoy social living.",
-      amenities: "Shared Bathroom, Fan, Study Desk, Wardrobe, Wi-Fi",
-      images: [
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop"
-      ],
-      beds: [
-        { id: 2, bedNumber: 1, price: 150, status: 'available', studentId: null },
-        { id: 3, bedNumber: 2, price: 180, status: 'occupied', studentId: 101 }
-      ]
-    },
-    3: {
-      id: 3,
-      name: "Economy Quad",
-      boarding_house_name: "Belvedere House",
-      capacity: 4,
-      description: "Budget-friendly four-person room ideal for students looking for affordable accommodation.",
-      amenities: "Shared Bathroom, Fan, Study Desk, Wardrobe, Wi-Fi",
-      images: [
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop"
-      ],
-      beds: [
-        { id: 4, bedNumber: 1, price: 120, status: 'available', studentId: null },
-        { id: 5, bedNumber: 2, price: 130, status: 'occupied', studentId: 102 },
-        { id: 6, bedNumber: 3, price: 125, status: 'occupied', studentId: 103 },
-        { id: 7, bedNumber: 4, price: 140, status: 'available', studentId: null }
-      ]
-    },
-    4: {
-      id: 4,
-      name: "Deluxe Triple",
-      boarding_house_name: "St. Kilda House",
-      capacity: 3,
-      description: "Spacious three-person room with modern amenities and en-suite bathroom.",
-      amenities: "En-suite Bathroom, Air Conditioning, Study Desk, Wardrobe, Mini Fridge, Wi-Fi",
-      images: [
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop"
-      ],
-      beds: [
-        { id: 8, bedNumber: 1, price: 160, status: 'occupied', studentId: 104 },
-        { id: 9, bedNumber: 2, price: 190, status: 'occupied', studentId: 105 },
-        { id: 10, bedNumber: 3, price: 175, status: 'available', studentId: null }
-      ]
-    },
-    5: {
-      id: 5,
-      name: "Premium Single",
-      boarding_house_name: "Belvedere House",
-      capacity: 1,
-      description: "Premium single room with modern facilities and private bathroom.",
-      amenities: "Private Bathroom, Air Conditioning, Study Desk, Wardrobe, Mini Fridge, Wi-Fi",
-      images: [
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop"
-      ],
-      beds: [
-        { id: 11, bedNumber: 1, price: 180, status: 'occupied', studentId: 106 }
-      ]
-    },
-    6: {
-      id: 6,
-      name: "Budget Double",
-      boarding_house_name: "St. Kilda House",
-      capacity: 2,
-      description: "Affordable double occupancy room with basic amenities.",
-      amenities: "Shared Bathroom, Fan, Study Desk, Wardrobe, Wi-Fi",
-      images: [
-        "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop",
-        "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&h=600&fit=crop"
-      ],
-      beds: [
-        { id: 12, bedNumber: 1, price: 130, status: 'available', studentId: null },
-        { id: 13, bedNumber: 2, price: 150, status: 'available', studentId: null }
-      ]
-    }
-  };
 
   useEffect(() => {
     const fetchRoomData = async () => {
@@ -155,14 +49,17 @@ const RoomDetails = () => {
         const bedsData = await bedsResponse.json();
         setBeds(Array.isArray(bedsData) ? bedsData : []);
         
+        // Fetch room images
+        const imagesResponse = await fetch(`${BASE_URL}/rooms/${id}/images`);
+        const imagesData = await imagesResponse.json();
+        setRoomImages(Array.isArray(imagesData) ? imagesData : []);
+        
       } catch (error) {
         console.error('Failed to fetch room data:', error);
-        // Fallback to sample data if API fails
-        const roomData = sampleRoomData[id];
-        if (roomData) {
-          setRoom(roomData);
-          setBeds(roomData.beds);
-        }
+        // Set empty data if API fails
+        setRoom(null);
+        setBeds([]);
+        setRoomImages([]);
       } finally {
         setLoading(false);
       }
@@ -180,17 +77,17 @@ const RoomDetails = () => {
   };
 
   const nextImage = () => {
-    if (room && room.images) {
+    if (roomImages.length > 0) {
       setCurrentImageIndex((prev) => 
-        prev === room.images.length - 1 ? 0 : prev + 1
+        prev === roomImages.length - 1 ? 0 : prev + 1
       );
     }
   };
 
   const prevImage = () => {
-    if (room && room.images) {
+    if (roomImages.length > 0) {
       setCurrentImageIndex((prev) => 
-        prev === 0 ? room.images.length - 1 : prev - 1
+        prev === 0 ? roomImages.length - 1 : prev - 1
       );
     }
   };
@@ -202,7 +99,7 @@ const RoomDetails = () => {
   const handleApply = () => {
     if (selectedBed) {
       // Navigate to application form with bed selection
-      window.location.href = `/apply?roomId=${room.id}&bedId=${selectedBed.id}&bedNumber=${selectedBed.bedNumber}&price=${selectedBed.price}`;
+      navigate(`/apply?roomId=${room.id}&bedId=${selectedBed.id}&bedNumber=${selectedBed.bedNumber}&price=${selectedBed.price}`);
     }
   };
 
@@ -287,21 +184,27 @@ const RoomDetails = () => {
       {/* Room Details Section */}
       <div className="relative z-10 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
             {/* Image Gallery */}
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Room Gallery</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Room Gallery</h2>
               
               {/* Main Image */}
               <div className="relative">
-                <img
-                  src={room?.images?.[currentImageIndex]}
-                  alt={`${room?.name} - Image ${currentImageIndex + 1}`}
-                  className="w-full h-96 object-cover rounded-lg shadow-lg"
-                />
+                {roomImages.length > 0 ? (
+                  <img
+                    src={`${BASE_URL}/rooms/${id}/images/${roomImages[currentImageIndex]?.id}`}
+                    alt={`${room?.name} - Image ${currentImageIndex + 1}`}
+                    className="w-full h-64 sm:h-80 lg:h-96 object-cover rounded-lg shadow-lg"
+                  />
+                ) : (
+                  <div className="w-full h-64 sm:h-80 lg:h-96 bg-gray-200 flex items-center justify-center rounded-lg">
+                    <PhotoIcon className="h-12 w-12 sm:h-16 sm:w-16 text-gray-400" />
+                  </div>
+                )}
                 
                 {/* Navigation Arrows */}
-                {room?.images && room.images.length > 1 && (
+                {roomImages.length > 1 && (
                   <>
                     <button
                       onClick={prevImage}
@@ -319,28 +222,28 @@ const RoomDetails = () => {
                 )}
                 
                 {/* Image Counter */}
-                {room?.images && room.images.length > 1 && (
+                {roomImages.length > 1 && (
                   <div className="absolute bottom-4 right-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded-full text-sm">
-                    {currentImageIndex + 1} / {room.images.length}
+                    {currentImageIndex + 1} / {roomImages.length}
                   </div>
                 )}
               </div>
               
               {/* Thumbnail Gallery */}
-              {room?.images && room.images.length > 1 && (
-                <div className="grid grid-cols-4 gap-2">
-                  {room.images.map((image, index) => (
+              {roomImages.length > 1 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {roomImages.map((image, index) => (
                     <button
-                      key={index}
+                      key={image.id}
                       onClick={() => selectImage(index)}
                       className={`relative overflow-hidden rounded-lg ${
                         index === currentImageIndex ? 'ring-2 ring-teal-500' : ''
                       }`}
                     >
                       <img
-                        src={image}
+                        src={`${BASE_URL}/rooms/${id}/images/${image.id}`}
                         alt={`Thumbnail ${index + 1}`}
-                        className="w-full h-20 object-cover hover:scale-105 transition-transform"
+                        className="w-full h-16 sm:h-20 object-cover hover:scale-105 transition-transform"
                       />
                     </button>
                   ))}
@@ -349,20 +252,20 @@ const RoomDetails = () => {
             </div>
 
             {/* Room Information */}
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Room Information</h2>
+            <div className="space-y-4 sm:space-y-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Room Information</h2>
               
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Description</h3>
-                  <p className="text-gray-600">{room?.description}</p>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Description</h3>
+                  <p className="text-sm sm:text-base text-gray-600">{room?.description}</p>
                 </div>
                 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Amenities</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Amenities</h3>
                   <div className="flex flex-wrap gap-2">
                     {room?.amenities && room.amenities.split(', ').map((amenity, index) => (
-                      <span key={index} className="bg-teal-100 text-teal-800 text-sm px-3 py-1 rounded-full">
+                      <span key={index} className="bg-teal-100 text-teal-800 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-full">
                         {amenity}
                       </span>
                     ))}
@@ -372,20 +275,20 @@ const RoomDetails = () => {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <div className="flex items-center text-gray-600 mb-2">
-                      <Squares2X2Icon className="h-5 w-5 mr-2" />
-                      <span className="font-medium">Capacity</span>
+                      <Squares2X2Icon className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                      <span className="text-sm sm:text-base font-medium">Capacity</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-900">{room?.capacity} person{room?.capacity > 1 ? 's' : ''}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-gray-900">{room?.capacity} person{room?.capacity > 1 ? 's' : ''}</div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                     <div className="flex items-center text-gray-600 mb-2">
-                      <CheckCircleIcon className="h-5 w-5 mr-2" />
-                      <span className="font-medium">Available Beds</span>
+                      <CheckCircleIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                      <span className="text-sm sm:text-base font-medium">Available Beds</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-600">{availableBeds.length}</div>
+                    <div className="text-xl sm:text-2xl font-bold text-green-600">{availableBeds.length}</div>
                   </div>
                 </div>
               </div>
@@ -393,43 +296,62 @@ const RoomDetails = () => {
           </div>
 
           {/* Bed Selection Section */}
-          <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Your Bed</h2>
+          <div className="mt-8 sm:mt-12">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6">Select Your Bed</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.isArray(beds) && beds.map((bed) => (
                 <div
                   key={bed.id}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-colors ${
+                  className={`rounded-lg border-2 cursor-pointer transition-all duration-200 overflow-hidden ${
                     bed.status === 'available'
                       ? selectedBed?.id === bed.id
-                        ? 'border-teal-500 bg-teal-50'
-                        : 'border-gray-200 hover:border-teal-300'
+                        ? 'border-teal-500 bg-teal-50 shadow-lg'
+                        : 'border-gray-200 hover:border-teal-300 hover:shadow-md'
                       : 'border-gray-200 bg-gray-50 cursor-not-allowed'
                   }`}
                   onClick={() => handleBedSelection(bed)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-gray-900">Bed {bed.bedNumber}</div>
-                      <div className="text-lg font-bold text-teal-600">${bed.price}/month</div>
-                    </div>
-                    <div className="flex items-center">
+                  {/* Bed Image */}
+                  <div className="relative h-32 w-full">
+                    {bed.bed_image ? (
+                      <img
+                        src={`${BASE_URL}/beds/${bed.id}/image`}
+                        alt={`Bed ${bed.bedNumber}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                        <PhotoIcon className="h-8 w-8 text-gray-400" />
+                      </div>
+                    )}
+                    
+                    {/* Status Badge */}
+                    <div className="absolute top-2 right-2">
                       {bed.status === 'available' ? (
-                        <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                        <CheckCircleIcon className="h-5 w-5 text-green-500 bg-white rounded-full" />
                       ) : (
-                        <XMarkIcon className="h-6 w-6 text-red-500" />
+                        <XMarkIcon className="h-5 w-5 text-red-500 bg-white rounded-full" />
                       )}
                     </div>
                   </div>
-                  <div className="mt-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      bed.status === 'available'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {bed.status === 'available' ? 'Available' : 'Occupied'}
-                    </span>
+                  
+                  {/* Bed Info */}
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-gray-900">Bed {bed.bedNumber}</div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        bed.status === 'available'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {bed.status === 'available' ? 'Available' : 'Occupied'}
+                      </span>
+                    </div>
+                    <div className="text-lg font-bold text-teal-600">${bed.price}/month</div>
+                    {bed.notes && (
+                      <div className="text-sm text-gray-600 mt-1 line-clamp-2">{bed.notes}</div>
+                    )}
                   </div>
                 </div>
               ))}

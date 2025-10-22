@@ -4,6 +4,7 @@ const {
   getDashboardData, 
   getDashboardStats,
   getKPIs,
+  getPettyCashBalances,
   getMonthlyRevenue,
   getInvoiceStatus,
   getExpenseCategories,
@@ -15,6 +16,7 @@ const { authenticate } = require('../middleware/auth');
 router.get('/data', authenticate, getDashboardData);
 router.get('/stats', authenticate, getDashboardStats);
 router.get('/kpis', authenticate, getKPIs);
+router.get('/petty-cash-balances', authenticate, getPettyCashBalances);
 router.get('/monthly-revenue', authenticate, getMonthlyRevenue);
 router.get('/invoice-status', authenticate, getInvoiceStatus);
 router.get('/expense-categories', authenticate, getExpenseCategories);

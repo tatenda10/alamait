@@ -498,13 +498,16 @@ const getAllRooms = async (req, res) => {
         COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count,
         AVG(b.price) as average_bed_price,
         MIN(b.price) as min_bed_price,
-        MAX(b.price) as max_bed_price
+        MAX(b.price) as max_bed_price,
+        MAX(CASE WHEN ri.is_display_image = 1 THEN ri.image_path END) as display_image_path,
+        MAX(CASE WHEN ri.is_display_image = 1 THEN ri.id END) as display_image_id
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
       LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
+      LEFT JOIN room_images ri ON r.id = ri.room_id AND ri.deleted_at IS NULL
       WHERE r.deleted_at IS NULL 
         AND r.status = 'active'
-      GROUP BY r.id
+      GROUP BY r.id, r.name, r.capacity, r.available_beds, r.price_per_bed, r.admin_fee, r.security_deposit, r.additional_rent, r.description, r.boarding_house_id, bh.name
       ORDER BY bh.name, r.name`
     );
 
@@ -522,6 +525,7 @@ const getAllRooms = async (req, res) => {
       status: room.occupancy_status,
       boarding_house_name: room.boarding_house_name,
       boarding_house_id: room.boarding_house_id,
+      displayImage: room.display_image_path ? `/api/rooms/${room.id}/images/${room.display_image_id}` : null,
       bedInfo: {
         totalBeds: room.total_beds || 0,
         availableBeds: room.available_beds_count || 0,

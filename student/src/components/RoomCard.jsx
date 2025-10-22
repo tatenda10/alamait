@@ -7,8 +7,10 @@ import {
   Squares2X2Icon,
   EyeIcon,
   HeartIcon,
-  MapPinIcon
+  MapPinIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
+import BASE_URL from '../utils/api';
 
 const RoomCard = ({ room, isFavorite = false, onToggleFavorite }) => {
   const availableBeds = room.bedInfo?.availableBeds || 0;
@@ -29,11 +31,23 @@ const RoomCard = ({ room, isFavorite = false, onToggleFavorite }) => {
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200">
       <div className="relative">
-        <img
-          src={room.image || 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop'}
-          alt={room.name}
-          className="w-full h-48 object-cover"
-        />
+        {room.displayImage ? (
+          <img
+            src={`${BASE_URL.replace('/api', '')}${room.displayImage}`}
+            alt={room.name}
+            className="w-full h-48 object-cover"
+            onLoad={() => console.log('Image loaded successfully:', `${BASE_URL.replace('/api', '')}${room.displayImage}`)}
+            onError={(e) => {
+              console.error('Image failed to load:', e.target.src);
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+        ) : (
+          <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+            <PhotoIcon className="h-16 w-16 text-gray-400" />
+          </div>
+        )}
         {onToggleFavorite && (
           <button 
             onClick={() => onToggleFavorite(room.id)}

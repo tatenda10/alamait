@@ -1,9 +1,9 @@
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 require('dotenv').config();
-
+ 
 async function addStudentIdMigration() {
-  let connection;
+  let connection; 
   
   try {
     console.log('Connecting to database...');

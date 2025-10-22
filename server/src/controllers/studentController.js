@@ -1,5 +1,6 @@
 const db = require('../services/db');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const { updateAccountBalance } = require('../services/accountBalanceService');
 
 // Student login authentication
@@ -47,13 +48,24 @@ const studentLogin = async (req, res) => {
 
     const student = students[0];
 
-    // For now, we'll use student_id as password (simple authentication)
-    // In production, you'd want to hash passwords properly
-    if (password !== student_id) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid Student ID or password' 
-      });
+    // Check if student has a password set, otherwise use student_id as fallback
+    if (student.password) {
+      // Use bcrypt to compare hashed password
+      const validPassword = await bcrypt.compare(password, student.password);
+      if (!validPassword) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid Student ID or password' 
+        });
+      }
+    } else {
+      // Fallback to student_id as password for backward compatibility
+      if (password !== student_id) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid Student ID or password' 
+        });
+      }
     }
 
     // Generate JWT token
@@ -2004,6 +2016,99 @@ const submitLeaseSignature = async (req, res) => {
   }
 };
 
+// Change student password
+const changeStudentPassword = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const studentId = req.user.studentId; // From JWT token
+
+    // Validate input
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'All fields are required' 
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'New password and confirmation do not match' 
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'New password must be at least 6 characters long' 
+      });
+    }
+
+    // Get current student data
+    const [students] = await connection.query(
+      'SELECT id, student_id, password FROM students WHERE id = ? AND deleted_at IS NULL',
+      [studentId]
+    );
+
+    if (students.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Student not found' 
+      });
+    }
+
+    const student = students[0];
+
+    // Verify current password
+    let currentPasswordValid = false;
+    
+    if (student.password) {
+      // Student has a hashed password
+      currentPasswordValid = await bcrypt.compare(currentPassword, student.password);
+    } else {
+      // Fallback to student_id as password
+      currentPasswordValid = (currentPassword === student.student_id);
+    }
+
+    if (!currentPasswordValid) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Current password is incorrect' 
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password in database
+    await connection.query(
+      'UPDATE students SET password = ?, updated_at = NOW() WHERE id = ?',
+      [hashedNewPassword, studentId]
+    );
+
+    await connection.commit();
+    
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in changeStudentPassword:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   studentLogin,
   getStudentsByBoardingHouse,
@@ -2022,5 +2127,6 @@ module.exports = {
   getStudentInvoices,
   getStudentPayments,
   getStudentInvoicesForDashboard,
-  submitLeaseSignature
+  submitLeaseSignature,
+  changeStudentPassword
 };

@@ -367,7 +367,7 @@ const getKPIs = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
-    const boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id || 4;
+    console.log('🔄 Fetching real-time KPIs...');
 
     // Get cash position (sum of all cash accounts)
     const [cashResult] = await connection.query(`
@@ -378,35 +378,37 @@ const getKPIs = async (req, res) => {
         AND coa.deleted_at IS NULL
     `);
 
-    // Get accounts receivable (student payments due)
+    // Get accounts receivable (negative balance means money owed TO us)
     const [arResult] = await connection.query(`
-      SELECT COALESCE(SUM(sps.amount_due - sps.amount_paid), 0) as accounts_receivable
-      FROM student_payment_schedules sps
-      JOIN students s ON sps.student_id = s.id
-      WHERE s.boarding_house_id = ?
-        AND sps.status = 'pending'
-        AND sps.period_start_date <= CURDATE()
-        AND s.deleted_at IS NULL
-    `, [boardingHouseId]);
+      SELECT COALESCE(SUM(cab.current_balance), 0) as accounts_receivable
+      FROM current_account_balances cab
+      JOIN chart_of_accounts coa ON cab.account_id = coa.id
+      WHERE coa.code = '10005'
+        AND coa.deleted_at IS NULL
+    `);
 
-    // Get accounts payable (expenses not yet paid)
-    const [apResult] = await connection.query(`
-      SELECT COALESCE(SUM(e.amount), 0) as accounts_payable
-      FROM expenses e
-      WHERE e.boarding_house_id = ?
-        AND e.deleted_at IS NULL
-    `, [boardingHouseId]);
+    // Get total petty cash (sum of all petty cash accounts)
+    const [pettyCashResult] = await connection.query(`
+      SELECT COALESCE(SUM(pca.current_balance), 0) as total_petty_cash
+      FROM petty_cash_accounts pca
+      WHERE pca.deleted_at IS NULL 
+        AND pca.status = 'active'
+    `);
 
     const cashPosition = parseFloat(cashResult[0].cash_position);
-    const accountsReceivable = parseFloat(arResult[0].accounts_receivable);
-    const accountsPayable = parseFloat(apResult[0].accounts_payable);
-    const workingCapital = cashPosition + accountsReceivable - accountsPayable;
+    const accountsReceivable = Math.abs(parseFloat(arResult[0].accounts_receivable)); // Make positive for display
+    const totalPettyCash = parseFloat(pettyCashResult[0].total_petty_cash);
+
+    console.log('📊 Real-time KPIs:', {
+      cashPosition,
+      accountsReceivable,
+      totalPettyCash
+    });
 
     res.json({
       cashPosition,
       accountsReceivable,
-      accountsPayable,
-      workingCapital
+      totalPettyCash
     });
 
   } catch (error) {
@@ -612,6 +614,53 @@ const getPaymentMethods = async (req, res) => {
   }
 };
 
+// Get petty cash balances for dashboard
+const getPettyCashBalances = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    console.log('🔄 Fetching real-time petty cash balances...');
+
+    // Get petty cash balances by individual users
+    const [pettyCashResult] = await connection.query(`
+      SELECT 
+        u.username as user,
+        bh.name as location,
+        COALESCE(pca.current_balance, 0) as balance
+      FROM users u
+      LEFT JOIN boarding_houses bh ON u.boarding_house_id = bh.id
+      LEFT JOIN petty_cash_accounts pca ON u.id = pca.user_id 
+        AND pca.deleted_at IS NULL 
+        AND pca.status = 'active'
+      WHERE u.role = 'petty_cash_user' 
+        AND u.deleted_at IS NULL
+        AND bh.deleted_at IS NULL
+      ORDER BY u.username
+    `);
+
+    console.log('💰 Petty cash balances:', pettyCashResult);
+
+    // Format the response
+    const pettyCashBalances = {};
+    pettyCashResult.forEach(item => {
+      const userKey = `${item.user} (${item.location})`;
+      pettyCashBalances[userKey] = parseFloat(item.balance);
+    });
+
+    res.json(pettyCashBalances);
+
+  } catch (error) {
+    console.error('Error in getPettyCashBalances:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch petty cash balances',
+      error: error.message
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 // Get recent activities
 const getActivities = async (req, res) => {
   const connection = await db.getConnection();
@@ -677,6 +726,7 @@ module.exports = {
   getDashboardData,
   getDashboardStats,
   getKPIs,
+  getPettyCashBalances,
   getMonthlyRevenue,
   getInvoiceStatus,
   getExpenseCategories,

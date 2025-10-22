@@ -1,4 +1,8 @@
 const db = require('../services/db');
+const { uploadBedImage } = require('../middleware/bedImageUpload');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
 
 // Get all beds for a room
 const getBedsByRoom = async (req, res) => {
@@ -150,8 +154,8 @@ const createBed = async (req, res) => {
     // Create the bed
     const [result] = await connection.query(
       `INSERT INTO beds (
-        room_id, bed_number, price, status, notes, created_at, updated_at
-      ) VALUES (?, ?, ?, 'available', ?, NOW(), NOW())`,
+        room_id, bed_number, price, status, notes, bed_image, created_at, updated_at
+      ) VALUES (?, ?, ?, 'available', ?, NULL, NOW(), NOW())`,
       [roomId, bedNumber, price, notes]
     );
     
@@ -412,6 +416,158 @@ const deleteBed = async (req, res) => {
   }
 };
 
+// Upload bed image
+const uploadBedImageController = async (req, res) => {
+  uploadBedImage(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ message: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    const connection = await db.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+      
+      const { bedId } = req.params;
+
+      if (!req.file) {
+        return res.status(400).json({ message: 'No image uploaded' });
+      }
+
+      // Check if bed exists
+      const [beds] = await connection.query(
+        'SELECT id, bed_image FROM beds WHERE id = ? AND deleted_at IS NULL',
+        [bedId]
+      );
+
+      if (beds.length === 0) {
+        return res.status(404).json({ message: 'Bed not found' });
+      }
+
+      // Delete old image if exists
+      if (beds[0].bed_image) {
+        try {
+          const oldImagePath = path.join(__dirname, '../../uploads/bed-images', beds[0].bed_image);
+          await fs.unlink(oldImagePath);
+        } catch (error) {
+          console.log('Old image not found or already deleted');
+        }
+      }
+
+      // Update bed with new image
+      const relativePath = req.file.filename;
+      await connection.query(
+        'UPDATE beds SET bed_image = ?, updated_at = NOW() WHERE id = ?',
+        [relativePath, bedId]
+      );
+
+      const [updatedBed] = await connection.query(
+        'SELECT * FROM beds WHERE id = ?',
+        [bedId]
+      );
+
+      await connection.commit();
+      res.status(200).json(updatedBed[0]);
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error in uploadBedImage:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    } finally {
+      connection.release();
+    }
+  });
+};
+
+// Delete bed image
+const deleteBedImage = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { bedId } = req.params;
+
+    // Get bed with current image
+    const [beds] = await connection.query(
+      'SELECT id, bed_image FROM beds WHERE id = ? AND deleted_at IS NULL',
+      [bedId]
+    );
+
+    if (beds.length === 0) {
+      return res.status(404).json({ message: 'Bed not found' });
+    }
+
+    if (!beds[0].bed_image) {
+      return res.status(400).json({ message: 'No image to delete' });
+    }
+
+    // Delete image file
+    try {
+      const imagePath = path.join(__dirname, '../../uploads/bed-images', beds[0].bed_image);
+      await fs.unlink(imagePath);
+    } catch (error) {
+      console.log('Image file not found or already deleted');
+    }
+
+    // Update bed to remove image reference
+    await connection.query(
+      'UPDATE beds SET bed_image = NULL, updated_at = NOW() WHERE id = ?',
+      [bedId]
+    );
+
+    const [updatedBed] = await connection.query(
+      'SELECT * FROM beds WHERE id = ?',
+      [bedId]
+    );
+
+    await connection.commit();
+    res.status(200).json(updatedBed[0]);
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in deleteBedImage:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get bed image
+const getBedImage = async (req, res) => {
+  try {
+    const { bedId } = req.params;
+    
+    const connection = await db.getConnection();
+    const [beds] = await connection.query(
+      'SELECT bed_image FROM beds WHERE id = ? AND deleted_at IS NULL',
+      [bedId]
+    );
+    connection.release();
+
+    if (beds.length === 0) {
+      return res.status(404).json({ message: 'Bed not found' });
+    }
+
+    if (!beds[0].bed_image) {
+      return res.status(404).json({ message: 'No image found for this bed' });
+    }
+
+    const imagePath = path.join(__dirname, '../../uploads/bed-images', beds[0].bed_image);
+    
+    // Check if file exists
+    try {
+      await fs.access(imagePath);
+      res.sendFile(imagePath);
+    } catch (error) {
+      res.status(404).json({ message: 'Image file not found' });
+    }
+  } catch (error) {
+    console.error('Error in getBedImage:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 module.exports = {
   getBedsByRoom,
   getAvailableBeds,
@@ -419,5 +575,8 @@ module.exports = {
   updateBed,
   assignBedToStudent,
   releaseBedFromStudent,
-  deleteBed
+  deleteBed,
+  uploadBedImage: uploadBedImageController,
+  deleteBedImage,
+  getBedImage
 };

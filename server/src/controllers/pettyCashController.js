@@ -1067,3 +1067,111 @@ exports.setBeginningBalance = async (req, res) => {
     connection.release();
   }
 };
+
+// Create new petty cash account
+exports.createAccount = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const { user_id, boarding_house_id, account_name, initial_balance, notes } = req.body;
+    const created_by = req.user.id;
+    
+    // Validate required fields
+    if (!user_id || !boarding_house_id || !account_name) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID, boarding house ID, and account name are required' 
+      });
+    }
+    
+    // Check if user already has a petty cash account for this boarding house
+    const [existingAccount] = await connection.query(
+      'SELECT id FROM petty_cash_accounts WHERE user_id = ? AND boarding_house_id = ? AND deleted_at IS NULL',
+      [user_id, boarding_house_id]
+    );
+    
+    if (existingAccount.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User already has a petty cash account for this boarding house' 
+      });
+    }
+    
+    // Generate account code
+    const accountCode = `PC-${user_id.toString().padStart(3, '0')}`;
+    const balance = parseFloat(initial_balance) || 0;
+    
+    // Create the petty cash account
+    const [accountResult] = await connection.query(
+      `INSERT INTO petty_cash_accounts (
+        user_id, boarding_house_id, account_name, account_code, 
+        initial_balance, current_balance, total_inflows, 
+        created_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [user_id, boarding_house_id, account_name, accountCode, balance, balance, balance, created_by]
+    );
+    
+    // If there's an initial balance, create a transaction record
+    if (balance > 0) {
+      // Create transaction record
+      const [transactionResult] = await connection.query(
+        `INSERT INTO transactions (
+          transaction_type, reference, amount, currency, description,
+          transaction_date, boarding_house_id, created_by, created_at, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'posted')`,
+        [
+          'beginning_balance',
+          `PC-${accountResult.insertId}-${Date.now()}`,
+          balance,
+          'USD',
+          `Initial balance for ${account_name}`,
+          new Date().toISOString().split('T')[0],
+          boarding_house_id,
+          created_by
+        ]
+      );
+      
+      // Create journal entry for petty cash account
+      const [pettyCashAccountResult] = await connection.query(
+        `SELECT id FROM chart_of_accounts WHERE code = '10001' AND deleted_at IS NULL`
+      );
+      
+      if (pettyCashAccountResult.length > 0) {
+        await connection.query(
+          `INSERT INTO journal_entries (
+            transaction_id, account_id, entry_type, amount, description,
+            boarding_house_id, created_by, created_at
+          ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
+          [
+            transactionResult.insertId,
+            pettyCashAccountResult[0].id,
+            balance,
+            `Initial balance for ${account_name}`,
+            boarding_house_id,
+            created_by
+          ]
+        );
+      }
+    }
+    
+    await connection.commit();
+    
+    res.json({
+      success: true,
+      message: 'Petty cash account created successfully',
+      account_id: accountResult.insertId
+    });
+    
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error creating petty cash account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create petty cash account'
+    });
+  } finally {
+    connection.release();
+  }
+};

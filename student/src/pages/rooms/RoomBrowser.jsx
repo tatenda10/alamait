@@ -30,117 +30,6 @@ const RoomBrowser = () => {
     priceRange: ''
   });
 
-  // Sample data for demonstration
-  const sampleRooms = [
-    {
-      id: 1,
-      name: "Executive Suite",
-      boarding_house_name: "Belvedere House",
-      location: "Cempaka Timur, Downtown",
-      capacity: 1,
-      bedInfo: {
-        totalBeds: 1,
-        availableBeds: 1,
-        occupiedBeds: 0,
-        minPrice: 200,
-        maxPrice: 200
-      },
-      description: "Luxury single occupancy room with private bathroom",
-      amenities: "Private Bathroom, Air Conditioning, Study Desk, Wardrobe",
-      image: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop",
-      type: "Single"
-    },
-    {
-      id: 2,
-      name: "Standard Double",
-      boarding_house_name: "St. Kilda House",
-      location: "Jl. Banaran No.117 Banaran Sekaran, Campus Area",
-      capacity: 2,
-      bedInfo: {
-        totalBeds: 2,
-        availableBeds: 1,
-        occupiedBeds: 1,
-        minPrice: 150,
-        maxPrice: 180
-      },
-      description: "Comfortable double occupancy room with shared facilities",
-      amenities: "Shared Bathroom, Fan, Study Desk, Wardrobe",
-      image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&h=300&fit=crop",
-      type: "Mixed"
-    },
-    {
-      id: 3,
-      name: "Economy Quad",
-      boarding_house_name: "Belvedere House",
-      location: "Jl. Prof Huda No.76 Banyumanik, Campus Area",
-      capacity: 4,
-      bedInfo: {
-        totalBeds: 4,
-        availableBeds: 2,
-        occupiedBeds: 2,
-        minPrice: 120,
-        maxPrice: 140
-      },
-      description: "Budget-friendly four-person room",
-      amenities: "Shared Bathroom, Fan, Study Desk, Wardrobe",
-      image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop",
-      type: "Mixed"
-    },
-    {
-      id: 4,
-      name: "Deluxe Triple",
-      boarding_house_name: "St. Kilda House",
-      location: "Cempaka Timur, Campus Area",
-      capacity: 3,
-      bedInfo: {
-        totalBeds: 3,
-        availableBeds: 1,
-        occupiedBeds: 2,
-        minPrice: 160,
-        maxPrice: 190
-      },
-      description: "Spacious three-person room with modern amenities",
-      amenities: "En-suite Bathroom, Air Conditioning, Study Desk, Wardrobe, Mini Fridge",
-      image: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop",
-      type: "Mixed"
-    },
-    {
-      id: 5,
-      name: "Premium Single",
-      boarding_house_name: "Belvedere House",
-      location: "Jl. Banaran No.117 Banaran Sekaran, Downtown",
-      capacity: 1,
-      bedInfo: {
-        totalBeds: 1,
-        availableBeds: 0,
-        occupiedBeds: 1,
-        minPrice: 180,
-        maxPrice: 180
-      },
-      description: "Premium single room with modern facilities",
-      amenities: "Private Bathroom, Air Conditioning, Study Desk, Wardrobe, Mini Fridge",
-      image: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop",
-      type: "Single"
-    },
-    {
-      id: 6,
-      name: "Budget Double",
-      boarding_house_name: "St. Kilda House",
-      location: "Jl. Prof Huda No.76 Banyumanik, Campus Area",
-      capacity: 2,
-      bedInfo: {
-        totalBeds: 2,
-        availableBeds: 2,
-        occupiedBeds: 0,
-        minPrice: 130,
-        maxPrice: 150
-      },
-      description: "Affordable double occupancy room",
-      amenities: "Shared Bathroom, Fan, Study Desk, Wardrobe",
-      image: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&h=300&fit=crop",
-      type: "Mixed"
-    }
-  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -156,20 +45,33 @@ const RoomBrowser = () => {
         const roomsData = await roomsResponse.json();
         const boardingHousesData = await boardingHousesResponse.json();
         
-        setRooms(roomsData);
-        setFilteredRooms(roomsData);
-        setBoardingHouses(boardingHousesData);
+        // Check if the response is valid and is an array
+        if (Array.isArray(roomsData)) {
+          setRooms(roomsData);
+          setFilteredRooms(roomsData);
+        } else {
+          console.error('Invalid rooms data:', roomsData);
+          throw new Error('Invalid rooms data received');
+        }
+        
+        if (Array.isArray(boardingHousesData)) {
+          setBoardingHouses(boardingHousesData);
+        } else {
+          console.error('Invalid boarding houses data:', boardingHousesData);
+          // Use fallback for boarding houses
+          setBoardingHouses([
+            { id: 4, name: 'St Kilda' },
+            { id: 5, name: 'Belvedere' },
+            { id: 6, name: 'Fifth Avenue' },
+            { id: 7, name: 'Amin' }
+          ]);
+        }
       } catch (error) {
         console.error('Failed to fetch data:', error);
-        // Fallback to sample data if API fails
-        setRooms(sampleRooms);
-        setFilteredRooms(sampleRooms);
-        setBoardingHouses([
-          { id: 4, name: 'St Kilda' },
-          { id: 5, name: 'Belvedere' },
-          { id: 6, name: 'Fifth Avenue' },
-          { id: 7, name: 'Amin' }
-        ]);
+        // Set empty arrays if API fails
+        setRooms([]);
+        setFilteredRooms([]);
+        setBoardingHouses([]);
       } finally {
         setLoading(false);
       }
@@ -374,7 +276,7 @@ const RoomBrowser = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRooms.map((room) => (
+            {Array.isArray(filteredRooms) && filteredRooms.map((room) => (
               <RoomCard
                 key={room.id}
                 room={room}
@@ -384,7 +286,7 @@ const RoomBrowser = () => {
             ))}
           </div>
 
-          {filteredRooms.length === 0 && (
+          {Array.isArray(filteredRooms) && filteredRooms.length === 0 && (
             <div className="text-center py-12">
               <HomeIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No rooms found</h3>

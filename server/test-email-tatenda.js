@@ -5,7 +5,7 @@ async function testEmailToTatenda() {
   console.log('🧪 Testing Nodemailer Configuration...\n');
   
   // Test email address
-  const testEmailAddress = 'tatendamuzenda1@capesso.com';
+  const testEmailAddress = 'yemukela.ndlovu@capesso.com';
   
   console.log(`📤 Sending test email to: ${testEmailAddress}\n`);
   

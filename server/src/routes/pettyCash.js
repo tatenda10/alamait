@@ -18,4 +18,7 @@ router.post('/add-expense', authenticate, pettyCashController.addExpense);
 // Set beginning balance for petty cash account
 router.post('/set-beginning-balance', authenticate, pettyCashController.setBeginningBalance);
 
+// Create new petty cash account
+router.post('/create-account', authenticate, pettyCashController.createAccount);
+
 module.exports = router;

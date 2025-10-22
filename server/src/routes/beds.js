@@ -3,6 +3,9 @@ const router = express.Router();
 const bedController = require('../controllers/bedController');
 const { authenticate } = require('../middleware/auth');
 
+// Get all beds for a specific room (authenticated endpoint for admin)
+router.get('/room/:roomId', authenticate, bedController.getBedsByRoom);
+
 // Get all beds for a specific room (public endpoint for student portal)
 router.get('/room/:roomId/public', bedController.getBedsByRoom);
 
@@ -23,5 +26,14 @@ router.post('/:bedId/release', authenticate, bedController.releaseBedFromStudent
 
 // Delete bed
 router.delete('/:id', authenticate, bedController.deleteBed);
+
+// Upload bed image
+router.post('/:bedId/image', authenticate, bedController.uploadBedImage);
+
+// Delete bed image
+router.delete('/:bedId/image', authenticate, bedController.deleteBedImage);
+
+// Get bed image
+router.get('/:bedId/image', bedController.getBedImage);
 
 module.exports = router;

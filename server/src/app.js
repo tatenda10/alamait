@@ -27,18 +27,19 @@ const accountsPayableRoutes = require('./routes/accountsPayable');
 const supplierPaymentRoutes = require('./routes/supplierPayment');
 const bankingRoutes = require('./routes/banking');
 const trialBalanceRoutes = require('./routes/trialBalance');
-const bedsRoutes = require('./routes/beds');
+const bedsRoutes = require('./routes/beds'); 
 const applicationRoutes = require('./routes/applications');
 const monthlyInvoiceRoutes = require('./routes/monthlyInvoices');
-const revenueRoutes = require('./routes/revenue');
+const revenueRoutes = require('./routes/revenue'); 
 const budgetRequestRoutes = require('./routes/budgetRequests');
 const expenditureRequestRoutes = require('./routes/expenditureRequests');
 const branchPaymentRoutes = require('./routes/branchPayment');
 const testEmailRoutes = require('./routes/testEmail');
+const roomImageRoutes = require('./routes/roomImages');
 
 // Enable CORS
 app.use(cors({
-  origin: ['http://localhost:5173','http://192.168.100.42:5173','http://192.168.56.1:5173','http://192.168.100.24:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
+  origin: ['http://localhost:5173','https://75mwv328-5173.uks1.devtunnels.ms','http://192.168.100.42:5173','http://192.168.56.1:5173','http://192.168.100.24:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
   credentials: true
 }));
 
@@ -79,6 +80,7 @@ app.use('/api/budget-requests', budgetRequestRoutes);
 app.use('/api/expenditure-requests', expenditureRequestRoutes);
 app.use('/api/branch-payments', branchPaymentRoutes);
 app.use('/api/test-email', testEmailRoutes);
+app.use('/api/rooms', roomImageRoutes);
 
 const swaggerDefinition = {
   openapi: '3.0.0',

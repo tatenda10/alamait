@@ -14,6 +14,7 @@ const PettyCash = () => {
   const [loading, setLoading] = useState(true);
   const [showAddCashModal, setShowAddCashModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
   
   // Petty cash data
   const [pettyCashData, setPettyCashData] = useState({
@@ -26,6 +27,10 @@ const PettyCash = () => {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [transactionHistory, setTransactionHistory] = useState([]);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
+
+  // For creating accounts
+  const [users, setUsers] = useState([]);
+  const [boardingHouses, setBoardingHouses] = useState([]);
 
   // Form states
   const [addCashForm, setAddCashForm] = useState({
@@ -50,8 +55,18 @@ const PettyCash = () => {
     account_id: ''
   });
 
+  const [createAccountForm, setCreateAccountForm] = useState({
+    user_id: '',
+    boarding_house_id: '',
+    account_name: '',
+    initial_balance: '',
+    notes: ''
+  });
+
   useEffect(() => {
     fetchPettyCashData();
+    fetchUsers();
+    fetchBoardingHouses();
   }, []);
 
   const fetchPettyCashData = async () => {
@@ -211,6 +226,80 @@ const PettyCash = () => {
     });
   };
 
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${BASE_URL}/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setUsers(response.data);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchBoardingHouses = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${BASE_URL}/boarding-houses`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setBoardingHouses(response.data);
+    } catch (error) {
+      console.error('Error fetching boarding houses:', error);
+    }
+  };
+
+  const handleCreateAccount = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      
+      const accountData = {
+        user_id: createAccountForm.user_id,
+        boarding_house_id: createAccountForm.boarding_house_id,
+        account_name: createAccountForm.account_name,
+        initial_balance: parseFloat(createAccountForm.initial_balance) || 0,
+        notes: createAccountForm.notes
+      };
+      
+      await axios.post(`${BASE_URL}/petty-cash/create-account`, accountData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      toast.success('Petty cash account created successfully');
+      setShowCreateAccountModal(false);
+      resetCreateAccountForm();
+      fetchPettyCashData();
+    } catch (error) {
+      console.error('Error creating account:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Request data:', {
+        user_id: createAccountForm.user_id,
+        boarding_house_id: createAccountForm.boarding_house_id,
+        account_name: createAccountForm.account_name,
+        initial_balance: createAccountForm.initial_balance,
+        notes: createAccountForm.notes
+      });
+      const errorMessage = error.response?.data?.message || 'Failed to create account';
+      toast.error(errorMessage);
+    }
+  };
+
+  const resetCreateAccountForm = () => {
+    setCreateAccountForm({
+      user_id: '',
+      boarding_house_id: '',
+      account_name: '',
+      initial_balance: '',
+      notes: ''
+    });
+  };
+
 
 
   const formatDate = (dateString) => {
@@ -238,6 +327,13 @@ const PettyCash = () => {
           <p className="text-xs text-gray-500">Overview of all petty cash accounts and their balances</p>
         </div>
         <div className="flex space-x-2">
+          <button
+            onClick={() => setShowCreateAccountModal(true)}
+            className="flex items-center px-3 py-2 text-xs bg-green-600 text-white transition-colors hover:bg-green-700"
+          >
+            <FaUser size={12} className="mr-1" />
+            Create Account
+          </button>
           <button
             onClick={() => setShowAddCashModal(true)}
             className="flex items-center px-3 py-2 text-xs text-white transition-colors"
@@ -711,6 +807,104 @@ const PettyCash = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Account Modal */}
+      {showCreateAccountModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg bg-white">
+            <div className="mt-3">
+              <h3 className="text-sm font-medium text-gray-900 mb-4">Create New Petty Cash Account</h3>
+              <form onSubmit={handleCreateAccount}>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Select User*</label>
+                  <select
+                    required
+                    value={createAccountForm.user_id}
+                    onChange={(e) => setCreateAccountForm({...createAccountForm, user_id: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select a user</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.username} - {user.role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Select Boarding House*</label>
+                  <select
+                    required
+                    value={createAccountForm.boarding_house_id}
+                    onChange={(e) => setCreateAccountForm({...createAccountForm, boarding_house_id: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select a boarding house</option>
+                    {boardingHouses.map((house) => (
+                      <option key={house.id} value={house.id}>
+                        {house.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Account Name*</label>
+                  <input
+                    type="text"
+                    required
+                    value={createAccountForm.account_name}
+                    onChange={(e) => setCreateAccountForm({...createAccountForm, account_name: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g., Petty Cash - John Doe"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Initial Balance</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={createAccountForm.initial_balance}
+                    onChange={(e) => setCreateAccountForm({...createAccountForm, initial_balance: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+                  <textarea
+                    value={createAccountForm.notes}
+                    onChange={(e) => setCreateAccountForm({...createAccountForm, notes: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    rows="3"
+                    placeholder="Optional notes about this account"
+                  />
+                </div>
+
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateAccountModal(false)}
+                    className="flex-1 px-3 py-2 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-3 py-2 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    Create Account
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

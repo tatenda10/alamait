@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 import BedManagement from '../../components/BedManagement';
+import RoomImageManagement from '../../components/RoomImageManagement';
 import {
   HomeIcon,
   BuildingOfficeIcon,
@@ -15,7 +16,8 @@ import {
   PencilIcon,
   ChartBarIcon,
   Cog6ToothIcon,
-  Squares2X2Icon
+  Squares2X2Icon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
 
 export default function ViewRoom() {
@@ -129,6 +131,7 @@ export default function ViewRoom() {
   const tabs = [
     { id: 'details', name: 'Room Details', icon: HomeIcon },
     { id: 'beds', name: 'Bed Management', icon: Squares2X2Icon },
+    { id: 'images', name: 'Room Images', icon: PhotoIcon },
     { id: 'actions', name: 'Quick Actions', icon: Cog6ToothIcon },
     { id: 'statistics', name: 'Statistics', icon: ChartBarIcon },
   ];
@@ -277,6 +280,15 @@ export default function ViewRoom() {
             roomId={room.id} 
             roomName={room.room_name || room.name}
             onBedUpdate={fetchRoom}
+          />
+        );
+
+      case 'images':
+        return (
+          <RoomImageManagement 
+            roomId={room.id} 
+            roomName={room.room_name || room.name}
+            onImageUpdate={fetchRoom}
           />
         );
 
