@@ -101,9 +101,9 @@ const getRoomById = async (req, res) => {
           ELSE 'Available'
         END as occupancy_status,
         COALESCE(r.price_per_bed, 0) as monthly_rent,
-        0 as admin_fee,
-        0 as security_deposit,
-        0 as additional_rent
+        COALESCE(r.admin_fee, 0) as admin_fee,
+        COALESCE(r.security_deposit, 0) as security_deposit,
+        COALESCE(r.additional_rent, 0) as additional_rent
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
       WHERE r.id = ? 
@@ -120,6 +120,9 @@ const getRoomById = async (req, res) => {
     }
 
     const room = rooms[0];
+    
+    console.log('🔍 RAW ROOM DATA FROM DATABASE:');
+    console.log('Full room object:', JSON.stringify(room, null, 2));
 
     // Get current occupants details
     const [occupants] = await db.query(`
@@ -135,8 +138,16 @@ const getRoomById = async (req, res) => {
       ORDER BY se.start_date DESC
     `, [id]);
 
-    // Add room_name field for compatibility
+    // Add room_name field for compatibility and map financial fields
     room.room_name = room.name;
+    room.rent = room.monthly_rent;
+    
+    console.log('🔍 AFTER MAPPING:');
+    console.log('room.rent:', room.rent);
+    console.log('room.monthly_rent:', room.monthly_rent);
+    console.log('room.admin_fee:', room.admin_fee);
+    console.log('room.security_deposit:', room.security_deposit);
+    console.log('room.additional_rent:', room.additional_rent);
 
     res.json({
       success: true,
@@ -164,7 +175,8 @@ const createRoom = async (req, res) => {
     const { 
       name, 
       capacity, 
-      rent, // We'll use this as price_per_bed
+      rent, // Frontend sends 'rent' but we need 'price_per_bed'
+      price_per_bed, // Alternative field name
       admin_fee,
       security_deposit,
       additional_rent,
@@ -172,8 +184,11 @@ const createRoom = async (req, res) => {
       boarding_house_id 
     } = req.body;
 
+    // Use rent if provided, otherwise use price_per_bed
+    const rentValue = rent || price_per_bed;
+    
     // Validate required fields
-    if (!name || !capacity || !rent || !boarding_house_id) {
+    if (!name || !capacity || !rentValue || !boarding_house_id) {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
@@ -193,7 +208,7 @@ const createRoom = async (req, res) => {
         name, 
         capacity, 
         capacity, 
-        rent, // Store rent as price_per_bed
+        rentValue, // Store rent as price_per_bed
         description, 
         boarding_house_id
       ]
@@ -235,7 +250,8 @@ const updateRoom = async (req, res) => {
     const { 
       name, 
       capacity, 
-      rent, // We'll use this as price_per_bed
+      rent, // Frontend sends 'rent' but we need 'price_per_bed'
+      price_per_bed, // Alternative field name
       admin_fee,
       security_deposit,
       additional_rent,
@@ -263,6 +279,9 @@ const updateRoom = async (req, res) => {
       }
     }
 
+    // Use rent if provided, otherwise use price_per_bed
+    const rentValue = rent || price_per_bed;
+    
     const [result] = await connection.query(
       `UPDATE rooms
        SET name = COALESCE(?, name),
@@ -273,7 +292,7 @@ const updateRoom = async (req, res) => {
            status = COALESCE(?, status),
            updated_at = NOW()
        WHERE id = ? AND deleted_at IS NULL`,
-      [name, capacity, availableBeds, rent, description, status, id]
+      [name, capacity, availableBeds, rentValue, description, status, id]
     );
 
     if (result.affectedRows === 0) {

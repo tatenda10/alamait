@@ -337,7 +337,7 @@ export default function Rooms() {
                             </div>
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
-                        {room.capacity}
+                        {beds.length > 0 ? beds.length : room.capacity}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-500 border-r border-gray-200">
                         US${(room.rent || 0).toLocaleString()}
@@ -516,7 +516,7 @@ export default function Rooms() {
                             required
                           />
                         </div>
-                        <div>
+                        {/* <div>
                           <label htmlFor="capacity" className="block text-xs font-medium text-gray-700 mb-1">
                             Capacity <span className="text-red-500">*</span>
                           </label>
@@ -529,7 +529,7 @@ export default function Rooms() {
                             className="block w-full rounded-md border border-gray-200 px-4 py-2 text-sm focus:border-blue-500 focus:ring-blue-500"
                             required
                           />
-                        </div>
+                        </div> */}
                         <div>
                           <label htmlFor="rent" className="block text-xs font-medium text-gray-700 mb-1">
                             Monthly Rent (US$) <span className="text-red-500">*</span>

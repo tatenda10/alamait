@@ -23,6 +23,7 @@ export default function ViewRoom() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [room, setRoom] = useState(null);
+  const [beds, setBeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('details');
@@ -41,6 +42,7 @@ export default function ViewRoom() {
 
   useEffect(() => {
     fetchRoom();
+    fetchBeds();
   }, [id]);
 
   const fetchRoom = async () => {
@@ -52,8 +54,10 @@ export default function ViewRoom() {
       console.log('Room API response:', response.data);
       
       if (response.data.success) {
+        console.log('🔍 Frontend received room data:', response.data.data);
         setRoom(response.data.data);
       } else {
+        console.log('🔍 Frontend received room data (no success flag):', response.data);
         setRoom(response.data);
       }
     } catch (err) {
@@ -61,6 +65,16 @@ export default function ViewRoom() {
       setError('Failed to load room details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBeds = async () => {
+    try {
+      const response = await api.get(`/beds/room/${id}`);
+      setBeds(response.data || []);
+    } catch (err) {
+      console.error('Error fetching beds:', err);
+      setBeds([]);
     }
   };
 
@@ -147,7 +161,9 @@ export default function ViewRoom() {
                     <UserIcon className="h-4 w-4 mr-2" />
                     Capacity
                   </dt>
-                  <dd className="mt-1 text-sm text-gray-900">{room.capacity} person(s)</dd>
+                  <dd className="mt-1 text-sm text-gray-900">
+                    {beds.length > 0 ? `${beds.length} bed${beds.length !== 1 ? 's' : ''}` : `${room.capacity} person(s)`}
+                  </dd>
                 </div>
 
                 <div>
@@ -230,7 +246,10 @@ export default function ViewRoom() {
           <BedManagement 
             roomId={room.id} 
             roomName={room.room_name || room.name}
-            onBedUpdate={fetchRoom}
+            onBedUpdate={() => {
+              fetchRoom();
+              fetchBeds();
+            }}
           />
         );
 

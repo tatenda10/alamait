@@ -40,10 +40,10 @@ const roomRoutes = require('./routes/room');
 
 // Enable CORS
 app.use(cors({
-  origin: ['http://localhost:5173','https://75mwv328-5173.uks1.devtunnels.ms','http://192.168.100.42:5173','http://192.168.56.1:5173','http://192.168.100.24:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
+  origin: ['http://localhost:5173','https://75mwv328-5173.uks1.devtunnels.ms','http://178.128.153.151','http://178.128.153.151:3001','http://178.128.153.151:3002','http://192.168.100.42:5173','http://192.168.56.1:5173','http://192.168.100.24:5173','http://localhost:5174','http://localhost:3002'], // Vite's default port + petty cash app
   credentials: true
 }));
-
+ 
 // Serve static files from uploads directory
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
