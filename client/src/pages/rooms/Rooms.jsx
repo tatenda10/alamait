@@ -60,20 +60,27 @@ export default function Rooms() {
       });
       
       // Transform the data to match the frontend expectations
-      const transformedRooms = response.data.map(room => ({
-        id: room.id,
-        room_name: room.name,
-        name: room.name,
-        capacity: room.capacity,
-        currentOccupants: room.current_occupants || (room.capacity - room.available_beds),
-        monthly_rent: room.price_per_bed || room.rent || 0,
-        rent: room.price_per_bed || room.rent || 0,
-        currency: room.currency || 'US$',
-        description: room.description,
-        status: room.occupancy_status || room.status || 'Available',
-        boarding_house_name: room.boarding_house_name || 'Unknown Boarding House',
-        boarding_house_id: room.boarding_house_id
-      }));
+      const transformedRooms = response.data.map(room => {
+        
+        return {
+          id: room.id,
+          room_name: room.name,
+          name: room.name,
+          capacity: room.capacity,
+          currentOccupants: room.currentOccupants || 0,
+          monthly_rent: room.rent || 0,
+          rent: room.rent || 0,
+          currency: 'US$',
+          description: room.description,
+          status: room.status || 'Available',
+          boarding_house_name: room.boarding_house_name || 'Unknown Boarding House',
+          boarding_house_id: room.boarding_house_id,
+          // Add bed information for better status calculation
+          totalBeds: room.bedInfo?.totalBeds || 0,
+          occupiedBeds: room.bedInfo?.occupiedBeds || 0,
+          availableBeds: room.bedInfo?.availableBeds || 0
+        };
+      });
       
       setRooms(transformedRooms);
       setLoading(false);
@@ -203,9 +210,9 @@ export default function Rooms() {
           className="block w-full sm:w-48 px-3 py-2 border border-gray-300 text-xs leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-[#f58020] focus:border-[#f58020]"
         >
           <option value="all">All Status</option>
-          <option value="available">Available</option>
-          <option value="occupied">Occupied</option>
-          <option value="maintenance">Maintenance</option>
+          <option value="Available">Available</option>
+          <option value="Fully Occupied">Fully Occupied</option>
+          <option value="Partially Occupied">Partially Occupied</option>
         </select>
       </div>
 
@@ -226,16 +233,16 @@ export default function Rooms() {
                           {room.room_name || room.name}
                         </p>
                         <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 text-xs font-medium
-                          ${room.status === 'available' || room.status === 'Available'
+                          ${room.status === 'Available'
                             ? 'bg-green-100 text-green-800'
-                            : room.status === 'occupied' || room.status === 'Fully Occupied'
+                            : room.status === 'Fully Occupied'
                             ? 'bg-red-100 text-red-800'
                             : room.status === 'Partially Occupied'
                             ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
                           }`}
                         >
-                          {(room.status === 'available' || room.status === 'Available') && <CheckCircleIcon className="mr-1 h-3 w-3" />}
+                          {(room.status === 'Available') && <CheckCircleIcon className="mr-1 h-3 w-3" />}
                           {room.status || 'Available'}
                         </span>
                       </div>
@@ -324,7 +331,7 @@ export default function Rooms() {
                     <dt className="text-xs font-medium text-gray-500 truncate">Available Rooms</dt>
                     <dd className="text-sm font-medium text-gray-900">
                       {filteredRooms.filter(room => 
-                        room.status === 'available' || room.status === 'Available'
+                        room.status === 'Available'
                       ).length}
                     </dd>
                   </dl>
@@ -343,7 +350,7 @@ export default function Rooms() {
                     <dt className="text-xs font-medium text-gray-500 truncate">Occupied Rooms</dt>
                     <dd className="text-sm font-medium text-gray-900">
                       {filteredRooms.filter(room => 
-                        room.status === 'occupied' || room.status === 'Fully Occupied'
+                        room.status === 'Fully Occupied'
                       ).length}
                     </dd>
                   </dl>

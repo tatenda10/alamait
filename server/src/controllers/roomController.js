@@ -7,19 +7,13 @@ const getRoomsByBoardingHouse = async (req, res) => {
     const [rooms] = await db.query(
       `SELECT 
         r.*,
-        (r.capacity - r.available_beds) as current_occupants,
-        bh.name as boarding_house_name,
-        CASE 
-          WHEN r.available_beds = r.capacity THEN 'Available'
-          WHEN r.available_beds = 0 THEN 'Fully Occupied'
-          WHEN r.available_beds < r.capacity THEN 'Partially Occupied'
-        END as occupancy_status,
         COUNT(b.id) as total_beds,
         COUNT(CASE WHEN b.status = 'available' THEN 1 END) as available_beds_count,
         COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count,
         AVG(b.price) as average_bed_price,
         MIN(b.price) as min_bed_price,
-        MAX(b.price) as max_bed_price
+        MAX(b.price) as max_bed_price,
+        bh.name as boarding_house_name
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
       LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
@@ -32,28 +26,47 @@ const getRoomsByBoardingHouse = async (req, res) => {
     );
     
     // Transform the data to match frontend expectations
-    const transformedRooms = rooms.map(room => ({
-      id: room.id,
-      name: room.name,
-      capacity: room.capacity,
-      currentOccupants: room.capacity - room.available_beds,
-      rent: parseFloat(room.price_per_bed || 0),
-      adminFee: parseFloat(room.admin_fee || 0), // Include room's admin fee
-      securityDeposit: parseFloat(room.security_deposit || 0),
-      additionalRent: parseFloat(room.additional_rent || 0),
-      description: room.description,
-      status: room.occupancy_status,
-      boarding_house_name: room.boarding_house_name,
-      boarding_house_id: room.boarding_house_id,
-      bedInfo: {
-        totalBeds: room.total_beds || 0,
-        availableBeds: room.available_beds_count || 0,
-        occupiedBeds: room.occupied_beds_count || 0,
-        averagePrice: parseFloat(room.average_bed_price || 0),
-        minPrice: parseFloat(room.min_bed_price || 0),
-        maxPrice: parseFloat(room.max_bed_price || 0)
+    const transformedRooms = rooms.map(room => {
+      const totalBeds = room.total_beds || 0;
+      const occupiedBeds = room.occupied_beds_count || 0;
+      const availableBeds = room.available_beds_count || 0;
+      const currentOccupants = occupiedBeds;
+      
+      // Calculate occupancy status
+      let occupancyStatus = 'Available';
+      if (totalBeds > 0) {
+        if (occupiedBeds === 0) {
+          occupancyStatus = 'Available';
+        } else if (occupiedBeds === totalBeds) {
+          occupancyStatus = 'Fully Occupied';
+        } else {
+          occupancyStatus = 'Partially Occupied';
+        }
       }
-    }));
+      
+      return {
+        id: room.id,
+        name: room.name,
+        capacity: room.capacity,
+        currentOccupants: currentOccupants,
+        rent: parseFloat(room.price_per_bed || 0),
+        adminFee: parseFloat(room.admin_fee || 0),
+        securityDeposit: parseFloat(room.security_deposit || 0),
+        additionalRent: parseFloat(room.additional_rent || 0),
+        description: room.description,
+        status: occupancyStatus,
+        boarding_house_name: room.boarding_house_name,
+        boarding_house_id: room.boarding_house_id,
+        bedInfo: {
+          totalBeds: totalBeds,
+          availableBeds: availableBeds,
+          occupiedBeds: occupiedBeds,
+          averagePrice: parseFloat(room.average_bed_price || 0),
+          minPrice: parseFloat(room.min_bed_price || 0),
+          maxPrice: parseFloat(room.max_bed_price || 0)
+        }
+      };
+    });
 
     res.json(transformedRooms);
   } catch (error) {
@@ -68,11 +81,15 @@ const getAvailableRooms = async (req, res) => {
     const [rooms] = await db.query(
       `SELECT 
         r.*,
-        (r.capacity - r.available_beds) as current_occupants
+        COUNT(b.id) as total_beds,
+        COUNT(CASE WHEN b.status = 'available' THEN 1 END) as available_beds_count,
+        COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count
       FROM rooms r
+      LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
       WHERE r.deleted_at IS NULL 
         AND r.status = 'active'
-        AND r.available_beds > 0
+      GROUP BY r.id
+      HAVING COUNT(CASE WHEN b.status = 'available' THEN 1 END) > 0
       ORDER BY r.name`
     );
 
@@ -91,24 +108,22 @@ const getRoomById = async (req, res) => {
     const [rooms] = await db.query(
       `SELECT 
         r.*,
-        (r.capacity - r.available_beds) as current_occupants,
+        COUNT(b.id) as total_beds,
+        COUNT(CASE WHEN b.status = 'available' THEN 1 END) as available_beds_count,
+        COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count,
         bh.name as boarding_house_name,
         bh.id as boarding_house_id,
-        CASE 
-          WHEN r.available_beds = r.capacity THEN 'Available'
-          WHEN r.available_beds = 0 THEN 'Fully Occupied'
-          WHEN r.available_beds < r.capacity THEN 'Partially Occupied'
-          ELSE 'Available'
-        END as occupancy_status,
         COALESCE(r.price_per_bed, 0) as monthly_rent,
         COALESCE(r.admin_fee, 0) as admin_fee,
         COALESCE(r.security_deposit, 0) as security_deposit,
         COALESCE(r.additional_rent, 0) as additional_rent
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
+      LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
       WHERE r.id = ? 
         AND r.deleted_at IS NULL
-        AND r.status = 'active'`,
+        AND r.status = 'active'
+      GROUP BY r.id`,
       [id]
     );
 
@@ -142,17 +157,40 @@ const getRoomById = async (req, res) => {
     room.room_name = room.name;
     room.rent = room.monthly_rent;
     
+    // Calculate occupancy status
+    const totalBeds = room.total_beds || 0;
+    const occupiedBeds = room.occupied_beds_count || 0;
+    const availableBeds = room.available_beds_count || 0;
+    const currentOccupants = occupiedBeds;
+    
+    let occupancyStatus = 'Available';
+    if (totalBeds > 0) {
+      if (occupiedBeds === 0) {
+        occupancyStatus = 'Available';
+      } else if (occupiedBeds === totalBeds) {
+        occupancyStatus = 'Fully Occupied';
+      } else {
+        occupancyStatus = 'Partially Occupied';
+      }
+    }
+    
     console.log('🔍 AFTER MAPPING:');
     console.log('room.rent:', room.rent);
     console.log('room.monthly_rent:', room.monthly_rent);
     console.log('room.admin_fee:', room.admin_fee);
     console.log('room.security_deposit:', room.security_deposit);
     console.log('room.additional_rent:', room.additional_rent);
+    console.log('totalBeds:', totalBeds);
+    console.log('occupiedBeds:', occupiedBeds);
+    console.log('currentOccupants:', currentOccupants);
+    console.log('occupancyStatus:', occupancyStatus);
 
     res.json({
       success: true,
       data: {
         ...room,
+        current_occupants: currentOccupants,
+        occupancy_status: occupancyStatus,
         occupants
       }
     });
@@ -505,13 +543,6 @@ const getAllRooms = async (req, res) => {
     const [rooms] = await db.query(
       `SELECT 
         r.*,
-        (r.capacity - r.available_beds) as current_occupants,
-        bh.name as boarding_house_name,
-        CASE 
-          WHEN r.available_beds = r.capacity THEN 'Available'
-          WHEN r.available_beds = 0 THEN 'Fully Occupied'
-          WHEN r.available_beds < r.capacity THEN 'Partially Occupied'
-        END as occupancy_status,
         COUNT(b.id) as total_beds,
         COUNT(CASE WHEN b.status = 'available' THEN 1 END) as available_beds_count,
         COUNT(CASE WHEN b.status = 'occupied' THEN 1 END) as occupied_beds_count,
@@ -519,42 +550,73 @@ const getAllRooms = async (req, res) => {
         MIN(b.price) as min_bed_price,
         MAX(b.price) as max_bed_price,
         MAX(CASE WHEN ri.is_display_image = 1 THEN ri.image_path END) as display_image_path,
-        MAX(CASE WHEN ri.is_display_image = 1 THEN ri.id END) as display_image_id
+        MAX(CASE WHEN ri.is_display_image = 1 THEN ri.id END) as display_image_id,
+        bh.name as boarding_house_name
       FROM rooms r
       LEFT JOIN boarding_houses bh ON r.boarding_house_id = bh.id
       LEFT JOIN beds b ON r.id = b.room_id AND b.deleted_at IS NULL
       LEFT JOIN room_images ri ON r.id = ri.room_id AND ri.deleted_at IS NULL
       WHERE r.deleted_at IS NULL 
         AND r.status = 'active'
-      GROUP BY r.id, r.name, r.capacity, r.available_beds, r.price_per_bed, r.admin_fee, r.security_deposit, r.additional_rent, r.description, r.boarding_house_id, bh.name
+      GROUP BY r.id, r.name, r.capacity, r.price_per_bed, r.admin_fee, r.security_deposit, r.additional_rent, r.description, r.boarding_house_id, bh.name
       ORDER BY bh.name, r.name`
     );
 
-    // Transform the data to match frontend expectations
-    const transformedRooms = rooms.map(room => ({
-      id: room.id,
-      name: room.name,
-      capacity: room.capacity,
-      currentOccupants: room.capacity - room.available_beds,
-      rent: parseFloat(room.price_per_bed || 0),
-      adminFee: parseFloat(room.admin_fee || 0), // Include room's admin fee
-      securityDeposit: parseFloat(room.security_deposit || 0),
-      additionalRent: parseFloat(room.additional_rent || 0),
-      description: room.description,
-      status: room.occupancy_status,
-      boarding_house_name: room.boarding_house_name,
-      boarding_house_id: room.boarding_house_id,
-      displayImage: room.display_image_path ? `/api/rooms/${room.id}/images/${room.display_image_id}` : null,
-      bedInfo: {
-        totalBeds: room.total_beds || 0,
-        availableBeds: room.available_beds_count || 0,
-        occupiedBeds: room.occupied_beds_count || 0,
-        averagePrice: parseFloat(room.average_bed_price || 0),
-        minPrice: parseFloat(room.min_bed_price || 0),
-        maxPrice: parseFloat(room.max_bed_price || 0)
-      }
-    }));
+    console.log('🔍 RAW ROOMS DATA FROM DATABASE:', rooms);
 
+    // Transform the data to match frontend expectations
+    const transformedRooms = rooms.map(room => {
+      const totalBeds = room.total_beds || 0;
+      const occupiedBeds = room.occupied_beds_count || 0;
+      const availableBeds = room.available_beds_count || 0;
+      const currentOccupants = occupiedBeds;
+      
+      console.log(`🔍 BACKEND PROCESSING ROOM: ${room.name}`, {
+        totalBeds,
+        occupiedBeds,
+        availableBeds,
+        currentOccupants,
+        capacity: room.capacity
+      });
+      
+      // Calculate occupancy status
+      let occupancyStatus = 'Available';
+      if (totalBeds > 0) {
+        if (occupiedBeds === 0) {
+          occupancyStatus = 'Available';
+        } else if (occupiedBeds === totalBeds) {
+          occupancyStatus = 'Fully Occupied';
+        } else {
+          occupancyStatus = 'Partially Occupied';
+        }
+      }
+      
+      return {
+        id: room.id,
+        name: room.name,
+        capacity: room.capacity,
+        currentOccupants: currentOccupants,
+        rent: parseFloat(room.price_per_bed || 0),
+        adminFee: parseFloat(room.admin_fee || 0),
+        securityDeposit: parseFloat(room.security_deposit || 0),
+        additionalRent: parseFloat(room.additional_rent || 0),
+        description: room.description,
+        status: occupancyStatus,
+        boarding_house_name: room.boarding_house_name,
+        boarding_house_id: room.boarding_house_id,
+        displayImage: room.display_image_path ? `/api/rooms/${room.id}/images/${room.display_image_id}` : null,
+        bedInfo: {
+          totalBeds: totalBeds,
+          availableBeds: availableBeds,
+          occupiedBeds: occupiedBeds,
+          averagePrice: parseFloat(room.average_bed_price || 0),
+          minPrice: parseFloat(room.min_bed_price || 0),
+          maxPrice: parseFloat(room.max_bed_price || 0)
+        }
+      };
+    });
+
+    console.log('🔍 FINAL TRANSFORMED ROOMS:', transformedRooms);
     res.json(transformedRooms);
   } catch (error) {
     console.error('Error in getAllRooms:', error);
