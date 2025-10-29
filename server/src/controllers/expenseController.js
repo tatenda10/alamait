@@ -251,6 +251,10 @@ exports.recordExpense = async (req, res) => {
     );
 
     // If payment is made from petty cash, update petty cash account
+    // NOTE: Petty cash is now user-specific and should be managed through the dedicated petty cash system
+    // This old boarding-house-based petty cash code is commented out
+    // TODO: Integrate with the new user-specific petty cash system via petty_cash_account_id
+    /*
     if (payment_method === 'petty_cash') {
       // Create petty cash transaction record
       await connection.query(
@@ -271,6 +275,7 @@ exports.recordExpense = async (req, res) => {
         [boardingHouseId, expenseAmount, expenseAmount, expenseAmount, expenseAmount]
       );
     }
+    */
 
     await connection.commit();
     res.status(201).json({ 
