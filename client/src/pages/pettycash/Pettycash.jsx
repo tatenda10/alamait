@@ -505,7 +505,7 @@ const PettyCash = () => {
                   >
                     <option value="">Select a user account</option>
                     {pettyCashData.accounts?.map((account) => (
-                      <option key={account.id} value={`${account.user_id}|${account.id}`}>
+                      <option key={account.id} value={`${account.petty_cash_user_id}|${account.id}`}>
                         {account.username} - {account.boarding_house_name} (${parseFloat(account.current_balance || 0).toFixed(2)})
                       </option>
                     ))}
@@ -625,7 +625,7 @@ const PettyCash = () => {
                   >
                     <option value="">Select a user account</option>
                     {pettyCashData.accounts?.map((account) => (
-                      <option key={account.id} value={`${account.user_id}|${account.id}`}>
+                      <option key={account.id} value={`${account.petty_cash_user_id}|${account.id}`}>
                         {account.username} - {account.boarding_house_name} (${parseFloat(account.current_balance || 0).toFixed(2)})
                       </option>
                     ))}
