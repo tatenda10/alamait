@@ -881,8 +881,49 @@ exports.addExpense = async (req, res) => {
         message: `Insufficient balance. Current balance: $${currentBalance.toFixed(2)}`
       });
     }
+
+    // Get expense account details if expense_category is provided
+    let expenseAccountId = null;
+    let expenseAccountDetails = null;
+    if (expense_category) {
+      const [expenseAccounts] = await connection.query(
+        `SELECT id, code, name, type FROM chart_of_accounts WHERE id = ? AND type = 'Expense' AND deleted_at IS NULL`,
+        [expense_category]
+      );
+      
+      if (expenseAccounts.length > 0) {
+        expenseAccountDetails = expenseAccounts[0];
+        expenseAccountId = expenseAccountDetails.id;
+      }
+    }
     
-    // Create transaction record
+    // Create main transaction record
+    const [mainTransactionResult] = await connection.query(
+      `INSERT INTO transactions (
+        transaction_type,
+        reference,
+        amount,
+        currency,
+        description,
+        transaction_date,
+        boarding_house_id,
+        created_by,
+        created_at,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'posted')`,
+      [
+        'petty_cash_expense',
+        receipt_number || `PCE-${Date.now()}`,
+        expenseAmount,
+        'USD',
+        `Petty Cash Expense: ${description}`,
+        transaction_date || new Date().toISOString().split('T')[0],
+        boardingHouseId,
+        created_by
+      ]
+    );
+    
+    // Create petty cash transaction record
     const [transactionResult] = await connection.query(
       `INSERT INTO petty_cash_transactions 
        (user_id, boarding_house_id, transaction_type, amount, description, reference_number, notes, transaction_date, created_by, created_at)
@@ -900,13 +941,115 @@ exports.addExpense = async (req, res) => {
       [expenseAmount, expenseAmount, userId, boardingHouseId]
     );
     
-    // Also create an expense record for reporting
-    await connection.query(
-      `INSERT INTO expenses 
-       (boarding_house_id, amount, description, expense_category, vendor_name, receipt_number, notes, payment_method, status, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'petty_cash', 'paid', ?, NOW())`,
-      [boardingHouseId, expenseAmount, description, expense_category, vendor_name, receipt_number, notes, created_by]
+    // Also create an expense record for reporting (if expense_category/expense_account_id is provided)
+    if (expense_category) {
+      // Note: We need to create a transaction_id for the expenses table
+      // Using the main transaction we created earlier
+      await connection.query(
+        `INSERT INTO expenses 
+         (transaction_id, boarding_house_id, expense_date, amount, description, expense_account_id, payment_method, reference_number, notes, payment_status, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'petty_cash', ?, ?, 'full', ?, NOW())`,
+        [mainTransactionResult.insertId, boardingHouseId, transaction_date || new Date().toISOString().split('T')[0], expenseAmount, description, expense_category, receipt_number, notes, created_by]
+      );
+    }
+
+    // Create journal entries for proper double-entry bookkeeping
+    // 1. Debit the expense account (if provided)
+    if (expenseAccountId && expenseAccountDetails) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
+        [
+          mainTransactionResult.insertId,
+          expenseAccountId,
+          expenseAmount,
+          `Petty Cash Expense: ${description}`,
+          boardingHouseId,
+          created_by
+        ]
+      );
+
+      // Update expense account balance
+      await connection.query(
+        `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+         VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?)
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance + ?,
+         total_debits = total_debits + ?,
+         transaction_count = transaction_count + 1,
+         last_transaction_date = ?,
+         updated_at = NOW()`,
+        [
+          expenseAccountId,
+          expenseAccountDetails.code,
+          expenseAccountDetails.name,
+          expenseAccountDetails.type,
+          expenseAmount,
+          expenseAmount,
+          transaction_date || new Date().toISOString().split('T')[0],
+          expenseAmount,
+          expenseAmount,
+          transaction_date || new Date().toISOString().split('T')[0]
+        ]
+      );
+    }
+
+    // 2. Credit petty cash account (10001)
+    const [pettyCashAccountResult] = await connection.query(
+      `SELECT id FROM chart_of_accounts WHERE code = '10001' AND deleted_at IS NULL`
     );
+
+    if (pettyCashAccountResult.length > 0) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, 'credit', ?, ?, ?, ?, NOW())`,
+        [
+          mainTransactionResult.insertId,
+          pettyCashAccountResult[0].id,
+          expenseAmount,
+          `Petty Cash Expense: ${description}`,
+          boardingHouseId,
+          created_by
+        ]
+      );
+
+      // Update petty cash COA balance
+      await connection.query(
+        `INSERT INTO current_account_balances (account_id, account_code, account_name, account_type, current_balance, total_debits, total_credits, transaction_count, last_transaction_date)
+         VALUES (?, '10001', 'Petty Cash', 'Asset', ?, 0, ?, 1, ?)
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance - ?,
+         total_credits = total_credits + ?,
+         transaction_count = transaction_count + 1,
+         last_transaction_date = ?,
+         updated_at = NOW()`,
+        [
+          pettyCashAccountResult[0].id,
+          currentBalance - expenseAmount,
+          expenseAmount,
+          transaction_date || new Date().toISOString().split('T')[0],
+          expenseAmount,
+          expenseAmount,
+          transaction_date || new Date().toISOString().split('T')[0]
+        ]
+      );
+    }
     
     await connection.commit();
     

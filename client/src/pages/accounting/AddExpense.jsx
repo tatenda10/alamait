@@ -275,13 +275,36 @@ const AddExpense = () => {
         formDataToSend.set('payment_method', 'credit');
       }
 
-      // Regular expense creation (including petty cash expenses)
-      const response = await axios.post(`${BASE_URL}/expenses`, formDataToSend, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // If petty cash is selected, use the dedicated petty cash endpoint
+      let response;
+      if (formData.payment_method === 'petty_cash') {
+        // Use petty cash endpoint
+        const pettyCashData = {
+          amount: parseFloat(formData.amount),
+          description: formData.description,
+          transaction_date: formData.expense_date,
+          expense_category: formData.expense_account_id,
+          vendor_name: formData.supplier_id ? suppliers.find(s => s.id == formData.supplier_id)?.name : '',
+          receipt_number: referenceNumber,
+          notes: formData.notes
+        };
+        
+        response = await axios.post(`${BASE_URL}/petty-cash/add-expense`, pettyCashData, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'boarding-house-id': formData.boarding_house_id
+          }
+        });
+      } else {
+        // Regular expense creation
+        response = await axios.post(`${BASE_URL}/expenses`, formDataToSend, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      }
 
       // Show success modal instead of navigating
       setSubmittedExpenseData({
