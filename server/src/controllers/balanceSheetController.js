@@ -92,12 +92,49 @@ const getBalanceSheet = async (req, res) => {
       }
     });
     
+    // Get student debtors total (negative balances = students who owe)
+    // Only include students with active enrollments
+    const [debtorsTotal] = await connection.query(`
+      SELECT COALESCE(SUM(ABS(sab.current_balance)), 0) as total
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND se.deleted_at IS NULL
+        AND (s.status = 'Active' OR s.status IS NULL)
+        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance < 0
+        AND sab.deleted_at IS NULL
+    `);
+    
+    // Get student prepayments total (positive balances = students who overpaid)
+    // Only include students with active enrollments and room assignments
+    const [prepaymentsTotal] = await connection.query(`
+      SELECT COALESCE(SUM(sab.current_balance), 0) as total
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN rooms r ON se.room_id = r.id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND se.deleted_at IS NULL
+        AND (s.status = 'Active' OR s.status IS NULL)
+        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance > 0
+        AND sab.deleted_at IS NULL
+    `);
+    
+    const totalDebtors = parseFloat(debtorsTotal[0].total);
+    const totalPrepayments = parseFloat(prepaymentsTotal[0].total);
+
     // Calculate totals
     const totalAssets = balanceSheet.assets.reduce((sum, acc) => sum + acc.debitBalance, 0) - 
                        balanceSheet.assets.reduce((sum, acc) => sum + acc.creditBalance, 0);
     
-    const totalLiabilities = balanceSheet.liabilities.reduce((sum, acc) => sum + acc.creditBalance, 0) - 
-                            balanceSheet.liabilities.reduce((sum, acc) => sum + acc.debitBalance, 0);
+    const liabilitiesFromAccounts = balanceSheet.liabilities.reduce((sum, acc) => sum + acc.creditBalance, 0) - 
+                                    balanceSheet.liabilities.reduce((sum, acc) => sum + acc.debitBalance, 0);
+    
+    // Add student prepayments to liabilities
+    const totalLiabilities = liabilitiesFromAccounts + totalPrepayments;
     
     const totalEquity = balanceSheet.equity.reduce((sum, acc) => sum + acc.creditBalance, 0) - 
                        balanceSheet.equity.reduce((sum, acc) => sum + acc.debitBalance, 0);
@@ -115,7 +152,8 @@ const getBalanceSheet = async (req, res) => {
     const totalEquityWithIncome = totalEquity + netIncome;
     
     // Calculate totals for balance sheet equation
-    const totalAssetsFinal = totalAssets;
+    // Add student debtors to assets
+    const totalAssetsFinal = totalAssets + totalDebtors;
     const totalLiabilitiesAndEquity = totalLiabilities + totalEquityWithIncome;
     
     res.json({
@@ -132,7 +170,9 @@ const getBalanceSheet = async (req, res) => {
           netIncome: netIncome,
           totalEquityWithIncome: totalEquityWithIncome,
           totalLiabilitiesAndEquity: totalLiabilitiesAndEquity,
-          isBalanced: Math.abs(totalAssetsFinal - totalLiabilitiesAndEquity) < 0.01
+          isBalanced: Math.abs(totalAssetsFinal - totalLiabilitiesAndEquity) < 0.01,
+          totalDebtors: totalDebtors,
+          totalPrepayments: totalPrepayments
         }
       }
     });

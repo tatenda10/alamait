@@ -22,14 +22,12 @@ import BASE_URL from '../../context/Api';
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState({
     kpis: {
-      cashPosition: 1732,
-      accountsReceivable: 0,
+      cash: 0,
+      cbzBank: 0,
+      cbzVault: 0,
       totalPettyCash: 0
     },
-    pettyCash: {
-      stKilda: 2716.08,
-      belvedere: 727.00
-    },
+    pettyCash: {},
     roomOccupancy: {
       totalRooms: 0,
       availableRooms: 0,
@@ -190,31 +188,38 @@ const Dashboard = () => {
           </div>
     </div>
 
-    {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {/* Cash Position */}
+    {/* KPI Cards - Main Accounts */}
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Cash Position</p>
-              <p className="text-xl font-bold text-green-600">{formatCurrency(dashboardData.kpis?.cashPosition || 0)}</p>
-      </div>
+              <p className="text-xs font-medium text-gray-600 mb-1">Cash</p>
+              <p className="text-xl font-bold text-green-600">{formatCurrency(dashboardData.kpis?.cash || 0)}</p>
+            </div>
             <FaDollarSign className="h-8 w-8 text-green-500" />
           </div>
-    </div>
+        </div>
 
-        {/* Accounts Receivable */}
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Accounts Receivable</p>
-              <p className="text-xl font-bold text-blue-600">{formatCurrency(dashboardData.kpis?.accountsReceivable || 0)}</p>
-      </div>
-            <FaFileInvoiceDollar className="h-8 w-8 text-blue-500" />
+              <p className="text-xs font-medium text-gray-600 mb-1">CBZ Bank Account</p>
+              <p className="text-xl font-bold text-blue-600">{formatCurrency(dashboardData.kpis?.cbzBank || 0)}</p>
+            </div>
+            <FaCreditCard className="h-8 w-8 text-blue-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-600 mb-1">CBZ Vault</p>
+              <p className="text-xl font-bold text-indigo-600">{formatCurrency(dashboardData.kpis?.cbzVault || 0)}</p>
+            </div>
+            <FaFileInvoiceDollar className="h-8 w-8 text-indigo-500" />
           </div>
         </div>
         
-        {/* Total Petty Cash */}
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
@@ -224,7 +229,7 @@ const Dashboard = () => {
             <FaMoneyBillWave className="h-8 w-8 text-purple-500" />
           </div>
         </div>
-      </div>
+      </div> */}
       
       {/* Individual Petty Cash Balances - Dynamic */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -242,7 +247,7 @@ const Dashboard = () => {
       </div>
 
       {/* Room Occupancy Section */}
-      <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
+      {/* <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900">Room Occupancy Overview</h3>
           <div className="flex items-center space-x-2">
@@ -251,9 +256,7 @@ const Dashboard = () => {
           </div>
         </div>
         
-        {/* Room Occupancy Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Total Rooms */}
           <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
             <div className="flex items-center justify-between">
               <div>
@@ -264,7 +267,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Available Rooms */}
           <div className="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
             <div className="flex items-center justify-between">
               <div>
@@ -275,7 +277,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Partially Occupied */}
           <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 p-4 rounded-lg border border-yellow-200">
             <div className="flex items-center justify-between">
               <div>
@@ -286,7 +287,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Fully Occupied */}
           <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-lg border border-red-200">
             <div className="flex items-center justify-between">
               <div>
@@ -298,9 +298,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Bed Occupancy Details */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Total Beds */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -311,7 +309,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Available Beds */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -322,7 +319,6 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Occupancy Rate */}
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -333,7 +329,7 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Monthly Revenue vs Expenses - Full Width */}
       <div className="bg-white p-4 rounded-lg border border-gray-200 mb-6">

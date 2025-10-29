@@ -42,6 +42,7 @@ import TrialBalance from './pages/accounting/TrialBalance';
 import ExpenditureRequests from './pages/expenses/ExpenditureRequests';
 import BudgetRequests from './pages/expenses/BudgetRequests';
 import BalanceSheet from './pages/reports/BalanceSheet';
+import MonthlyInvoices from './pages/accounting/MonthlyInvoices';
 
 const App = () => {
   return (
@@ -79,6 +80,7 @@ const App = () => {
         <Route path="accounting/balance-bd-cd" element={<BalanceBDCD />} />
         <Route path="accounting/account-ledger/:accountId/:periodId" element={<AccountLedger />} />
         <Route path="accounting/trial-balance" element={<TrialBalance />} />
+        <Route path="accounting/monthly-invoices" element={<MonthlyInvoices />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expenses/add" element={<AddExpense />} />
         <Route path="expenses/edit/:id" element={<EditExpense />} />

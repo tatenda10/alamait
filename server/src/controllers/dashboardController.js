@@ -369,21 +369,30 @@ const getKPIs = async (req, res) => {
   try {
     console.log('🔄 Fetching real-time KPIs...');
 
-    // Get cash position (sum of all cash accounts)
+    // Get Cash balance (10001)
     const [cashResult] = await connection.query(`
-      SELECT COALESCE(SUM(cab.current_balance), 0) as cash_position
+      SELECT COALESCE(cab.current_balance, 0) as balance
       FROM current_account_balances cab
       JOIN chart_of_accounts coa ON cab.account_id = coa.id
-      WHERE coa.code IN ('10001', '10002', '10003', '10004')
+      WHERE coa.code = '10001'
         AND coa.deleted_at IS NULL
     `);
 
-    // Get accounts receivable (negative balance means money owed TO us)
-    const [arResult] = await connection.query(`
-      SELECT COALESCE(SUM(cab.current_balance), 0) as accounts_receivable
+    // Get CBZ Bank Account balance (10002)
+    const [cbzBankResult] = await connection.query(`
+      SELECT COALESCE(cab.current_balance, 0) as balance
       FROM current_account_balances cab
       JOIN chart_of_accounts coa ON cab.account_id = coa.id
-      WHERE coa.code = '10005'
+      WHERE coa.code = '10002'
+        AND coa.deleted_at IS NULL
+    `);
+
+    // Get CBZ Vault balance (10003)
+    const [cbzVaultResult] = await connection.query(`
+      SELECT COALESCE(cab.current_balance, 0) as balance
+      FROM current_account_balances cab
+      JOIN chart_of_accounts coa ON cab.account_id = coa.id
+      WHERE coa.code = '10003'
         AND coa.deleted_at IS NULL
     `);
 
@@ -395,19 +404,22 @@ const getKPIs = async (req, res) => {
         AND pca.status = 'active'
     `);
 
-    const cashPosition = parseFloat(cashResult[0].cash_position);
-    const accountsReceivable = Math.abs(parseFloat(arResult[0].accounts_receivable)); // Make positive for display
+    const cash = parseFloat(cashResult[0]?.balance || 0);
+    const cbzBank = parseFloat(cbzBankResult[0]?.balance || 0);
+    const cbzVault = parseFloat(cbzVaultResult[0]?.balance || 0);
     const totalPettyCash = parseFloat(pettyCashResult[0].total_petty_cash);
 
     console.log('📊 Real-time KPIs:', {
-      cashPosition,
-      accountsReceivable,
+      cash,
+      cbzBank,
+      cbzVault,
       totalPettyCash
     });
 
     res.json({
-      cashPosition,
-      accountsReceivable,
+      cash,
+      cbzBank,
+      cbzVault,
       totalPettyCash
     });
 

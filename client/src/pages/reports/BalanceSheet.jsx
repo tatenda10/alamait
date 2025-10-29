@@ -26,7 +26,9 @@ const BalanceSheet = () => {
       netIncome: 0,
       totalEquityWithIncome: 0,
       totalLiabilitiesAndEquity: 0,
-      isBalanced: false
+      isBalanced: false,
+      totalDebtors: 0,
+      totalPrepayments: 0
     }
   });
 
@@ -181,7 +183,7 @@ const BalanceSheet = () => {
               <h4 className="text-xs font-bold text-gray-900 mb-4">ASSETS</h4>
               <div className="space-y-2">
                 {balanceSheetData.balanceSheet.assets
-                  .filter(asset => asset.debitBalance > 0 || asset.creditBalance > 0)
+                  .filter(asset => asset.code !== '10005' && (asset.debitBalance > 0 || asset.creditBalance > 0))
                   .map((asset, index) => (
                     <div key={index} className="flex justify-between text-xs">
                       <span className="text-gray-600">{asset.name}</span>
@@ -192,6 +194,17 @@ const BalanceSheet = () => {
                       </span>
                     </div>
                   ))}
+                
+                {/* Student Debtors */}
+                {balanceSheetData.summary.totalDebtors > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Student Debtors</span>
+                    <span className="text-gray-900 font-medium">
+                      {formatCurrency(balanceSheetData.summary.totalDebtors)}
+                    </span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between text-xs font-bold pt-2 border-t">
                   <span>Total Assets</span>
                   <span>{formatCurrency(balanceSheetData.summary.totalAssets)}</span>
@@ -215,6 +228,17 @@ const BalanceSheet = () => {
                       </span>
                     </div>
                   ))}
+                
+                {/* Student Prepayments */}
+                {balanceSheetData.summary.totalPrepayments > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">Student Prepayments</span>
+                    <span className="text-gray-900 font-medium">
+                      {formatCurrency(balanceSheetData.summary.totalPrepayments)}
+                    </span>
+                  </div>
+                )}
+                
                 <div className="flex justify-between text-xs font-bold pt-2 border-t">
                   <span>Total Liabilities</span>
                   <span>{formatCurrency(balanceSheetData.summary.totalLiabilities)}</span>
@@ -238,65 +262,19 @@ const BalanceSheet = () => {
                       </span>
                     </div>
                   ))}
+                
+                {/* Current Period Profit/Loss */}
+                <div className="flex justify-between text-xs pt-2 mt-2 border-t">
+                  <span className="text-gray-600">Current Period Profit/(Loss)</span>
+                  <span className={`font-medium ${balanceSheetData.summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(balanceSheetData.summary.netIncome)}
+                  </span>
+                </div>
+                
                 <div className="flex justify-between text-xs font-bold pt-2 border-t">
                   <span>Total Equity</span>
-                  <span>{formatCurrency(balanceSheetData.summary.totalEquity)}</span>
+                  <span>{formatCurrency(balanceSheetData.summary.totalEquityWithIncome)}</span>
                 </div>
-              </div>
-            </div>
-
-            {/* Revenue and Expenses (P&L) */}
-            <div className="mb-8">
-              <h4 className="text-xs font-bold text-gray-900 mb-4">REVENUE</h4>
-              <div className="space-y-2">
-                {balanceSheetData.balanceSheet.revenue
-                  .filter(revenue => revenue.debitBalance > 0 || revenue.creditBalance > 0)
-                  .map((revenue, index) => (
-                    <div key={index} className="flex justify-between text-xs">
-                      <span className="text-gray-600">{revenue.name}</span>
-                      <span className="text-gray-900 font-medium">
-                        {revenue.creditBalance > 0 ? formatCurrency(revenue.creditBalance) : 
-                         revenue.debitBalance > 0 ? `(${formatCurrency(revenue.debitBalance)})` : 
-                         formatCurrency(0)}
-                      </span>
-                    </div>
-                  ))}
-                <div className="flex justify-between text-xs font-bold pt-2 border-t">
-                  <span>Total Revenue</span>
-                  <span>{formatCurrency(balanceSheetData.summary.totalRevenue)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <h4 className="text-xs font-bold text-gray-900 mb-4">EXPENSES</h4>
-              <div className="space-y-2">
-                {balanceSheetData.balanceSheet.expenses
-                  .filter(expense => expense.debitBalance > 0 || expense.creditBalance > 0)
-                  .map((expense, index) => (
-                    <div key={index} className="flex justify-between text-xs">
-                      <span className="text-gray-600">{expense.name}</span>
-                      <span className="text-gray-900 font-medium">
-                        {expense.debitBalance > 0 ? formatCurrency(expense.debitBalance) : 
-                         expense.creditBalance > 0 ? `(${formatCurrency(expense.creditBalance)})` : 
-                         formatCurrency(0)}
-                      </span>
-                    </div>
-                  ))}
-                <div className="flex justify-between text-xs font-bold pt-2 border-t">
-                  <span>Total Expenses</span>
-                  <span>{formatCurrency(balanceSheetData.summary.totalExpenses)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Net Income */}
-            <div className="mb-8">
-              <div className="flex justify-between text-xs font-bold pt-2 border-t-2 border-gray-400">
-                <span>Net Income (Revenue - Expenses)</span>
-                <span className={balanceSheetData.summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  {formatCurrency(balanceSheetData.summary.netIncome)}
-                </span>
               </div>
             </div>
 

@@ -652,14 +652,14 @@ const getDebtorsReport = async (req, res) => {
         sab.updated_at as last_balance_update
       FROM students s
       JOIN student_enrollments se ON s.id = se.student_id
-      JOIN rooms r ON se.room_id = r.id
+      LEFT JOIN rooms r ON se.room_id = r.id
       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
       JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
         AND se.deleted_at IS NULL
         AND (s.status = 'Active' OR s.status IS NULL)
         AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
-        AND sab.current_balance > 0
+        AND sab.current_balance < 0
         AND sab.deleted_at IS NULL
         ${whereClause}
       ORDER BY sab.current_balance ASC, bh.name, s.full_name`,

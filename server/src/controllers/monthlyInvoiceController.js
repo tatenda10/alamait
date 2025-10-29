@@ -1,3 +1,5 @@
+const db = require('../services/db');
+
 // Generate monthly invoices for all active students
 const generateMonthlyInvoices = async (req, res) => {
   const connection = await db.getConnection();

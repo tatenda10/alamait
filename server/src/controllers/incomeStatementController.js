@@ -114,37 +114,37 @@ const generateIncomeStatement = async (req, res) => {
 };
 
 /**
- * Get revenue data from student invoices for date range
- * This shows rental income based on when invoices were created, not when payments were received
+ * Get revenue data from journal entries for date range
+ * This shows rental income based on when invoices were created (credit entries to revenue accounts)
  */
 const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
   
   let query = `
     SELECT 
-      'Rentals Income' as account_name,
-      'Revenue' as account_type,
+      coa.name as account_name,
+      coa.type as account_type,
       coa.id as account_id,
       coa.code as account_code,
-      SUM(si.amount) as amount,
-      COUNT(DISTINCT si.id) as transaction_count,
+      SUM(je.amount) as amount,
+      COUNT(DISTINCT t.id) as transaction_count,
       bh.name as boarding_house_name
-    FROM student_invoices si
-    JOIN student_enrollments se ON si.enrollment_id = se.id
-    JOIN rooms r ON se.room_id = r.id
-    JOIN boarding_houses bh ON r.boarding_house_id = bh.id
-    JOIN chart_of_accounts coa ON coa.code = '40001' AND coa.type = 'Revenue'
-    WHERE DATE(si.invoice_date) BETWEEN ? AND ?
-      AND si.deleted_at IS NULL
-      AND se.deleted_at IS NULL
-      AND r.deleted_at IS NULL
-      AND bh.deleted_at IS NULL
+    FROM journal_entries je
+    JOIN transactions t ON je.transaction_id = t.id
+    JOIN chart_of_accounts coa ON je.account_id = coa.id
+    JOIN boarding_houses bh ON je.boarding_house_id = bh.id
+    WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+      AND je.entry_type = 'credit'
+      AND coa.type = 'Revenue'
+      AND je.deleted_at IS NULL
+      AND t.deleted_at IS NULL
       AND coa.deleted_at IS NULL
+      AND bh.deleted_at IS NULL
   `;
 
   let params = [startDate, endDate];
 
   if (!isConsolidated && boardingHouseId) {
-    query += ' AND r.boarding_house_id = ?';
+    query += ' AND je.boarding_house_id = ?';
     params.push(boardingHouseId);
   }
 
@@ -153,7 +153,7 @@ const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidate
     ORDER BY coa.code, bh.name
   `;
 
-  console.log('Revenue Query (from invoices):', query);
+  console.log('Revenue Query (from journal entries):', query);
   console.log('Revenue Params:', params);
 
   const [results] = await db.query(query, params);

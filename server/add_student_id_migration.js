@@ -4,7 +4,7 @@ require('dotenv').config();
  
 async function addStudentIdMigration() {
   let connection; 
-  
+   
   try {
     console.log('Connecting to database...');
     connection = await mysql.createConnection({
