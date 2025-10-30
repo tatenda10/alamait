@@ -1,11 +1,14 @@
 const db = require('../services/db');
 
 const getCashflowReport = async (req, res) => {
+  console.log('🔥🔥🔥 CASHFLOW ENDPOINT HIT - NEW VERSION 🔥🔥🔥');
+  
   const connection = await db.getConnection();
   
   try {
     const { boarding_house_id, start_date, end_date } = req.query;
     
+    console.log('=== CASHFLOW REPORT REQUEST (UPDATED VERSION) ===');
     console.log('Cashflow request params:', { boarding_house_id, start_date, end_date });
 
     // Handle "all" boarding houses case
@@ -205,11 +208,54 @@ const getCashflowReport = async (req, res) => {
     inflows.sort((a, b) => b.amount - a.amount);
     outflows.sort((a, b) => b.amount - a.amount);
 
+    // Get current balances for all cash accounts
+    // For Petty Cash (10001), sum all petty cash user balances
+    // For other accounts (Cash, CBZ Bank, CBZ Vault), use current_account_balances table
+    const [cashBalances] = await connection.query(
+      `SELECT 
+        coa.code,
+        coa.name,
+        CASE 
+          WHEN coa.code = '10001' THEN 
+            COALESCE((SELECT SUM(current_balance) FROM petty_cash_accounts WHERE deleted_at IS NULL), 0)
+          ELSE
+            COALESCE(cab.current_balance, 0)
+        END as balance
+      FROM chart_of_accounts coa
+      LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+      WHERE coa.id IN (${cashAccountIds.map(() => '?').join(',')})
+      ORDER BY coa.code`,
+      cashAccountIds
+    );
+
+    // Calculate total cash position
+    const totalCashPosition = cashBalances.reduce((sum, account) => {
+      return sum + Number(account.balance);
+    }, 0);
+
+    // Format individual account balances
+    const cashAccountBalances = cashBalances.map(account => ({
+      code: account.code,
+      name: account.name,
+      balance: Number(account.balance)
+    }));
+
+    console.log('=== CASH BALANCES QUERY RESULT ===');
+    console.log('Cash Balances Rows:', cashBalances.length);
+    cashBalances.forEach(acc => {
+      console.log(`  ${acc.code} - ${acc.name}: $${Number(acc.balance).toFixed(2)}`);
+    });
+    console.log('Total Cash Position:', totalCashPosition);
+    console.log('Formatted Cash Account Balances:', JSON.stringify(cashAccountBalances, null, 2));
+    
     console.log('Response data:', {
       inflows,
       outflows,
       totalInflows,
-      totalOutflows
+      totalOutflows,
+      netCashflow: totalInflows - totalOutflows,
+      totalCashPosition,
+      cashAccountBalances
     });
 
     res.json({
@@ -217,7 +263,9 @@ const getCashflowReport = async (req, res) => {
       outflows,
       totalInflows: { amount: totalInflows },
       totalOutflows: { amount: totalOutflows },
-      netCashflow: { amount: totalInflows - totalOutflows }
+      netCashflow: { amount: totalInflows - totalOutflows },
+      totalCashPosition: { amount: totalCashPosition },
+      cashAccountBalances
     });
 
   } catch (error) {

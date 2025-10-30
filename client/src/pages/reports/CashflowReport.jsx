@@ -16,7 +16,9 @@ const CashflowReport = () => {
     outflows: [],
     netCashflow: { amount: 0 },
     totalInflows: { amount: 0 },
-    totalOutflows: { amount: 0 }
+    totalOutflows: { amount: 0 },
+    totalCashPosition: { amount: 0 },
+    cashAccountBalances: []
   });
 
   function getDefaultStartDate() {
@@ -77,6 +79,8 @@ const CashflowReport = () => {
       });
 
       console.log('Cashflow response:', response.data);
+      console.log('Total Cash Position:', response.data.totalCashPosition);
+      console.log('Cash Account Balances:', response.data.cashAccountBalances);
       setCashflowData(response.data);
       setShowCashflow(true);
     } catch (error) {
@@ -269,6 +273,28 @@ const CashflowReport = () => {
                 {formatCurrency(cashflowData.netCashflow.amount)}
               </span>
             </div>
+          </div>
+
+          {/* Total Cash Position */}
+          <div className="mt-6 pt-4 border-t border-gray-300">
+            <div className="flex justify-between text-xs font-bold mb-4">
+              <span>Total Cash Position</span>
+              <span className="text-blue-600">
+                {formatCurrency(cashflowData.totalCashPosition?.amount || 0)}
+              </span>
+            </div>
+            
+            {/* Individual Cash Account Balances */}
+            {cashflowData.cashAccountBalances && cashflowData.cashAccountBalances.length > 0 && (
+              <div className="space-y-2 ml-4">
+                {cashflowData.cashAccountBalances.map((account, index) => (
+                  <div key={index} className="flex justify-between text-xs text-gray-600">
+                    <span>{account.name}</span>
+                    <span>{formatCurrency(account.balance)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           </div>
         </div>
