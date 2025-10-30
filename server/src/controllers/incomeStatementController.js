@@ -41,19 +41,16 @@ const generateIncomeStatement = async (req, res) => {
     const [
       revenueData,
       expenseData,
-      pettyCashExpenseData,
       boardingHouses
     ] = await Promise.all([
       getRevenueData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
       getExpenseData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
-      getPettyCashExpenseData(dateStart, dateEnd, boardingHouseIdNum, isConsolidatedBool),
       getBoardingHouses()
     ]);
 
     // Calculate totals for each account type
     const revenueTotal = revenueData.reduce((sum, item) => sum + item.amount, 0);
     const expensesTotal = expenseData.reduce((sum, item) => sum + item.amount, 0);
-    const pettyCashTotal = pettyCashExpenseData.reduce((sum, item) => sum + item.amount, 0);
 
     const response = {
       success: true,
@@ -74,15 +71,9 @@ const generateIncomeStatement = async (req, res) => {
           ]
         },
         expenses: {
-          total: expensesTotal + pettyCashTotal, // Only actual expenses
+          total: expensesTotal, // All expenses from journal entries
           accounts: [
             ...expenseData.map(account => ({
-              account_id: account.account_id,
-              account_name: account.account_name,
-              account_code: account.account_code,
-              amount: account.amount
-            })),
-            ...pettyCashExpenseData.map(account => ({
               account_id: account.account_id,
               account_name: account.account_name,
               account_code: account.account_code,
@@ -92,8 +83,8 @@ const generateIncomeStatement = async (req, res) => {
         },
         summary: {
           totalRevenue: revenueTotal,
-          totalExpenses: expensesTotal + pettyCashTotal,
-          netIncome: revenueTotal - (expensesTotal + pettyCashTotal)
+          totalExpenses: expensesTotal,
+          netIncome: revenueTotal - expensesTotal
         }
       }
     };
@@ -158,19 +149,33 @@ const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidate
 
   const [results] = await db.query(query, params);
   
+  console.log('\n=== REVENUE RESULTS BREAKDOWN ===');
+  console.log('Total revenue records found:', results.length);
+  
+  results.forEach((row, index) => {
+    console.log(`\n${index + 1}. ${row.account_name} (${row.account_code})`);
+    console.log(`   Boarding House: ${row.boarding_house_name}`);
+    console.log(`   Amount: $${row.amount}`);
+    console.log(`   Transaction Count: ${row.transaction_count}`);
+  });
+  
+  const totalRevenue = results.reduce((sum, row) => sum + Number(row.amount), 0);
+  console.log(`\nTOTAL REVENUE: $${totalRevenue}`);
+  console.log('=================================\n');
+  
   return results.map(row => ({
     account_id: row.account_id,
     account_name: row.account_name,
     account_type: row.account_type,
     account_code: row.account_code,
-    amount: parseFloat(row.amount),
+    amount: Number(row.amount), // Preserve exact decimal precision without rounding
     transaction_count: row.transaction_count,
     boarding_house_name: row.boarding_house_name
   }));
 };
 
 /**
- * Get expense data from transactions and journal entries
+ * Get expense data from journal entries - includes ALL expenses (regular and petty cash)
  */
 const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
   let query = `
@@ -218,63 +223,7 @@ const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidate
     account_name: row.account_name,
     account_type: row.account_type,
     account_code: row.account_code,
-    amount: parseFloat(row.amount),
-    transaction_count: row.transaction_count,
-    boarding_house_name: row.boarding_house_name
-  }));
-};
-
-/**
- * Get petty cash expense data from transactions and journal entries
- */
-const getPettyCashExpenseData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
-  let query = `
-    SELECT 
-      coa.name as account_name,
-      coa.type as account_type,
-      coa.id as account_id,
-      coa.code as account_code,
-      SUM(je.amount) as amount,
-      COUNT(DISTINCT t.id) as transaction_count,
-      bh.name as boarding_house_name
-    FROM journal_entries je
-    JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts coa ON je.account_id = coa.id
-    JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-    WHERE DATE(t.transaction_date) BETWEEN ? AND ?
-      AND t.status = 'posted'
-      AND je.entry_type = 'debit'
-      AND coa.type = 'Expense'
-      AND t.transaction_type LIKE '%petty%'
-      AND je.deleted_at IS NULL
-      AND t.deleted_at IS NULL
-      AND coa.deleted_at IS NULL
-      AND bh.deleted_at IS NULL
-  `;
-
-  let params = [startDate, endDate];
-
-  if (!isConsolidated && boardingHouseId) {
-    query += ' AND je.boarding_house_id = ?';
-    params.push(boardingHouseId);
-  }
-
-  query += `
-    GROUP BY coa.id, coa.name, coa.type, coa.code, bh.id, bh.name
-    ORDER BY coa.code, bh.name
-  `;
-
-  console.log('Petty Cash Query:', query);
-  console.log('Petty Cash Params:', params);
-
-  const [results] = await db.query(query, params);
-  
-  return results.map(row => ({
-    account_id: row.account_id,
-    account_name: `${row.account_name} (Petty Cash)`,
-    account_type: row.account_type,
-    account_code: row.account_code,
-    amount: parseFloat(row.amount),
+    amount: Number(row.amount), // Preserve exact decimal precision without rounding
     transaction_count: row.transaction_count,
     boarding_house_name: row.boarding_house_name
   }));
