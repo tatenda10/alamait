@@ -26,9 +26,9 @@ const Layout = ({ children }) => {
   return (
     <div className="min-h-screen flex bg-gray-50">
       <DynamicSidebar currentSection={currentSection} />
-      <div className="flex-1 ml-0 md:ml-64 flex flex-col">
+      <div className="flex-1 ml-0 md:ml-64 flex flex-col min-w-0">
         <Navbar />
-        <main className="flex-1 p-8 mt-16">{children}</main>
+        <main className="flex-1 p-8 mt-16 overflow-x-auto min-w-0">{children}</main>
       </div>
     </div>
   );

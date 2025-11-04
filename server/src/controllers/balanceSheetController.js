@@ -12,47 +12,94 @@ const getBalanceSheet = async (req, res) => {
     // Use current date if no asOfDate provided
     const reportDate = asOfDate || new Date().toISOString().split('T')[0];
     
-    // Get all account balances grouped by type
+    // Build date filter for transactions
+    let dateFilter = '';
+    const params = [];
+    
+    if (asOfDate) {
+      dateFilter = `AND DATE(t.transaction_date) <= ?`;
+      params.push(asOfDate);
+    }
+    
+    // Calculate balances directly from journal entries
+    // This ensures accuracy instead of relying on potentially stale current_account_balances
     let query = `
       SELECT 
         coa.id as account_id,
         coa.code as account_code,
         coa.name as account_name,
         coa.type as account_type,
-        COALESCE(cab.current_balance, 0) as current_balance,
-        CASE 
-          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) > 0 THEN 
-            COALESCE(cab.current_balance, 0)
-          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) < 0 THEN 
-            ABS(COALESCE(cab.current_balance, 0))
-          ELSE 0
-        END as debit_balance,
-        CASE 
-          WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND COALESCE(cab.current_balance, 0) > 0 THEN 
-            COALESCE(cab.current_balance, 0)
-          WHEN coa.type IN ('Asset', 'Expense') AND COALESCE(cab.current_balance, 0) < 0 THEN 
-            ABS(COALESCE(cab.current_balance, 0))
-          ELSE 0
-        END as credit_balance
+        COALESCE(
+          SUM(
+            CASE 
+              WHEN coa.type IN ('Asset', 'Expense') AND je.entry_type = 'debit' THEN je.amount
+              WHEN coa.type IN ('Asset', 'Expense') AND je.entry_type = 'credit' THEN -je.amount
+              WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND je.entry_type = 'credit' THEN je.amount
+              WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND je.entry_type = 'debit' THEN -je.amount
+              ELSE 0
+            END
+          ), 0
+        ) as current_balance
       FROM chart_of_accounts coa
-      LEFT JOIN current_account_balances cab ON coa.code = cab.account_code
+      LEFT JOIN journal_entries je ON coa.id = je.account_id AND je.deleted_at IS NULL
+      LEFT JOIN transactions t ON je.transaction_id = t.id AND t.deleted_at IS NULL AND t.status = 'posted'
       WHERE coa.deleted_at IS NULL
+        ${dateFilter}
+      GROUP BY coa.id, coa.code, coa.name, coa.type
+      ORDER BY coa.type, coa.code
     `;
-    
-    const params = [];
-    
-    // Add date filter if specified
-    if (asOfDate) {
-      query += ` AND (cab.updated_at <= ? OR cab.updated_at IS NULL)`;
-      params.push(asOfDate);
-    }
-    
-    query += ` ORDER BY coa.type, coa.code`;
     
     console.log('Balance Sheet Query:', query);
     console.log('Query Parameters:', params);
     
     const [rows] = await connection.query(query, params);
+    
+    // Get Petty Cash balance from petty_cash_accounts table
+    const pettyCashCode = '10001';
+    const [pettyCashResult] = await connection.query(`
+      SELECT COALESCE(SUM(current_balance), 0) as total_balance
+      FROM petty_cash_accounts
+      WHERE deleted_at IS NULL AND status = 'active'
+    `);
+    const pettyCashBalance = parseFloat(pettyCashResult[0]?.total_balance || 0);
+    
+    // Process rows to calculate debit/credit balances and replace Petty Cash if needed
+    const processedRows = rows.map(row => {
+      let balance = parseFloat(row.current_balance || 0);
+      
+      // Replace Petty Cash balance with actual petty cash accounts sum
+      if (row.account_code === pettyCashCode) {
+        balance = pettyCashBalance;
+      }
+      
+      // Calculate debit and credit balances based on account type
+      let debitBalance = 0;
+      let creditBalance = 0;
+      
+      if (row.account_type === 'Asset' || row.account_type === 'Expense') {
+        if (balance > 0) {
+          debitBalance = balance;
+        } else if (balance < 0) {
+          creditBalance = Math.abs(balance);
+        }
+      } else if (row.account_type === 'Liability' || row.account_type === 'Equity' || row.account_type === 'Revenue') {
+        if (balance > 0) {
+          creditBalance = balance;
+        } else if (balance < 0) {
+          debitBalance = Math.abs(balance);
+        }
+      }
+      
+      return {
+        account_id: row.account_id,
+        account_code: row.account_code,
+        account_name: row.account_name,
+        account_type: row.account_type,
+        current_balance: balance,
+        debit_balance: debitBalance,
+        credit_balance: creditBalance
+      };
+    });
     
     // Group accounts by type
     const balanceSheet = {
@@ -63,14 +110,14 @@ const getBalanceSheet = async (req, res) => {
       expenses: []
     };
     
-    rows.forEach(row => {
+    processedRows.forEach(row => {
       const account = {
         code: row.account_code,
         name: row.account_name,
         type: row.account_type,
-        currentBalance: parseFloat(row.current_balance),
-        debitBalance: parseFloat(row.debit_balance),
-        creditBalance: parseFloat(row.credit_balance)
+        currentBalance: row.current_balance,
+        debitBalance: row.debit_balance,
+        creditBalance: row.credit_balance
       };
       
       switch (row.account_type) {
@@ -127,14 +174,13 @@ const getBalanceSheet = async (req, res) => {
     const totalPrepayments = parseFloat(prepaymentsTotal[0].total);
 
     // Calculate totals
+    // Note: Accounts Receivable already includes all student balances (both debtors and prepayments)
+    // So we use AR as-is and don't add debtors/prepayments separately to avoid double counting
     const totalAssets = balanceSheet.assets.reduce((sum, acc) => sum + acc.debitBalance, 0) - 
                        balanceSheet.assets.reduce((sum, acc) => sum + acc.creditBalance, 0);
     
-    const liabilitiesFromAccounts = balanceSheet.liabilities.reduce((sum, acc) => sum + acc.creditBalance, 0) - 
-                                    balanceSheet.liabilities.reduce((sum, acc) => sum + acc.debitBalance, 0);
-    
-    // Add student prepayments to liabilities
-    const totalLiabilities = liabilitiesFromAccounts + totalPrepayments;
+    const totalLiabilities = balanceSheet.liabilities.reduce((sum, acc) => sum + acc.creditBalance, 0) - 
+                            balanceSheet.liabilities.reduce((sum, acc) => sum + acc.debitBalance, 0);
     
     const totalEquity = balanceSheet.equity.reduce((sum, acc) => sum + acc.creditBalance, 0) - 
                        balanceSheet.equity.reduce((sum, acc) => sum + acc.debitBalance, 0);
@@ -152,8 +198,8 @@ const getBalanceSheet = async (req, res) => {
     const totalEquityWithIncome = totalEquity + netIncome;
     
     // Calculate totals for balance sheet equation
-    // Add student debtors to assets
-    const totalAssetsFinal = totalAssets + totalDebtors;
+    // Use assets as-is (AR already included, don't add debtors separately)
+    const totalAssetsFinal = totalAssets;
     const totalLiabilitiesAndEquity = totalLiabilities + totalEquityWithIncome;
     
     res.json({

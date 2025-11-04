@@ -4,10 +4,12 @@ const { authenticate } = require('../middleware/auth');
 const reportsController = require('../controllers/reportsController');
 const incomeStatementController = require('../controllers/incomeStatementController');
 const balanceSheetController = require('../controllers/balanceSheetController');
+const monthlyCashflowController = require('../controllers/monthlyCashflowController');
 
 // Cashflow report routes
 router.get('/cashflow', authenticate, reportsController.getCashflowReport);
 router.get('/cashflow/export', authenticate, reportsController.exportCashflowReport);
+router.get('/cashflow/monthly', authenticate, monthlyCashflowController.getMonthlyCashflowReport);
 
 // Income statement routes
 router.get('/income-statement', authenticate, incomeStatementController.generateIncomeStatement);

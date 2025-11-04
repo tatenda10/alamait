@@ -4,34 +4,22 @@ import axios from 'axios';
 import BASE_URL from '../../context/Api';
 
 const CashflowReport = () => {
-  const [startDate, setStartDate] = useState(getDefaultStartDate());
-  const [endDate, setEndDate] = useState(getDefaultEndDate());
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setMonth(0, 1); // January 1st
+    return date.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth(), 0); // Last day of current month
+    return date.toISOString().split('T')[0];
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showCashflow, setShowCashflow] = useState(false);
   const [boardingHouses, setBoardingHouses] = useState([]);
   const [selectedBoardingHouse, setSelectedBoardingHouse] = useState('all');
-  const [cashflowData, setCashflowData] = useState({
-    inflows: [],
-    outflows: [],
-    netCashflow: { amount: 0 },
-    totalInflows: { amount: 0 },
-    totalOutflows: { amount: 0 },
-    totalCashPosition: { amount: 0 },
-    cashAccountBalances: []
-  });
-
-  function getDefaultStartDate() {
-    const date = new Date();
-    date.setDate(1); // First day of current month
-    return date.toISOString().split('T')[0];
-  }
-
-  function getDefaultEndDate() {
-    const date = new Date();
-    date.setMonth(date.getMonth() + 1, 0); // Last day of current month
-    return date.toISOString().split('T')[0];
-  }
+  const [reportData, setReportData] = useState(null);
 
   // Fetch boarding houses
   const fetchBoardingHouses = async () => {
@@ -69,23 +57,21 @@ const CashflowReport = () => {
         params.boarding_house_id = selectedBoardingHouse;
       }
 
-      console.log('Fetching cashflow with params:', params);
+      console.log('Fetching monthly cashflow with params:', params);
 
-      const response = await axios.get(`${BASE_URL}/reports/cashflow`, {
+      const response = await axios.get(`${BASE_URL}/reports/cashflow/monthly`, {
         params,
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
 
-      console.log('Cashflow response:', response.data);
-      console.log('Total Cash Position:', response.data.totalCashPosition);
-      console.log('Cash Account Balances:', response.data.cashAccountBalances);
-      setCashflowData(response.data);
+      console.log('Monthly cashflow response:', response.data);
+      setReportData(response.data);
       setShowCashflow(true);
     } catch (error) {
-      console.error('Error fetching cashflow data:', error);
-      setError(error.response?.data?.message || 'Failed to load cashflow data');
+      console.error('Error fetching monthly cashflow data:', error);
+      setError(error.response?.data?.message || 'Failed to load monthly cashflow data');
     } finally {
       setLoading(false);
     }
@@ -146,156 +132,311 @@ const CashflowReport = () => {
 
   if (loading) {
     return (
-      <div className="px-6 mt-5 py-8">
+      <div className="px-1 mt-2 py-2">
         <div className="flex items-center justify-center h-64">
-          <div className="text-sm text-gray-500">Loading cashflow data...</div>
+          <div className="text-sm text-gray-500">Loading monthly cashflow data...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="px-6 mt-5 py-8">
-      <div className="mb-8">
-        <h1 className="text-sm font-bold text-gray-900">Cashflow Statement</h1>
-        <p className="mt-1 text-xs text-gray-600">
-          For the period {new Date(startDate).toLocaleDateString()} to {new Date(endDate).toLocaleDateString()}
+    <div className="px-1 mt-2 py-2 w-full min-w-0">
+      <div className="mb-2">
+        <h1 className="text-sm font-bold text-gray-900">Monthly Cash Flow Statement</h1>
+        <p className="mt-0.5 text-xs text-gray-600">
+          Monthly breakdown from {new Date(startDate).toLocaleDateString()} to {new Date(endDate).toLocaleDateString()}
         </p>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex gap-4 items-center">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-2 text-xs border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-2 text-xs border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Boarding House</label>
-            <select
-              value={selectedBoardingHouse}
-              onChange={(e) => setSelectedBoardingHouse(e.target.value)}
-              className="px-3 py-2 text-xs border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
-            >
-              <option value="all">All Boarding Houses</option>
-              {boardingHouses.map(bh => (
-                <option key={bh.id} value={bh.id}>
-                  {bh.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="mb-2 flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-0.5">Start Date</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
+          />
         </div>
-        <div className="flex gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-0.5">End Date</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-0.5">Boarding House</label>
+          <select
+            value={selectedBoardingHouse}
+            onChange={(e) => setSelectedBoardingHouse(e.target.value)}
+            className="px-2 py-1 text-xs border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:border-transparent"
+          >
+            <option value="all">All Boarding Houses</option>
+            {boardingHouses.map(bh => (
+              <option key={bh.id} value={bh.id}>
+                {bh.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2">
           <button
             onClick={fetchCashflowData}
             disabled={loading}
-            className="flex items-center px-4 py-2 text-xs text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:ring-offset-2"
+            className="px-3 py-1 text-xs text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:ring-offset-2"
           >
-            {loading ? 'Loading...' : 'Generate Report'}
+            {loading ? 'Loading...' : 'Search Report'}
           </button>
           <button
             onClick={handleExport}
             disabled={!showCashflow}
-            className="flex items-center px-4 py-2 text-xs text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:ring-offset-2"
+            className="flex items-center px-3 py-1 text-xs text-white bg-[#f58020] hover:bg-[#f58020]/90 focus:outline-none focus:ring-2 focus:ring-[#f58020] focus:ring-offset-2"
           >
-            <FaFileDownload className="h-4 w-4 mr-2" />
-            Export Report
+            <FaFileDownload className="h-3 w-3 mr-1" />
+            Export
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-300 rounded">
+        <div className="mb-2 p-2 bg-red-50 border border-red-300 rounded">
           <div className="text-xs text-red-800">{error}</div>
         </div>
       )}
 
-      {showCashflow && (
-        <div className="bg-white border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-xs font-semibold text-gray-900">Statement of Cash Flows</h3>
-          </div>
-          
-          <div className="p-6">
-          {/* Cash Inflows Section */}
-          <div className="mb-8">
-            <h4 className="text-xs font-bold text-gray-900 mb-4">Cash Inflows</h4>
-            <div className="space-y-2">
-              {cashflowData.inflows.map((item, index) => (
-                <div key={index} className="flex justify-between text-xs">
-                  <span className="text-gray-600">{item.category}</span>
-                  <span className="text-gray-900 font-medium">{formatCurrency(item.amount)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between text-xs font-bold pt-2 border-t">
-                <span>Total Inflows</span>
-                <span>{formatCurrency(cashflowData.totalInflows.amount)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Cash Outflows Section */}
-          <div className="mb-8">
-            <h4 className="text-xs font-bold text-gray-900 mb-4">Cash Outflows</h4>
-            <div className="space-y-2">
-              {cashflowData.outflows.map((item, index) => (
-                <div key={index} className="flex justify-between text-xs">
-                  <span className="text-gray-600">{item.category}</span>
-                  <span className="text-gray-900 font-medium">({formatCurrency(item.amount)})</span>
-                </div>
-              ))}
-              <div className="flex justify-between text-xs font-bold pt-2 border-t">
-                <span>Total Outflows</span>
-                <span>({formatCurrency(cashflowData.totalOutflows.amount)})</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Net Cashflow */}
-          <div className="pt-4 border-t-2 border-gray-900">
-            <div className="flex justify-between text-xs font-bold">
-              <span>Net Cash Flow</span>
-              <span className={cashflowData.netCashflow.amount >= 0 ? 'text-green-600' : 'text-red-600'}>
-                {formatCurrency(cashflowData.netCashflow.amount)}
-              </span>
-            </div>
-          </div>
-
-          {/* Total Cash Position */}
-          <div className="mt-6 pt-4 border-t border-gray-300">
-            <div className="flex justify-between text-xs font-bold mb-4">
-              <span>Total Cash Position</span>
-              <span className="text-blue-600">
-                {formatCurrency(cashflowData.totalCashPosition?.amount || 0)}
-              </span>
-            </div>
+      {showCashflow && reportData && (
+        <div className="bg-white border border-gray-200 w-full">
+          <div className="p-1">
+            <h2 className="text-xs font-bold text-gray-900 mb-1">Cash Flow Statement</h2>
             
-            {/* Individual Cash Account Balances */}
-            {cashflowData.cashAccountBalances && cashflowData.cashAccountBalances.length > 0 && (
-              <div className="space-y-2 ml-4">
-                {cashflowData.cashAccountBalances.map((account, index) => (
-                  <div key={index} className="flex justify-between text-xs text-gray-600">
-                    <span>{account.name}</span>
-                    <span>{formatCurrency(account.balance)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            {/* Monthly columns header - scrollable container */}
+            <div className="overflow-x-auto w-full" style={{ WebkitOverflowScrolling: 'touch', overflowY: 'visible', display: 'block' }}>
+              <table className="text-xs" style={{ minWidth: `${250 + (reportData.months.length + 1) * 120}px`, width: 'max-content', tableLayout: 'auto', borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <thead>
+                    <tr className="border-b border-gray-300">
+                      <th className="text-left py-1 px-3 font-semibold text-gray-700 sticky left-0 bg-white z-20 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Account</th>
+                    {reportData.months.map((month, idx) => (
+                      <th key={idx} className="text-right py-1 px-3 font-semibold text-gray-700 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {month}
+                      </th>
+                    ))}
+                    <th className="text-right py-1 px-3 font-semibold text-gray-700 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      FY-25
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Operating Activities - Income */}
+                  <tr className="bg-blue-50">
+                    <td colSpan={reportData.months.length + 2} className="py-1 px-3 font-bold text-gray-900">
+                      Cash Flows from Operating Activities
+                    </td>
+                  </tr>
+                  
+                  {reportData.operatingActivities.income.map((item, idx) => (
+                    <tr key={`income-${idx}`} className="border-b border-gray-200">
+                      <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                      {item.monthlyValues.map((val, mIdx) => (
+                        <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                          {val > 0 ? formatCurrency(val) : ''}
+                        </td>
+                      ))}
+                      <td className="py-0.5 px-3 text-right font-semibold text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(item.total)}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Total Rental Income */}
+                  <tr className="border-b-2 border-gray-400 font-semibold">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Total Rental Income</td>
+                    {reportData.operatingActivities.totals.operatingIncome.map((total, idx) => (
+                      <td key={idx} className="py-1 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(total)}
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.summary.totalOperatingIncome)}
+                    </td>
+                  </tr>
+
+                  {/* Operating Activities - Expenses */}
+                  <tr>
+                    <td colSpan={reportData.months.length + 2} className="py-1 px-3 font-bold text-gray-900">
+                      Operating Activities (Expenses)
+                    </td>
+                  </tr>
+
+                  {reportData.operatingActivities.expenses.map((item, idx) => (
+                    <tr key={`expense-${idx}`} className="border-b border-gray-200">
+                      <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                      {item.monthlyValues.map((val, mIdx) => (
+                        <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                          {val > 0 ? formatCurrency(val) : ''}
+                        </td>
+                      ))}
+                      <td className="py-0.5 px-3 text-right font-semibold text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(item.total)}
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Total Cash Flows from Operating Activities */}
+                  <tr className="border-b-2 border-gray-400 font-bold">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Total Cash Flows from Operating Activities</td>
+                    {reportData.operatingActivities.totals.operatingNet.map((net, idx) => (
+                      <td key={idx} className="py-1 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(net)}
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.summary.totalOperatingIncome - reportData.summary.totalOperatingExpenses)}
+                    </td>
+                  </tr>
+
+                  {/* Investing Activities */}
+                  <tr className="bg-green-50">
+                    <td colSpan={reportData.months.length + 2} className="py-1 px-3 font-bold text-gray-900">
+                      Cash Flows From Investing Activities
+                    </td>
+                  </tr>
+
+                  {reportData.investingActivities.length > 0 ? (
+                    reportData.investingActivities.map((item, idx) => (
+                      <tr key={`investing-${idx}`} className="border-b border-gray-200">
+                        <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                        {item.monthlyValues.map((val, mIdx) => (
+                          <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                            {val > 0 ? formatCurrency(val) : ''}
+                          </td>
+                        ))}
+                        <td className="py-0.5 px-3 text-right font-semibold text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                          {formatCurrency(item.total)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={reportData.months.length + 2} className="py-0.5 px-3 text-gray-500 text-center">
+                        No investing activities
+                      </td>
+                    </tr>
+                  )}
+
+                  <tr className="border-b-2 border-gray-400 font-bold">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Total Cash Flows From Investing Activities</td>
+                    {reportData.monthlyTotals.investing.map((total, idx) => (
+                      <td key={idx} className="py-1 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(total)}
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.summary.totalInvesting)}
+                    </td>
+                  </tr>
+
+                  {/* Financing Activities */}
+                  <tr className="bg-purple-50">
+                    <td colSpan={reportData.months.length + 2} className="py-1 px-3 font-bold text-gray-900">
+                      Cash Flows From Financing Activities
+                    </td>
+                  </tr>
+
+                  {reportData.financingActivities.length > 0 ? (
+                    reportData.financingActivities.map((item, idx) => (
+                      <tr key={`financing-${idx}`} className="border-b border-gray-200">
+                        <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                        {item.monthlyValues.map((val, mIdx) => (
+                          <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                            {val > 0 ? formatCurrency(val) : ''}
+                          </td>
+                        ))}
+                        <td className="py-0.5 px-3 text-right font-semibold text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                          {formatCurrency(item.total)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={reportData.months.length + 2} className="py-0.5 px-3 text-gray-500 text-center">
+                        No financing activities
+                      </td>
+                    </tr>
+                  )}
+
+                  <tr className="border-b-2 border-gray-400 font-bold">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Total Cash Flows From Financing Activities</td>
+                    {reportData.monthlyTotals.financing.map((total, idx) => (
+                      <td key={idx} className="py-1 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(total)}
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.summary.totalFinancing)}
+                    </td>
+                  </tr>
+
+                  {/* Net increase in cash */}
+                  <tr className="border-b-2 border-gray-400 font-bold bg-yellow-50">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-yellow-50 z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Net increase in cash and cash equivalents</td>
+                    {reportData.cashAtEndOfPeriod.map((cash, idx) => {
+                      const prevCash = idx > 0 ? reportData.cashAtEndOfPeriod[idx - 1] : 0;
+                      const increase = cash - prevCash;
+                      return (
+                        <td key={idx} className="py-1 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                          {formatCurrency(increase)}
+                        </td>
+                      );
+                    })}
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.cashAtEndOfPeriod[reportData.cashAtEndOfPeriod.length - 1] || 0)}
+                    </td>
+                  </tr>
+
+                  {/* Cash at end of period */}
+                  <tr className="border-b-2 border-gray-900 font-bold bg-blue-50">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-blue-50 z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Cash and cash equivalents at end of period</td>
+                    {reportData.cashAtEndOfPeriod.map((cash, idx) => (
+                      <td key={idx} className="py-1 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(cash)}
+                      </td>
+                    ))}
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.cashAtEndOfPeriod[reportData.cashAtEndOfPeriod.length - 1] || 0)}
+                    </td>
+                  </tr>
+
+                  {/* Cash Breakdown */}
+                  <tr className="bg-gray-100">
+                    <td colSpan={reportData.months.length + 2} className="py-1 px-3 font-bold text-gray-900">
+                      Cash Breakdown
+                    </td>
+                  </tr>
+
+                  {reportData.cashBreakdown.accounts.map((account, idx) => (
+                    <tr key={`cash-${idx}`} className="border-b border-gray-200">
+                      <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{account.name}</td>
+                      <td colSpan={reportData.months.length} className="py-0.5 px-3 text-right text-gray-500"></td>
+                      <td className="py-0.5 px-3 text-right font-semibold text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                        {formatCurrency(account.balance)}
+                      </td>
+                    </tr>
+                  ))}
+
+                  <tr className="border-b-2 border-gray-400 font-bold">
+                    <td className="py-1 px-3 text-gray-900 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>Total</td>
+                    <td colSpan={reportData.months.length} className="py-1 px-3 text-right text-gray-500"></td>
+                    <td className="py-1 px-3 text-right text-gray-900 bg-gray-50 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
+                      {formatCurrency(reportData.cashBreakdown.total)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

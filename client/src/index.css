@@ -11,11 +11,10 @@
 
 
 body {
-
   overflow-y: scroll;
   /* Enable vertical scrolling */
-  overflow-x: hidden;
-  /* Hide horizontal scrollbar */
+  overflow-x: auto;
+  /* Allow horizontal scrolling when needed */
   font-family: 'Montserrat', sans-serif;
   /* Hide the vertical scrollbar */
   scrollbar-width: none;
