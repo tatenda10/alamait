@@ -125,7 +125,9 @@ const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidate
       JOIN transactions t ON je.transaction_id = t.id
       JOIN chart_of_accounts coa ON je.account_id = coa.id
       JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+      WHERE t.transaction_date >= ? 
+        AND t.transaction_date <= ?
+        AND t.status = 'posted'
         AND je.entry_type = 'credit'
         AND coa.type = 'Revenue'
         AND je.deleted_at IS NULL
@@ -202,7 +204,8 @@ const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidate
       JOIN transactions t ON je.transaction_id = t.id
       JOIN chart_of_accounts coa ON je.account_id = coa.id
       JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+      WHERE t.transaction_date >= ? 
+        AND t.transaction_date <= ?
         AND t.status = 'posted'
         AND je.entry_type = 'debit'
         AND coa.type = 'Expense'
