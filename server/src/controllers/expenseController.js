@@ -1067,6 +1067,10 @@ exports.getExpensesReport = async (req, res) => {
     const groupedExpenses = expenses.reduce((acc, expense) => {
       const boardingHouseKey = expense.boarding_house_id;
       
+      // Ensure numeric conversion for amounts and counts
+      const totalAmount = parseFloat(expense.total_amount) || 0;
+      const transactionCount = parseInt(expense.transaction_count) || 0;
+      
       if (!acc[boardingHouseKey]) {
         acc[boardingHouseKey] = {
           boarding_house_id: expense.boarding_house_id,
@@ -1083,12 +1087,12 @@ exports.getExpensesReport = async (req, res) => {
         account_code: expense.account_code,
         account_name: expense.account_name,
         account_type: expense.account_type,
-        total_amount: expense.total_amount,
-        transaction_count: expense.transaction_count
+        total_amount: totalAmount,
+        transaction_count: transactionCount
       });
 
-      acc[boardingHouseKey].total_amount += expense.total_amount;
-      acc[boardingHouseKey].total_transactions += expense.transaction_count;
+      acc[boardingHouseKey].total_amount += totalAmount;
+      acc[boardingHouseKey].total_transactions += transactionCount;
 
       return acc;
     }, {});
@@ -1096,10 +1100,10 @@ exports.getExpensesReport = async (req, res) => {
     // Convert to array format
     const result = Object.values(groupedExpenses);
 
-    // Calculate overall totals
+    // Calculate overall totals - ensure numeric conversion
     const overallTotals = result.reduce((totals, boardingHouse) => {
-      totals.total_amount += boardingHouse.total_amount;
-      totals.total_transactions += boardingHouse.total_transactions;
+      totals.total_amount += parseFloat(boardingHouse.total_amount) || 0;
+      totals.total_transactions += parseInt(boardingHouse.total_transactions) || 0;
       return totals;
     }, { total_amount: 0, total_transactions: 0 });
 
