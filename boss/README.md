@@ -1,86 +1,16 @@
-# Boss Dashboard
+# React + Vite
 
-A comprehensive management dashboard for overseeing all boarding houses and operations in the Alamait system.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Features
+Currently, two official plugins are available:
 
-- **Global Overview**: Monitor all boarding houses from a single dashboard
-- **Student Management**: View and manage students across all locations
-- **Financial Reports**: Access comprehensive financial reports
-- **Accounting**: Manage chart of accounts, trial balance, and accounts payable
-- **Supplier Management**: Oversee all suppliers and vendors
-- **System Settings**: Configure system-wide settings and preferences
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## Getting Started
+## React Compiler
 
-### Prerequisites
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-- Node.js (v16 or higher)
-- npm or yarn
-- Access to the Alamait API server
+## Expanding the ESLint configuration
 
-### Installation
-
-1. Navigate to the boss directory:
-   ```bash
-   cd boss
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file in the boss directory:
-   ```env
-   VITE_API_URL=http://localhost:5000/api
-   ```
-
-4. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-The application will be available at `http://localhost:5173` (default Vite port)
-
-### Building for Production
-
-```bash
-npm run build
-```
-
-## Authentication
-
-The Boss Dashboard requires users with `boss` or `admin` role privileges. Regular users will be denied access.
-
-## Pages
-
-- **Dashboard**: Overview of all system metrics
-- **All Boarding Houses**: Manage all boarding houses
-- **All Students**: View students across all locations
-- **All Rooms**: Room management across all houses
-- **All Suppliers**: Supplier and vendor management
-- **All Users**: User management and permissions
-- **Accounting Overview**: Financial management tools
-- **All Reports**: Comprehensive reporting system
-- **System Settings**: System configuration and preferences
-
-## Technology Stack
-
-- React 19
-- React Router DOM
-- Axios
-- Vite
-- Custom CSS (no external UI library)
-
-## API Integration
-
-The Boss Dashboard integrates with the Alamait API server to fetch data from all boarding houses. Make sure the API server is running and accessible.
-
-## Development
-
-The application uses Vite for fast development and hot module replacement. All components are built with React and styled with custom CSS.
-
-## License
-
-This project is part of the Alamait boarding house management system.
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.

@@ -22,7 +22,7 @@ const processCheckout = async (req, res) => {
       });
     }
 
-    // Get current active enrollment
+    // Get current active enrollment (not checked out yet)
     const [enrollments] = await connection.query(
       `SELECT 
         se.id,
@@ -33,7 +33,7 @@ const processCheckout = async (req, res) => {
        JOIN rooms r ON se.room_id = r.id
        WHERE se.student_id = ? 
          AND se.deleted_at IS NULL 
-         AND se.expected_end_date >= CURRENT_DATE
+         AND se.checkout_date IS NULL
        ORDER BY se.created_at DESC
        LIMIT 1`,
       [studentId]
@@ -47,14 +47,16 @@ const processCheckout = async (req, res) => {
 
     const enrollment = enrollments[0];
 
-    // Verify all checklist items are completed
-    const allItemsChecked = Object.values(checklistItems)
-      .every(item => item.checked);
+    // Verify all checklist items are completed (if checklistItems is provided)
+    if (checklistItems && typeof checklistItems === 'object') {
+      const allItemsChecked = Object.values(checklistItems)
+        .every(item => item && item.checked);
 
-    if (!allItemsChecked) {
-      return res.status(400).json({ 
-        message: 'All checklist items must be completed before checkout' 
-      });
+      if (!allItemsChecked) {
+        return res.status(400).json({ 
+          message: 'All checklist items must be completed before checkout' 
+        });
+      }
     }
 
     // Update enrollment with checkout details
@@ -77,10 +79,22 @@ const processCheckout = async (req, res) => {
       ]
     );
 
+    // Free up the bed assigned to this enrollment
+    await connection.query(
+      `UPDATE beds 
+       SET status = 'available',
+           student_id = NULL,
+           enrollment_id = NULL,
+           updated_at = NOW()
+       WHERE enrollment_id = ? AND deleted_at IS NULL`,
+      [enrollment.id]
+    );
+
     // Update room availability
     await connection.query(
       `UPDATE rooms 
-       SET available_beds = available_beds + 1
+       SET available_beds = available_beds + 1,
+           updated_at = NOW()
        WHERE id = ?`,
       [enrollment.room_id]
     );

@@ -441,6 +441,35 @@ export default function UserManagement() {
     ));
   };
 
+  const handleDelete = async (userId) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${BASE_URL}/users/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      // Remove user from the list
+      setUsers(prev => prev.filter(user => user.id !== userId));
+      setError('');
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      if (err.response?.status === 401) {
+        setError('Your session has expired. Please log in again.');
+      } else if (err.response?.status === 403) {
+        setError(err.response?.data?.message || 'You do not have permission to delete users.');
+      } else if (err.response?.status === 404) {
+        setError('User not found.');
+      } else {
+        setError(err.response?.data?.message || 'Failed to delete user');
+      }
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
       user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -572,12 +601,15 @@ export default function UserManagement() {
                       >
                         <FiEdit2 size={14} />
                       </button>
-                      <button 
-                        className="text-gray-600 hover:text-red-600 transition-colors"
-                        title="Delete user"
-                      >
-                        <FiTrash2 size={14} />
-                      </button>
+                      {user.role !== 'super_admin' && user.username !== 'sysadmin' && (
+                        <button 
+                          className="text-gray-600 hover:text-red-600 transition-colors"
+                          title="Delete user"
+                          onClick={() => handleDelete(user.id)}
+                        >
+                          <FiTrash2 size={14} />
+                        </button>
+                      )}
                 </td>
               </tr>
                 ))

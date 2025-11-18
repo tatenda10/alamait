@@ -87,4 +87,7 @@ router.get('/:studentId/invoices-dashboard', studentController.getStudentInvoice
 // Submit lease signature
 router.post('/:studentId/sign-lease', studentController.submitLeaseSignature);
 
+// Add student previous balance
+router.post('/previous-balance', authenticate, studentController.addStudentPreviousBalance);
+
 module.exports = router; 

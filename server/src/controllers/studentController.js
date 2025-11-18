@@ -116,30 +116,52 @@ const studentLogin = async (req, res) => {
   }
 };
 
-// Get students by boarding house
+// Get students by boarding house (including students without enrollments and past enrollments)
 const getStudentsByBoardingHouse = async (req, res) => {
   try {
     const { boardingHouseId } = req.params;
+    // Get students with enrollments in this boarding house (including past/terminated enrollments)
+    // Also include students with no enrollments at all (they might have left but still owe money)
     const [students] = await db.query(
-      `SELECT 
+      `SELECT DISTINCT
         s.*,
-        se.room_id,
+        latest_se.room_id,
         r.name as room_name,
-        se.agreed_amount,
-        se.currency,
-        se.start_date,
-        se.expected_end_date,
-        bh.name as boarding_house_name
+        latest_se.agreed_amount,
+        latest_se.currency,
+        latest_se.start_date,
+        latest_se.expected_end_date,
+        latest_se.boarding_house_id,
+        latest_se.id as enrollment_id,
+        bh.name as boarding_house_name,
+        COALESCE(sab.current_balance, 0) as current_balance,
+        COALESCE(sab.currency, 'USD') as balance_currency
       FROM students s
-      LEFT JOIN student_enrollments se ON s.id = se.student_id 
-        AND se.deleted_at IS NULL 
-        AND se.boarding_house_id = ?
-      LEFT JOIN rooms r ON se.room_id = r.id AND r.deleted_at IS NULL
-      LEFT JOIN boarding_houses bh ON s.boarding_house_id = bh.id AND bh.deleted_at IS NULL
-      WHERE s.boarding_house_id = ? 
-        AND s.deleted_at IS NULL
+      LEFT JOIN (
+        SELECT se1.*
+        FROM student_enrollments se1
+        INNER JOIN (
+          SELECT student_id, MAX(created_at) as max_created_at
+          FROM student_enrollments
+          WHERE deleted_at IS NULL 
+            AND boarding_house_id = ?
+          GROUP BY student_id
+        ) se2 ON se1.student_id = se2.student_id 
+          AND se1.created_at = se2.max_created_at
+        WHERE se1.deleted_at IS NULL 
+          AND se1.boarding_house_id = ?
+      ) latest_se ON s.id = latest_se.student_id
+      LEFT JOIN rooms r ON latest_se.room_id = r.id AND r.deleted_at IS NULL
+      LEFT JOIN boarding_houses bh ON latest_se.boarding_house_id = bh.id AND bh.deleted_at IS NULL
+      LEFT JOIN student_account_balances sab ON s.id = sab.student_id 
+        AND (latest_se.id = sab.enrollment_id OR latest_se.id IS NULL)
+      WHERE s.deleted_at IS NULL
+        AND (
+          latest_se.boarding_house_id = ? 
+          OR latest_se.boarding_house_id IS NULL
+        )
       ORDER BY s.full_name`,
-      [boardingHouseId, boardingHouseId]
+      [boardingHouseId, boardingHouseId, boardingHouseId]
     );
     
     res.json(students);
@@ -201,19 +223,35 @@ const getStudentById = async (req, res) => {
 // Get list of students
 const getStudents = async (req, res) => {
   try {
+    // Get students with their most recent enrollment's boarding house
     const [students] = await db.query(
       `SELECT 
         s.*,
-        se.room_id,
+        latest_se.room_id,
         r.name as room_name,
-        se.agreed_amount,
-        se.currency,
-        bh.name as boarding_house_name
+        latest_se.agreed_amount,
+        latest_se.currency,
+        latest_se.boarding_house_id,
+        latest_se.id as enrollment_id,
+        bh.name as boarding_house_name,
+        latest_se.start_date,
+        COALESCE(sab.current_balance, 0) as current_balance,
+        COALESCE(sab.currency, 'USD') as balance_currency
       FROM students s
-      LEFT JOIN student_enrollments se ON s.id = se.student_id 
-        AND se.deleted_at IS NULL
-      LEFT JOIN rooms r ON se.room_id = r.id AND r.deleted_at IS NULL
-      LEFT JOIN boarding_houses bh ON s.boarding_house_id = bh.id AND bh.deleted_at IS NULL
+      LEFT JOIN (
+        SELECT se.*
+        FROM (
+          SELECT se.*,
+            ROW_NUMBER() OVER (PARTITION BY se.student_id ORDER BY se.start_date DESC, se.id DESC) as rn
+          FROM student_enrollments se
+          WHERE se.deleted_at IS NULL
+        ) se
+        WHERE se.rn = 1
+      ) latest_se ON s.id = latest_se.student_id
+      LEFT JOIN rooms r ON latest_se.room_id = r.id AND r.deleted_at IS NULL
+      LEFT JOIN boarding_houses bh ON latest_se.boarding_house_id = bh.id AND bh.deleted_at IS NULL
+      LEFT JOIN student_account_balances sab ON s.id = sab.student_id 
+        AND (latest_se.id = sab.enrollment_id OR latest_se.id IS NULL)
       WHERE s.deleted_at IS NULL
       ORDER BY s.full_name`
     );
@@ -227,6 +265,7 @@ const getStudents = async (req, res) => {
       return {
         id: student.id,
         id_number: student.student_number,
+        student_number: student.student_number,
         first_name: nameParts[0] || '',
         last_name: nameParts.slice(1).join(' ') || '',
         full_name: student.full_name || '',
@@ -236,7 +275,10 @@ const getStudents = async (req, res) => {
         year_level: student.year_level || 1,
         room_name: student.room_name || null,
         boarding_house_name: student.boarding_house_name || null,
-        status: student.status || 'Inactive'
+        status: student.status || 'Inactive',
+        current_balance: parseFloat(student.current_balance || 0),
+        balance_currency: student.balance_currency || 'USD',
+        enrollment_id: student.enrollment_id
       };
     });
     
@@ -703,30 +745,28 @@ const assignRoom = async (req, res) => {
 
     const boardingHouseId = room[0].boarding_house_id;
 
-    // If bedId is provided, check if that specific bed is available
-    if (bedId) {
-      const [bed] = await connection.query(
-        'SELECT id, status, price FROM beds WHERE id = ? AND room_id = ? AND deleted_at IS NULL',
-        [bedId, roomId]
-      );
+    // Bed selection is REQUIRED
+    if (!bedId) {
+      return res.status(400).json({ message: 'Bed selection is required. Please select a specific bed.' });
+    }
 
-      if (bed.length === 0) {
-        return res.status(404).json({ message: 'Bed not found in this room' });
-      }
+    // Check if that specific bed is available
+    const [bed] = await connection.query(
+      'SELECT id, status, price FROM beds WHERE id = ? AND room_id = ? AND deleted_at IS NULL',
+      [bedId, roomId]
+    );
 
-      if (bed[0].status !== 'available') {
-        return res.status(400).json({ message: 'Selected bed is not available' });
-      }
+    if (bed.length === 0) {
+      return res.status(404).json({ message: 'Bed not found in this room' });
+    }
 
-      // Use the bed's specific price if no agreed amount is provided
-      if (!agreedAmount && bed[0].price) {
-        agreedAmount = bed[0].price;
-      }
-    } else {
-      // If no specific bed is selected, check if room has any available beds
-      if (room[0].available_beds < 1) {
-        return res.status(400).json({ message: 'No available beds in this room' });
-      }
+    if (bed[0].status !== 'available') {
+      return res.status(400).json({ message: 'Selected bed is not available' });
+    }
+
+    // Use the bed's specific price if no agreed amount is provided
+    if (!agreedAmount && bed[0].price) {
+      agreedAmount = bed[0].price;
     }
 
     // Create enrollment with admin fee and security deposit
@@ -993,12 +1033,12 @@ const assignRoom = async (req, res) => {
     const invoiceDate = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), 1); // First day of the month
     const invoiceRef = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    // Calculate total for first invoice: RENT ONLY (admin fee handled separately)
+    // Calculate total for first invoice: RENT + ADMIN FEE
     const monthlyRent = parseFloat(agreedAmount);
     const adminFeeAmount = parseFloat(adminFee || 0);
-    const firstInvoiceTotal = monthlyRent;
+    const firstInvoiceTotal = monthlyRent + adminFeeAmount;
     
-    // Create invoice for first month (rent only)
+    // Create invoice for first month (rent + admin fee)
     const [invoiceResult] = await connection.query(
       `INSERT INTO student_invoices (
         student_id,
@@ -1015,10 +1055,14 @@ const assignRoom = async (req, res) => {
         id,
         enrollmentId,
         firstInvoiceTotal,
-        `First month rent for ${startDateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
+        adminFeeAmount > 0 
+          ? `First month rent + admin fee for ${startDateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+          : `First month rent for ${startDateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
         invoiceDate,
         invoiceRef,
-        `Initial invoice: Monthly rent (${currency} ${monthlyRent.toFixed(2)})`,
+        adminFeeAmount > 0
+          ? `Initial invoice: Monthly rent (${currency} ${monthlyRent.toFixed(2)}) + Admin fee (${currency} ${adminFeeAmount.toFixed(2)})`
+          : `Initial invoice: Monthly rent (${currency} ${monthlyRent.toFixed(2)})`,
         'pending'
       ]
     );
@@ -1080,7 +1124,7 @@ const assignRoom = async (req, res) => {
     }
 
     // Create journal entries for the initial invoice
-    // Debit: Accounts Receivable (increases receivable)
+    // Debit: Accounts Receivable (increases receivable) - for rent only
     await connection.query(
       `INSERT INTO journal_entries (
         transaction_id,
@@ -1096,14 +1140,14 @@ const assignRoom = async (req, res) => {
         invoiceTransactionResult.insertId,
         receivableAccount[0].id,
         'debit',
-        firstInvoiceTotal,
-        `Initial invoice - Debit Accounts Receivable`,
+        monthlyRent,
+        `Initial invoice - Debit Accounts Receivable (Rent)`,
         boardingHouseId,
         req.user?.id || 1
       ]
     );
 
-    // Credit: Revenue Account
+    // Credit: Revenue Account - for rent only
     await connection.query(
       `INSERT INTO journal_entries (
         transaction_id,
@@ -1119,17 +1163,21 @@ const assignRoom = async (req, res) => {
         invoiceTransactionResult.insertId,
         revenueAccount[0].id,
         'credit',
-        firstInvoiceTotal,
-        `Initial invoice - Credit Rentals Income`,
+        monthlyRent,
+        `Initial invoice - Credit Rentals Income (Rent)`,
         boardingHouseId,
         req.user?.id || 1
       ]
     );
+    
+    // Note: Admin fee is handled separately in its own transaction (lines 806-883)
+    // This ensures proper accounting while including it in the student balance
 
-    // Update account balances after creating journal entries
+    // Update account balances after creating journal entries (rent only)
+    // Admin fee account balances are updated separately in lines 868-882
     await updateAccountBalance(
       receivableAccount[0].id,
-      firstInvoiceTotal,
+      monthlyRent,
       'debit',
       boardingHouseId,
       connection
@@ -1137,7 +1185,7 @@ const assignRoom = async (req, res) => {
 
     await updateAccountBalance(
       revenueAccount[0].id,
-      firstInvoiceTotal,
+      monthlyRent,
       'credit',
       boardingHouseId,
       connection
@@ -1236,6 +1284,7 @@ const updateEnrollment = async (req, res) => {
     const { studentId, enrollmentId } = req.params;
     const { 
       roomId, 
+      bedId, // Bed ID for bed assignment
       startDate, 
       endDate, 
       agreedAmount, 
@@ -1243,7 +1292,7 @@ const updateEnrollment = async (req, res) => {
       notes 
     } = req.body;
 
-    // Get current enrollment to check room change
+    // Get current enrollment to check room and bed change
     const [currentEnrollment] = await connection.query(
       'SELECT room_id FROM student_enrollments WHERE id = ? AND student_id = ? AND deleted_at IS NULL',
       [enrollmentId, studentId]
@@ -1255,8 +1304,12 @@ const updateEnrollment = async (req, res) => {
 
     const oldRoomId = currentEnrollment[0].room_id;
 
-    // If room is changing, check availability of new room
+    // If room is changing, bed selection is REQUIRED
     if (roomId && roomId !== oldRoomId) {
+      if (!bedId) {
+        return res.status(400).json({ message: 'Bed selection is required when changing rooms. Please select a specific bed.' });
+      }
+
       const [room] = await connection.query(
         'SELECT id, available_beds FROM rooms WHERE id = ? AND deleted_at IS NULL',
         [roomId]
@@ -1266,9 +1319,41 @@ const updateEnrollment = async (req, res) => {
         return res.status(404).json({ message: 'New room not found' });
       }
 
-      if (room[0].available_beds < 1) {
-        return res.status(400).json({ message: 'No available beds in the new room' });
+      // Check if the selected bed is available in the new room
+      const [bed] = await connection.query(
+        'SELECT id, status, price FROM beds WHERE id = ? AND room_id = ? AND deleted_at IS NULL',
+        [bedId, roomId]
+      );
+
+      if (bed.length === 0) {
+        return res.status(404).json({ message: 'Bed not found in the new room' });
       }
+
+      if (bed[0].status !== 'available') {
+        return res.status(400).json({ message: 'Selected bed is not available in the new room' });
+      }
+
+      // Free up the old bed (if one was assigned)
+      await connection.query(
+        `UPDATE beds 
+         SET status = 'available',
+             student_id = NULL,
+             enrollment_id = NULL,
+             updated_at = NOW()
+         WHERE enrollment_id = ? AND deleted_at IS NULL`,
+        [enrollmentId]
+      );
+
+      // Assign the new bed
+      await connection.query(
+        `UPDATE beds 
+         SET status = 'occupied',
+             student_id = ?,
+             enrollment_id = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [studentId, enrollmentId, bedId]
+      );
 
       // Update old room's available beds (+1)
       await connection.query(
@@ -1287,6 +1372,42 @@ const updateEnrollment = async (req, res) => {
          WHERE id = ?`,
         [roomId]
       );
+    } else if (bedId && roomId === oldRoomId) {
+      // If only bed is changing (same room), validate and update bed
+      const [bed] = await connection.query(
+        'SELECT id, status, price FROM beds WHERE id = ? AND room_id = ? AND deleted_at IS NULL',
+        [bedId, roomId]
+      );
+
+      if (bed.length === 0) {
+        return res.status(404).json({ message: 'Bed not found in this room' });
+      }
+
+      if (bed[0].status !== 'available') {
+        return res.status(400).json({ message: 'Selected bed is not available' });
+      }
+
+      // Free up the old bed
+      await connection.query(
+        `UPDATE beds 
+         SET status = 'available',
+             student_id = NULL,
+             enrollment_id = NULL,
+             updated_at = NOW()
+         WHERE enrollment_id = ? AND deleted_at IS NULL`,
+        [enrollmentId]
+      );
+
+      // Assign the new bed
+      await connection.query(
+        `UPDATE beds 
+         SET status = 'occupied',
+             student_id = ?,
+             enrollment_id = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [studentId, enrollmentId, bedId]
+      );
     }
 
     // Update enrollment
@@ -1297,8 +1418,7 @@ const updateEnrollment = async (req, res) => {
            expected_end_date = COALESCE(?, expected_end_date),
            agreed_amount = COALESCE(?, agreed_amount),
            currency = COALESCE(?, currency),
-           notes = COALESCE(?, notes),
-           updated_at = NOW()
+           notes = COALESCE(?, notes)
        WHERE id = ? AND student_id = ? AND deleted_at IS NULL`,
       [roomId, startDate, endDate, agreedAmount, currency, notes, enrollmentId, studentId]
     );
@@ -2117,6 +2237,336 @@ const changeStudentPassword = async (req, res) => {
   }
 };
 
+// Add student previous balance
+// This function allows adding a previous balance (debit or credit) to a student's account
+// It creates journal entries affecting Accounts Receivable and Revenue accounts
+const addStudentPreviousBalance = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.beginTransaction();
+    
+    const {
+      student_id,
+      enrollment_id,
+      amount,
+      balance_type, // 'debit' (student owes) or 'credit' (student has prepaid/credit)
+      description,
+      transaction_date,
+      reference_number,
+      notes
+    } = req.body;
+
+    // Validate required fields
+    if (!student_id || !enrollment_id || !amount || !balance_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: student_id, enrollment_id, amount, balance_type (debit or credit)'
+      });
+    }
+
+    if (balance_type !== 'debit' && balance_type !== 'credit') {
+      return res.status(400).json({
+        success: false,
+        message: 'balance_type must be either "debit" or "credit"'
+      });
+    }
+
+    // Check if student and enrollment exist
+    const [enrollment] = await connection.query(
+      `SELECT se.*, s.full_name, s.student_number, r.name as room_name, bh.id as boarding_house_id, bh.name as boarding_house_name
+       FROM student_enrollments se
+       JOIN students s ON se.student_id = s.id
+       JOIN rooms r ON se.room_id = r.id
+       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
+       WHERE se.student_id = ? AND se.id = ? AND se.deleted_at IS NULL`,
+      [student_id, enrollment_id]
+    );
+
+    if (enrollment.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student enrollment not found'
+      });
+    }
+
+    const enrollmentData = enrollment[0];
+    const boardingHouseId = enrollmentData.boarding_house_id;
+    const amountValue = parseFloat(amount);
+
+    // Get account IDs
+    const [receivableAccount] = await connection.query(
+      'SELECT id FROM chart_of_accounts WHERE code = ? AND deleted_at IS NULL',
+      ['10005'] // Accounts Receivable
+    );
+
+    // Use Rentals Income (40001) as default, but allow for other income accounts
+    const revenueAccountCode = req.body.revenue_account_code || '40001'; // Default to Rentals Income
+    const [revenueAccount] = await connection.query(
+      'SELECT id FROM chart_of_accounts WHERE code = ? AND deleted_at IS NULL',
+      [revenueAccountCode]
+    );
+
+    if (receivableAccount.length === 0 || revenueAccount.length === 0) {
+      throw new Error('Required accounts not found in chart of accounts');
+    }
+
+    // Create transaction record
+    const transactionRef = reference_number || `PREV-BAL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const transactionDescription = description || `Previous balance adjustment - ${enrollmentData.full_name} (${balance_type})`;
+    
+    const [transactionResult] = await connection.query(
+      `INSERT INTO transactions (
+        transaction_type,
+        student_id,
+        reference,
+        amount,
+        currency,
+        description,
+        transaction_date,
+        boarding_house_id,
+        created_by,
+        created_at,
+        status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)`,
+      [
+        'previous_balance',
+        student_id,
+        transactionRef,
+        amountValue,
+        enrollmentData.currency,
+        transactionDescription,
+        transaction_date || new Date(),
+        boardingHouseId,
+        req.user?.id || 1,
+        'posted'
+      ]
+    );
+
+    const transactionId = transactionResult.insertId;
+
+    // Create journal entries based on balance type
+    if (balance_type === 'debit') {
+      // Student owes money (debit balance)
+      // Debit: Accounts Receivable (increases receivable)
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          transactionId,
+          receivableAccount[0].id,
+          'debit',
+          amountValue,
+          `Previous balance (debit) - Debit Accounts Receivable - ${enrollmentData.full_name}`,
+          boardingHouseId,
+          req.user?.id || 1
+        ]
+      );
+
+      // Credit: Revenue Account (increases income)
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          transactionId,
+          revenueAccount[0].id,
+          'credit',
+          amountValue,
+          `Previous balance (debit) - Credit Revenue - ${enrollmentData.full_name}`,
+          boardingHouseId,
+          req.user?.id || 1
+        ]
+      );
+
+      // Update student account balance (decrease balance, making it more negative)
+      // If record doesn't exist, assume balance is 0
+      await connection.query(
+        `INSERT INTO student_account_balances 
+         (student_id, enrollment_id, current_balance, created_at, updated_at)
+         VALUES (?, ?, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance - ?,
+         updated_at = NOW()`,
+        [student_id, enrollment_id, -amountValue, amountValue]
+      );
+
+      // Update account balances using the service
+      const { updateAccountBalance } = require('../services/accountBalanceService');
+      await updateAccountBalance(
+        receivableAccount[0].id,
+        amountValue,
+        'debit',
+        boardingHouseId,
+        connection
+      );
+
+      await updateAccountBalance(
+        revenueAccount[0].id,
+        amountValue,
+        'credit',
+        boardingHouseId,
+        connection
+      );
+
+    } else {
+      // balance_type === 'credit' - Student has prepaid/credit
+      // Credit: Accounts Receivable (reduces receivable, or creates negative receivable)
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          transactionId,
+          receivableAccount[0].id,
+          'credit',
+          amountValue,
+          `Previous balance (credit) - Credit Accounts Receivable - ${enrollmentData.full_name}`,
+          boardingHouseId,
+          req.user?.id || 1
+        ]
+      );
+
+      // Debit: Revenue Account (reduces income, or creates a prepaid expense)
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id,
+          account_id,
+          entry_type,
+          amount,
+          description,
+          boarding_house_id,
+          created_by,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          transactionId,
+          revenueAccount[0].id,
+          'debit',
+          amountValue,
+          `Previous balance (credit) - Debit Revenue - ${enrollmentData.full_name}`,
+          boardingHouseId,
+          req.user?.id || 1
+        ]
+      );
+
+      // Update student account balance (increase balance, making it more positive)
+      // If record doesn't exist, assume balance is 0
+      await connection.query(
+        `INSERT INTO student_account_balances 
+         (student_id, enrollment_id, current_balance, created_at, updated_at)
+         VALUES (?, ?, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE 
+         current_balance = current_balance + ?,
+         updated_at = NOW()`,
+        [student_id, enrollment_id, amountValue, amountValue]
+      );
+
+      // Update account balances using the service
+      const { updateAccountBalance } = require('../services/accountBalanceService');
+      await updateAccountBalance(
+        receivableAccount[0].id,
+        amountValue,
+        'credit',
+        boardingHouseId,
+        connection
+      );
+
+      await updateAccountBalance(
+        revenueAccount[0].id,
+        amountValue,
+        'debit',
+        boardingHouseId,
+        connection
+      );
+    }
+
+    // Create a student invoice record for tracking (even if it's a credit, we record it)
+    const invoiceDescription = description || `Previous balance (${balance_type}) - ${enrollmentData.full_name}`;
+    await connection.query(
+      `INSERT INTO student_invoices (
+        student_id,
+        enrollment_id,
+        amount,
+        description,
+        invoice_date,
+        reference_number,
+        notes,
+        status,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        student_id,
+        enrollment_id,
+        balance_type === 'debit' ? amountValue : -amountValue, // Negative for credit
+        invoiceDescription,
+        transaction_date || new Date(),
+        transactionRef,
+        notes || `Previous balance adjustment: ${balance_type}`,
+        'pending',
+      ]
+    );
+
+    // Get updated balance
+    const [balance] = await connection.query(
+      'SELECT current_balance FROM student_account_balances WHERE student_id = ? AND enrollment_id = ?',
+      [student_id, enrollment_id]
+    );
+
+    await connection.commit();
+
+    // Ensure we have a balance value (default to 0 if not found)
+    const newBalance = balance && balance.length > 0 ? balance[0].current_balance : 0;
+
+    res.status(201).json({
+      success: true,
+      message: `Previous balance (${balance_type}) added successfully`,
+      data: {
+        transaction_id: transactionId,
+        amount: amountValue,
+        balance_type: balance_type,
+        new_balance: newBalance,
+        student_name: enrollmentData.full_name,
+        student_number: enrollmentData.student_number,
+        room_name: enrollmentData.room_name
+      }
+    });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error adding previous balance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   studentLogin,
   getStudentsByBoardingHouse,
@@ -2136,5 +2586,6 @@ module.exports = {
   getStudentPayments,
   getStudentInvoicesForDashboard,
   submitLeaseSignature,
-  changeStudentPassword
+  changeStudentPassword,
+  addStudentPreviousBalance
 };

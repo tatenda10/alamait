@@ -22,14 +22,6 @@ export const AuthProvider = ({ children }) => {
         { username, password },
         { withCredentials: true }
       );
-      
-      // Check if user has boss/admin privileges
-      if (response.data.user.role !== 'boss' && response.data.user.role !== 'admin') {
-        setError('Access denied. Boss privileges required.');
-        setLoading(false);
-        return { success: false, message: 'Access denied. Boss privileges required.' };
-      }
-      
       setToken(response.data.token);
       setUser(response.data.user);
       localStorage.setItem('token', response.data.token);
@@ -55,35 +47,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Set up axios interceptor for token
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }, [token]);
-
-  const value = {
-    user,
-    token,
-    login,
-    logout,
-    loading,
-    error,
-    setError
-  };
+    // Optionally, validate token or fetch user info here
+  }, []);
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, token, loading, error, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export const useAuth = () => useContext(AuthContext);
+

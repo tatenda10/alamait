@@ -2,9 +2,13 @@ const express = require('express');
 const router = express.Router();
 const {
   generateMonthlyInvoices,
-  getMonthlyInvoiceSummary
+  getMonthlyInvoiceSummary,
+  previewMonthlyInvoices
 } = require('../controllers/monthlyInvoiceController');
 const { authenticate } = require('../middleware/auth');
+
+// Preview invoices for a boarding house and month (without generating)
+router.get('/preview', authenticate, previewMonthlyInvoices);
 
 // Generate monthly invoices for all active students
 router.post('/generate', authenticate, generateMonthlyInvoices);

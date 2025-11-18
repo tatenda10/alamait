@@ -1,37 +1,46 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+
+
+
+@import url('https://fonts.googleapis.com/css2?family=Italianno&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500&family=Italianno&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+
+
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f3f4f6;
-  color: #1f2937;
+  overflow-y: scroll;
+  /* Enable vertical scrolling */
+  overflow-x: auto;
+  /* Allow horizontal scrolling when needed */
+  font-family: 'Montserrat', sans-serif;
+  /* Hide the vertical scrollbar */
+  scrollbar-width: none;
+  /* For Firefox */
+  -ms-overflow-style: none;
+  /* For IE and Edge */
+  font-size: 0.75rem; /* xs size */
 }
 
-#root {
-  height: 100vh;
+/* Hide webkit scrollbar */
+body::-webkit-scrollbar {
+  display: none;
+  /* For Chrome, Safari, and Opera */
 }
 
-button {
-  font-family: inherit;
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
 }
 
-input {
-  font-family: inherit;
+/* Hide number input spinners in Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}

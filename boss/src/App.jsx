@@ -1,43 +1,119 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/auth/Login';
-import BossDashboardLayout from './components/BossDashboardLayout';
 import Dashboard from './pages/Dashboard';
-import AllBoardingHouses from './pages/AllBoardingHouses';
-import AllStudents from './pages/AllStudents';
-import AllReports from './pages/AllReports';
-import AllAccounting from './pages/AllAccounting';
-import AllSuppliers from './pages/AllSuppliers';
-import AllRooms from './pages/AllRooms';
-import AllUsers from './pages/AllUsers';
-import SystemSettings from './pages/SystemSettings';
+import IncomeStatement from './pages/IncomeStatement';
+import Cashflow from './pages/Cashflow';
+import BalanceSheet from './pages/BalanceSheet';
+import ExpensesReport from './pages/ExpensesReport';
+import BedsAndRooms from './pages/BedsAndRooms';
+import ExpenditureRequests from './pages/ExpenditureRequests';
+
+// Protected Route Component
+const ProtectedRoute = ({ children }) => {
+  const { token } = useAuth();
+  return token ? children : <Navigate to="/" replace />;
+};
+
+// Public Route Component (redirects to dashboard if already logged in)
+const PublicRoute = ({ children }) => {
+  const { token } = useAuth();
+  return !token ? children : <Navigate to="/dashboard" replace />;
+};
+
+const AppRoutes = () => {
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/income-statement"
+        element={
+          <ProtectedRoute>
+            <IncomeStatement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/cashflow"
+        element={
+          <ProtectedRoute>
+            <Cashflow />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/balance-sheet"
+        element={
+          <ProtectedRoute>
+            <BalanceSheet />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/expenses-report"
+        element={
+          <ProtectedRoute>
+            <ExpensesReport />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/beds-rooms"
+        element={
+          <ProtectedRoute>
+            <BedsAndRooms />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/expenditure-requests"
+        element={
+          <ProtectedRoute>
+            <ExpenditureRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
 
 const App = () => {
   return (
-    <Routes>
-      <Route path="/" element={<Login />} />
-      <Route path="/dashboard/*" element={<BossDashboardLayout />}>
-        <Route path="" element={<Dashboard />} />
-        <Route path="overview" element={<Dashboard />} />
-        
-        {/* Global Management Routes */}
-        <Route path="boarding-houses" element={<AllBoardingHouses />} />
-        <Route path="students" element={<AllStudents />} />
-        <Route path="rooms" element={<AllRooms />} />
-        <Route path="suppliers" element={<AllSuppliers />} />
-        <Route path="users" element={<AllUsers />} />
-        
-        {/* Global Accounting Routes */}
-        <Route path="accounting" element={<AllAccounting />} />
-        
-        {/* Global Reports Routes */}
-        <Route path="reports" element={<AllReports />} />
-        
-        {/* System Settings */}
-        <Route path="settings" element={<SystemSettings />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+    <Router>
+      <AuthProvider>
+        <AppRoutes />
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+        />
+      </AuthProvider>
+    </Router>
   );
 };
 

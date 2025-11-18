@@ -357,6 +357,39 @@ const AccountTransactions = () => {
     setEditLoading(true);
     
     try {
+      // Validate that debits equal credits
+      const totalDebits = editFormData.journal_entries
+        .filter(entry => entry.entry_type === 'debit')
+        .reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
+      
+      const totalCredits = editFormData.journal_entries
+        .filter(entry => entry.entry_type === 'credit')
+        .reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
+      
+      const difference = Math.abs(totalDebits - totalCredits);
+      
+      if (difference > 0.01) { // Allow for small rounding differences
+        setError(`Debits ($${totalDebits.toFixed(2)}) must equal Credits ($${totalCredits.toFixed(2)}). Difference: $${difference.toFixed(2)}`);
+        setEditLoading(false);
+        return;
+      }
+
+      // Validate that all journal entries have accounts
+      const missingAccounts = editFormData.journal_entries.filter(entry => !entry.account_id);
+      if (missingAccounts.length > 0) {
+        setError('All journal entries must have an account selected');
+        setEditLoading(false);
+        return;
+      }
+
+      // Validate that all journal entries have amounts
+      const missingAmounts = editFormData.journal_entries.filter(entry => !entry.amount || parseFloat(entry.amount) <= 0);
+      if (missingAmounts.length > 0) {
+        setError('All journal entries must have a positive amount');
+        setEditLoading(false);
+        return;
+      }
+
       // Prepare the data to send
       const updateData = {
         transaction_date: editFormData.transaction_date,
@@ -383,6 +416,7 @@ const AccountTransactions = () => {
       
       setEditModalOpen(false);
       setEditingTransaction(null);
+      setError(''); // Clear any previous errors
       fetchTransactions(); // Refresh the list
       
       // Show success message based on transaction type
@@ -392,10 +426,10 @@ const AccountTransactions = () => {
         ? 'Expense transaction updated successfully'
         : editFormData.transaction_type === 'petty_cash'
         ? 'Petty cash transaction updated successfully'
-        : 'Transaction updated successfully';
+        : 'Transaction and COA accounts updated successfully';
       
-      // You can add a toast notification here if you have one
-      console.log(successMessage);
+      // Show success message
+      alert(successMessage);
     } catch (error) {
       console.error('Error updating transaction:', error);
       setError(error.response?.data?.message || 'Failed to update transaction');
@@ -698,6 +732,13 @@ const AccountTransactions = () => {
             </div>
             
             <form onSubmit={handleEditSubmit}>
+              {/* Error Message */}
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-xs">
+                  {error}
+                </div>
+              )}
+              
               {/* Transaction Type Information */}
               {editFormData.transaction_type && (
                 <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded">
@@ -781,14 +822,43 @@ const AccountTransactions = () => {
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="text-sm font-medium text-gray-700">Journal Entries</h3>
-                  <button
-                    type="button"
-                    onClick={addJournalEntry}
-                    className="text-xs text-white px-3 py-1"
-                    style={{ backgroundColor: '#f58020' }}
-                  >
-                    Add Entry
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Show totals summary */}
+                    {editFormData.journal_entries && editFormData.journal_entries.length > 0 && (() => {
+                      const totalDebits = editFormData.journal_entries
+                        .filter(entry => entry.entry_type === 'debit')
+                        .reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
+                      const totalCredits = editFormData.journal_entries
+                        .filter(entry => entry.entry_type === 'credit')
+                        .reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0);
+                      const difference = Math.abs(totalDebits - totalCredits);
+                      const isBalanced = difference <= 0.01;
+                      
+                      return (
+                        <div className="flex items-center gap-4 text-xs">
+                          <div className={`px-2 py-1 rounded ${isBalanced ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            <span className="font-medium">Debits: ${totalDebits.toFixed(2)}</span>
+                          </div>
+                          <div className={`px-2 py-1 rounded ${isBalanced ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            <span className="font-medium">Credits: ${totalCredits.toFixed(2)}</span>
+                          </div>
+                          {!isBalanced && (
+                            <div className="px-2 py-1 rounded bg-yellow-100 text-yellow-800">
+                              <span className="font-medium">Difference: ${difference.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    <button
+                      type="button"
+                      onClick={addJournalEntry}
+                      className="text-xs text-white px-3 py-1"
+                      style={{ backgroundColor: '#f58020' }}
+                    >
+                      Add Entry
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="space-y-3">
@@ -797,7 +867,7 @@ const AccountTransactions = () => {
                       <div key={entry.id || index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 border border-gray-200 rounded">
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Account
+                            Account (COA) <span className="text-red-500">*</span>
                           </label>
                           <select
                             value={entry.account_id || ''}
@@ -806,11 +876,20 @@ const AccountTransactions = () => {
                             required
                           >
                             <option value="">Select Account</option>
-                            {accounts.length > 0 ? accounts.map(account => (
-                              <option key={account.id} value={account.id}>
-                                {account.code} - {account.name}
-                              </option>
-                            )) : (
+                            {accounts.length > 0 ? accounts
+                              .filter(account => !account.deleted_at)
+                              .sort((a, b) => {
+                                // Sort by account code first, then by name
+                                if (a.code !== b.code) {
+                                  return (a.code || '').localeCompare(b.code || '');
+                                }
+                                return (a.name || '').localeCompare(b.name || '');
+                              })
+                              .map(account => (
+                                <option key={account.id} value={account.id}>
+                                  {account.code} - {account.name} ({account.type})
+                                </option>
+                              )) : (
                               <option value="" disabled>Loading accounts...</option>
                             )}
                           </select>

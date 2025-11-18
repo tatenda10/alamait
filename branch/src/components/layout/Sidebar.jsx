@@ -227,7 +227,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
                   <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
                     <span className="text-base font-semibold text-gray-900">{userName}</span>
                   </div>
-                  <nav className="flex-1 px-4 mt-4 overflow-y-hidden">
+                  <nav className="flex-1 px-4 mt-4 overflow-y-auto">
                     <ul role="list" className="flex flex-1 flex-col gap-y-1">
                       {navigation.map((item) => (
                         item && <li key={item.name}>{renderNavItem(item)}</li>
@@ -256,7 +256,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
           <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
             <span className="text-base font-semibold text-gray-900">{userName}</span>
           </div>
-          <nav className="flex-1 px-4 mt-4 overflow-y-hidden">
+          <nav className="flex-1 px-4 mt-4 overflow-y-auto">
             <ul role="list" className="flex flex-1 flex-col gap-y-1">
               {navigation.map((item) => (
                 item && <li key={item.name}>{renderNavItem(item)}</li>

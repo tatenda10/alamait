@@ -11,6 +11,8 @@ export default function ExpenditureRequests() {
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
   const [filter, setFilter] = useState('all'); // all, pending, approved, rejected, actioned
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -52,6 +54,11 @@ export default function ExpenditureRequests() {
 
   const handleReject = async (requestId, reason) => {
     try {
+      if (!reason || !reason.trim()) {
+        toast.error('Please provide a rejection reason');
+        return;
+      }
+      
       await axios.post(`${BASE_URL}/expenditure-requests/${requestId}/reject`, 
         { rejection_reason: reason }, 
         getAuthHeaders()
@@ -59,10 +66,19 @@ export default function ExpenditureRequests() {
       toast.success('Expenditure request rejected');
       fetchExpenditureRequests();
       setShowModal(false);
+      setShowRejectModal(false);
+      setRejectionReason('');
     } catch (error) {
       console.error('Error rejecting request:', error);
-      toast.error('Failed to reject expenditure request');
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Failed to reject expenditure request';
+      toast.error(errorMessage);
     }
+  };
+
+  const openRejectModal = (request) => {
+    setSelectedRequest(request);
+    setRejectionReason('');
+    setShowRejectModal(true);
   };
 
   const filteredRequests = requests.filter(request => {
@@ -362,7 +378,7 @@ export default function ExpenditureRequests() {
               {selectedRequest.status === 'pending' && (
                 <div className="mt-6 flex justify-end space-x-3">
                   <button
-                    onClick={() => handleReject(selectedRequest.id, 'Rejected by admin')}
+                    onClick={() => openRejectModal(selectedRequest)}
                     className="inline-flex items-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                   >
                     <FiX className="h-4 w-4 mr-2" />
@@ -377,6 +393,50 @@ export default function ExpenditureRequests() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && selectedRequest && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Reject Expenditure Request
+              </h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rejection Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Please provide a reason for rejecting this request..."
+                  required
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectionReason('');
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleReject(selectedRequest.id, rejectionReason)}
+                  disabled={!rejectionReason.trim()}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  Reject Request
+                </button>
+              </div>
             </div>
           </div>
         </div>

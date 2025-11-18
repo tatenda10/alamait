@@ -140,22 +140,20 @@ const getBalanceSheet = async (req, res) => {
     });
     
     // Get student debtors total (negative balances = students who owe)
-    // Only include students with active enrollments
+    // Include checked-out students with outstanding balances
     const [debtorsTotal] = await connection.query(`
       SELECT COALESCE(SUM(ABS(sab.current_balance)), 0) as total
       FROM students s
       JOIN student_enrollments se ON s.id = se.student_id
       JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
-        AND se.deleted_at IS NULL
-        AND (s.status = 'Active' OR s.status IS NULL)
-        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND (se.deleted_at IS NULL OR se.checkout_date IS NOT NULL)
         AND sab.current_balance < 0
         AND sab.deleted_at IS NULL
     `);
     
     // Get student prepayments total (positive balances = students who overpaid)
-    // Only include students with active enrollments and room assignments
+    // Only include active enrollments (not checked out) and room assignments
     const [prepaymentsTotal] = await connection.query(`
       SELECT COALESCE(SUM(sab.current_balance), 0) as total
       FROM students s
@@ -164,6 +162,7 @@ const getBalanceSheet = async (req, res) => {
       JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
         AND se.deleted_at IS NULL
+        AND se.checkout_date IS NULL
         AND (s.status = 'Active' OR s.status IS NULL)
         AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
         AND sab.current_balance > 0

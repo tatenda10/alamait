@@ -3,6 +3,12 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import BASE_URL from '../utils/api';
 
+// Ensure we're using the correct base URL without double /api
+// Check if axios has a default baseURL that might conflict
+if (axios.defaults.baseURL && axios.defaults.baseURL.includes('/api')) {
+  console.warn('axios.defaults.baseURL is set:', axios.defaults.baseURL);
+}
+
 export default function Checkout({ studentId, onCancel, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -21,12 +27,19 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
   useEffect(() => {
     const fetchCheckoutDetails = async () => {
       try {
+        // BASE_URL already includes /api, so just add /checkout/students/${studentId}
+        const url = `${BASE_URL}/checkout/students/${studentId}`;
+        console.log('Checkout GET URL:', url);
+        console.log('axios.defaults.baseURL:', axios.defaults.baseURL);
+        
         const response = await axios.get(
-          `${BASE_URL}/api/checkout/students/${studentId}`,
+          url,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
+            },
+            // Explicitly set baseURL to empty to prevent any default baseURL from being used
+            baseURL: ''
           }
         );
 
@@ -74,8 +87,17 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
     setError(null);
 
     try {
+      // BASE_URL already includes /api, so just add /checkout/students/${studentId}
+      // BASE_URL = 'http://localhost:5000/api'
+      // Final URL: 'http://localhost:5000/api/checkout/students/${studentId}'
+      // Use absolute URL to avoid any axios.defaults.baseURL interference
+      const url = `${BASE_URL}/checkout/students/${studentId}`;
+      console.log('Checkout POST URL:', url);
+      console.log('BASE_URL value:', BASE_URL);
+      console.log('axios.defaults.baseURL:', axios.defaults.baseURL);
+      
       const response = await axios.post(
-        `${BASE_URL}/api/checkout/students/${studentId}`,
+        url,
         {
           terminationDate,
           terminationReason,
@@ -85,7 +107,9 @@ export default function Checkout({ studentId, onCancel, onSuccess }) {
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
+          },
+          // Explicitly set baseURL to empty to prevent any default baseURL from being used
+          baseURL: ''
         }
       );
 

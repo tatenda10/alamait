@@ -684,6 +684,7 @@ const getDebtorsReport = async (req, res) => {
     }
 
     // Get students with negative balances (they owe money)
+    // Include checked-out students with outstanding balances
     const [debtors] = await connection.query(
       `SELECT 
         s.id as student_id,
@@ -693,6 +694,7 @@ const getDebtorsReport = async (req, res) => {
         se.security_deposit,
         se.start_date as enrollment_start,
         se.expected_end_date as enrollment_end,
+        se.checkout_date,
         r.name as room_number,
         bh.name as boarding_house_name,
         s.status as student_status,
@@ -704,15 +706,18 @@ const getDebtorsReport = async (req, res) => {
       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
       JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
-        AND se.deleted_at IS NULL
-        AND (s.status = 'Active' OR s.status IS NULL)
-        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND (se.deleted_at IS NULL OR se.checkout_date IS NOT NULL)
         AND sab.current_balance < 0
         AND sab.deleted_at IS NULL
         ${whereClause}
       ORDER BY sab.current_balance ASC, bh.name, s.full_name`,
       queryParams
     );
+
+    console.log(`\n📊 Debtors Query Results: Found ${debtors.length} students with negative balances`);
+    debtors.forEach((d, idx) => {
+      console.log(`  ${idx + 1}. ${d.student_name} - Balance: ${d.current_balance}, Checkout: ${d.checkout_date || 'Not checked out'}, Status: ${d.student_status}`);
+    });
 
     // Process debtors data - students with negative balances
     const processedDebtors = [];
@@ -795,6 +800,13 @@ const getDebtorsReport = async (req, res) => {
       },
       debtors: processedDebtors
     };
+
+    console.log(`\n✅ Processed Debtors: ${processedDebtors.length} students`);
+    console.log(`   Total Outstanding: $${totalOutstanding.toFixed(2)}`);
+    processedDebtors.forEach((d, idx) => {
+      console.log(`   ${idx + 1}. ${d.student_name} - $${d.total_due.toFixed(2)} (${d.status})`);
+    });
+    console.log(`\n📤 Sending to frontend - Total debtors: ${processedDebtors.length}, Summary:`, JSON.stringify(response.summary, null, 2));
 
     res.json(response);
 
@@ -1132,7 +1144,7 @@ const exportDebtorsReport = async (req, res) => {
       }
     }
 
-    // Get all active enrolled students
+    // Get all students with balances (including checked out students with outstanding debts)
     const [activeStudents] = await connection.query(
       `SELECT 
         s.id as student_id,
@@ -1142,17 +1154,20 @@ const exportDebtorsReport = async (req, res) => {
         se.security_deposit,
         se.start_date as enrollment_start,
         se.expected_end_date as enrollment_end,
+        se.checkout_date,
         r.name as room_number,
         bh.name as boarding_house_name,
-        s.status as student_status
+        s.status as student_status,
+        sab.current_balance
       FROM students s
       JOIN student_enrollments se ON s.id = se.student_id
       JOIN rooms r ON se.room_id = r.id
       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
-        AND se.deleted_at IS NULL
-        AND (s.status = 'Active' OR s.status IS NULL)
-        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND (se.deleted_at IS NULL OR se.checkout_date IS NOT NULL)
+        AND sab.current_balance < 0
+        AND sab.deleted_at IS NULL
         ${whereClause}
       ORDER BY bh.name, s.full_name`,
       queryParams
@@ -1160,146 +1175,166 @@ const exportDebtorsReport = async (req, res) => {
 
     const debtors = [];
 
-    // For each active student, calculate their debts
+    // For each student with negative balance, calculate their debts
     for (const student of activeStudents) {
-      let totalDebt = 0;
-      let adminFeeDebt = 0;
-      let securityDepositDebt = 0;
-      let rentDebt = 0;
-      let earliestOverdueDate = null;
-      let lastPaymentDate = null;
+      // Use the actual balance from the database
+      const actualBalance = parseFloat(student.current_balance || 0);
+      
+      // If balance is already negative, use it directly
+      if (actualBalance < 0) {
+        let totalDebt = Math.abs(actualBalance);
+        let adminFeeDebt = 0;
+        let securityDepositDebt = 0;
+        let rentDebt = 0;
+        let earliestOverdueDate = null;
+        let lastPaymentDate = null;
 
-      // Check admin fee payment
-      if (student.admin_fee > 0) {
-        const [adminFeePayments] = await connection.query(
-          `SELECT COALESCE(SUM(amount), 0) as total_paid
-           FROM student_payments
-           WHERE student_id = ? 
-             AND enrollment_id = ?
-             AND payment_type = 'admin_fee'
-             AND status = 'completed'
-             AND deleted_at IS NULL`,
-          [student.student_id, student.enrollment_id]
-        );
+        // For checked-out students, use the balance directly and skip payment schedule calculations
+        if (student.checkout_date) {
+          // Use checkout date as earliest overdue date
+          earliestOverdueDate = student.checkout_date;
+          // For checked-out students, assume all debt is rent (or we can break it down if needed)
+          rentDebt = totalDebt;
+        } else {
+          // For active students, calculate debt breakdown from payment schedules
+          // Check admin fee payment
+          if (student.admin_fee > 0) {
+            const [adminFeePayments] = await connection.query(
+              `SELECT COALESCE(SUM(amount), 0) as total_paid
+               FROM student_payments
+               WHERE student_id = ? 
+                 AND enrollment_id = ?
+                 AND payment_type = 'admin_fee'
+                 AND status = 'completed'
+                 AND deleted_at IS NULL`,
+              [student.student_id, student.enrollment_id]
+            );
 
-        const adminFeePaid = parseFloat(adminFeePayments[0].total_paid) || 0;
-        adminFeeDebt = Math.max(0, student.admin_fee - adminFeePaid);
-        totalDebt += adminFeeDebt;
-        
-        if (adminFeeDebt > 0 && (!earliestOverdueDate || student.enrollment_start < earliestOverdueDate)) {
-          earliestOverdueDate = student.enrollment_start;
-        }
-      }
-
-      // Check security deposit payment
-      if (student.security_deposit > 0) {
-        const [securityDepositPayments] = await connection.query(
-          `SELECT COALESCE(SUM(amount), 0) as total_paid
-           FROM student_payments
-           WHERE student_id = ? 
-             AND enrollment_id = ?
-             AND payment_type = 'security_deposit'
-             AND status = 'completed'
-             AND deleted_at IS NULL`,
-          [student.student_id, student.enrollment_id]
-        );
-
-        const securityDepositPaid = parseFloat(securityDepositPayments[0].total_paid) || 0;
-        securityDepositDebt = Math.max(0, student.security_deposit - securityDepositPaid);
-        totalDebt += securityDepositDebt;
-        
-        if (securityDepositDebt > 0 && (!earliestOverdueDate || student.enrollment_start < earliestOverdueDate)) {
-          earliestOverdueDate = student.enrollment_start;
-        }
-      }
-
-      // Check rent payment schedules for overdue/unpaid amounts
-      const [rentSchedules] = await connection.query(
-        `SELECT 
-          sps.id,
-          sps.period_start_date,
-          sps.period_end_date,
-          sps.amount_due,
-          sps.amount_paid,
-          sps.status
-        FROM student_payment_schedules sps
-        WHERE sps.student_id = ?
-          AND sps.enrollment_id = ?
-          AND sps.deleted_at IS NULL
-          AND (sps.status = 'pending' OR sps.status = 'partial' OR 
-               (sps.status = 'paid' AND sps.amount_paid < sps.amount_due))
-        ORDER BY sps.period_start_date`,
-        [student.student_id, student.enrollment_id]
-      );
-
-      for (const schedule of rentSchedules) {
-        const scheduleRentDebt = schedule.amount_due - (schedule.amount_paid || 0);
-        
-        if (scheduleRentDebt > 0) {
-          // Check if this rent period is overdue (past the end date)
-          const isOverdue = new Date(schedule.period_end_date) < new Date();
-          
-          if (isOverdue || schedule.status === 'partial') {
-            rentDebt += scheduleRentDebt;
-
-            if (isOverdue && (!earliestOverdueDate || schedule.period_end_date < earliestOverdueDate)) {
-              earliestOverdueDate = schedule.period_end_date;
+            const adminFeePaid = parseFloat(adminFeePayments[0].total_paid) || 0;
+            adminFeeDebt = Math.max(0, student.admin_fee - adminFeePaid);
+            totalDebt += adminFeeDebt;
+            
+            if (adminFeeDebt > 0 && (!earliestOverdueDate || student.enrollment_start < earliestOverdueDate)) {
+              earliestOverdueDate = student.enrollment_start;
             }
           }
+
+          // Check security deposit payment
+          if (student.security_deposit > 0) {
+            const [securityDepositPayments] = await connection.query(
+              `SELECT COALESCE(SUM(amount), 0) as total_paid
+               FROM student_payments
+               WHERE student_id = ? 
+                 AND enrollment_id = ?
+                 AND payment_type = 'security_deposit'
+                 AND status = 'completed'
+                 AND deleted_at IS NULL`,
+              [student.student_id, student.enrollment_id]
+            );
+
+            const securityDepositPaid = parseFloat(securityDepositPayments[0].total_paid) || 0;
+            securityDepositDebt = Math.max(0, student.security_deposit - securityDepositPaid);
+            totalDebt += securityDepositDebt;
+            
+            if (securityDepositDebt > 0 && (!earliestOverdueDate || student.enrollment_start < earliestOverdueDate)) {
+              earliestOverdueDate = student.enrollment_start;
+            }
+          }
+
+          // Check rent payment schedules for overdue/unpaid amounts
+          const [rentSchedules] = await connection.query(
+            `SELECT 
+              sps.id,
+              sps.period_start_date,
+              sps.period_end_date,
+              sps.amount_due,
+              sps.amount_paid,
+              sps.status
+            FROM student_payment_schedules sps
+            WHERE sps.student_id = ?
+              AND sps.enrollment_id = ?
+              AND sps.deleted_at IS NULL
+              AND (sps.status = 'pending' OR sps.status = 'partial' OR 
+                   (sps.status = 'paid' AND sps.amount_paid < sps.amount_due))
+            ORDER BY sps.period_start_date`,
+            [student.student_id, student.enrollment_id]
+          );
+
+          for (const schedule of rentSchedules) {
+            const scheduleRentDebt = schedule.amount_due - (schedule.amount_paid || 0);
+            
+            if (scheduleRentDebt > 0) {
+              // Check if this rent period is overdue (past the end date)
+              const isOverdue = new Date(schedule.period_end_date) < new Date();
+              
+              if (isOverdue || schedule.status === 'partial') {
+                rentDebt += scheduleRentDebt;
+
+                if (isOverdue && (!earliestOverdueDate || schedule.period_end_date < earliestOverdueDate)) {
+                  earliestOverdueDate = schedule.period_end_date;
+                }
+              }
+            }
+          }
+
+          totalDebt += rentDebt;
         }
-      }
 
-      totalDebt += rentDebt;
+        // Get last payment date for this student
+        const [lastPayment] = await connection.query(
+          `SELECT payment_date
+           FROM student_payments
+           WHERE student_id = ?
+             AND enrollment_id = ?
+             AND status = 'completed'
+             AND deleted_at IS NULL
+           ORDER BY payment_date DESC
+           LIMIT 1`,
+          [student.student_id, student.enrollment_id]
+        );
 
-      // Get last payment date for this student
-      const [lastPayment] = await connection.query(
-        `SELECT payment_date
-         FROM student_payments
-         WHERE student_id = ?
-           AND enrollment_id = ?
-           AND status = 'completed'
-           AND deleted_at IS NULL
-         ORDER BY payment_date DESC
-         LIMIT 1`,
-        [student.student_id, student.enrollment_id]
-      );
-
-      if (lastPayment.length > 0) {
-        lastPaymentDate = lastPayment[0].payment_date;
-      }
-
-      // If student has any debt, add to debtors list
-      if (totalDebt > 0) {
-        const daysOverdue = earliestOverdueDate 
-          ? Math.max(0, Math.floor((new Date() - new Date(earliestOverdueDate)) / (1000 * 60 * 60 * 24)))
-          : 0;
-
-        // Determine status based on debt types and overdue status
-        let studentStatus = 'pending';
-        if (daysOverdue > 0) {
-          studentStatus = 'overdue';
-        } else if (rentDebt > 0 && (adminFeeDebt > 0 || securityDepositDebt > 0)) {
-          studentStatus = 'partial';
-        }
-        
-        // Filter by status only (no day filters)
-        if (status !== 'all') {
-          if (status === 'overdue' && studentStatus !== 'overdue') continue;
-          if (status === 'partial' && studentStatus !== 'partial') continue;
+        if (lastPayment.length > 0) {
+          lastPaymentDate = lastPayment[0].payment_date;
         }
 
-        debtors.push({
-          student_name: student.student_name,
-          room_number: student.room_number,
-          boarding_house_name: student.boarding_house_name,
-          total_debt: totalDebt,
-          admin_fee_debt: adminFeeDebt,
-          security_deposit_debt: securityDepositDebt,
-          rent_debt: rentDebt,
-          days_overdue: daysOverdue,
-          last_payment_date: lastPaymentDate,
-          status: studentStatus
-        });
+        // Use checkout date as earliest overdue date if student is checked out
+        if (student.checkout_date) {
+          earliestOverdueDate = student.checkout_date;
+        }
+
+        // If student has any debt, add to debtors list
+        if (totalDebt > 0) {
+          const daysOverdue = earliestOverdueDate 
+            ? Math.max(0, Math.floor((new Date() - new Date(earliestOverdueDate)) / (1000 * 60 * 60 * 24)))
+            : 0;
+
+          // Determine status based on debt types and overdue status
+          let studentStatus = 'pending';
+          if (daysOverdue > 0) {
+            studentStatus = 'overdue';
+          } else if (rentDebt > 0 && (adminFeeDebt > 0 || securityDepositDebt > 0)) {
+            studentStatus = 'partial';
+          }
+          
+          // Filter by status only (no day filters)
+          if (status !== 'all') {
+            if (status === 'overdue' && studentStatus !== 'overdue') continue;
+            if (status === 'partial' && studentStatus !== 'partial') continue;
+          }
+
+          debtors.push({
+            student_name: student.student_name,
+            room_number: student.room_number,
+            boarding_house_name: student.boarding_house_name,
+            total_debt: totalDebt,
+            admin_fee_debt: adminFeeDebt,
+            security_deposit_debt: securityDepositDebt,
+            rent_debt: rentDebt,
+            days_overdue: daysOverdue,
+            last_payment_date: lastPaymentDate,
+            status: studentStatus
+          });
+        }
       }
     }
 

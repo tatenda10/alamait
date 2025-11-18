@@ -542,26 +542,13 @@ router.put('/users/:id', authenticate, async (req, res) => {
   const connection = await db.getConnection();
   
   try {
-    // Check if user is sysadmin
-    if (req.user.role !== 'sysadmin') {
-      console.log('=== RESPONSE STATUS 403 - PUT /users/:id ===');
-      console.log('User role:', req.user.role);
-      console.log('Access denied for user update');
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Only system administrators can update petty cash users.'
-      });
-    }
-
     const userId = req.params.id;
     const { 
       name, 
       full_name,
+      username,
       email, 
-      password, 
-      employee_id, 
-      department, 
-      phone 
+      password
     } = req.body;
 
     // Use full_name if provided, otherwise use name for backward compatibility
@@ -582,13 +569,14 @@ router.put('/users/:id', authenticate, async (req, res) => {
 
     // Check if user exists
     const [existingUser] = await connection.query(
-      'SELECT id, email, employee_id FROM petty_cash_users WHERE id = ?',
+      'SELECT id, username, email FROM petty_cash_users WHERE id = ? AND deleted_at IS NULL',
       [userId]
     );
 
-    if (result.affectedRows === 0) {
+    if (existingUser.length === 0) {
+      await connection.rollback();
       console.log('=== RESPONSE STATUS 404 - PUT /users/:id ===');
-      console.log('User ID:', id);
+      console.log('User ID:', userId);
       console.log('User not found for update');
       return res.status(404).json({
         success: false,
@@ -596,14 +584,34 @@ router.put('/users/:id', authenticate, async (req, res) => {
       });
     }
 
+    // Check if username already exists (excluding current user)
+    if (username && username !== existingUser[0].username) {
+      const [usernameCheck] = await connection.query(
+        'SELECT id FROM petty_cash_users WHERE username = ? AND id != ? AND deleted_at IS NULL',
+        [username, userId]
+      );
+
+      if (usernameCheck.length > 0) {
+        await connection.rollback();
+        console.log('=== RESPONSE STATUS 400 - PUT /users/:id ===');
+        console.log('Username already exists:', username);
+        console.log('Duplicate username validation failed for user update');
+        return res.status(400).json({
+          success: false,
+          message: 'Username already exists'
+        });
+      }
+    }
+
     // Check if email already exists (excluding current user)
     if (email !== existingUser[0].email) {
       const [emailCheck] = await connection.query(
-        'SELECT id FROM petty_cash_users WHERE email = ? AND id != ?',
+        'SELECT id FROM petty_cash_users WHERE email = ? AND id != ? AND deleted_at IS NULL',
         [email, userId]
       );
 
       if (emailCheck.length > 0) {
+        await connection.rollback();
         console.log('=== RESPONSE STATUS 400 - PUT /users/:id ===');
         console.log('Email already exists:', email);
         console.log('Duplicate email validation failed for user update');
@@ -614,44 +622,29 @@ router.put('/users/:id', authenticate, async (req, res) => {
       }
     }
 
-    // Check if employee_id already exists (excluding current user)
-    if (employee_id && employee_id !== existingUser[0].employee_id) {
-      const [employeeCheck] = await connection.query(
-        'SELECT id FROM petty_cash_users WHERE employee_id = ? AND id != ?',
-        [employee_id, userId]
-      );
-
-      if (employeeCheck.length > 0) {
-        console.log('=== RESPONSE STATUS 400 - PUT /users/:id ===');
-        console.log('Employee ID already exists:', employee_id);
-        console.log('Duplicate employee ID validation failed for user update');
-        return res.status(400).json({
-          success: false,
-          message: 'Employee ID already exists'
-        });
-      }
-    }
-
     // Prepare update query
     let updateQuery = `UPDATE petty_cash_users SET 
                        full_name = ?, 
                        email = ?, 
-                       employee_id = ?, 
-                       department = ?, 
-                       phone = ?, 
                        updated_at = CURRENT_TIMESTAMP`;
     
-    let updateParams = [finalName, email, employee_id, department, phone];
+    let updateParams = [finalName, email];
+
+    // Add username update if provided
+    if (username && username !== existingUser[0].username) {
+      updateQuery += `, username = ?`;
+      updateParams.push(username);
+    }
 
     // Add password update if provided
     if (password) {
       const saltRounds = 10;
       const password_hash = await bcrypt.hash(password, saltRounds);
-      updateQuery += `, password_hash = ?`;
+      updateQuery += `, password = ?`;
       updateParams.push(password_hash);
     }
 
-    updateQuery += ` WHERE id = ?`;
+    updateQuery += ` WHERE id = ? AND deleted_at IS NULL`;
     updateParams.push(userId);
 
     // Update user

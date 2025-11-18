@@ -92,3 +92,44 @@ exports.updateUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if user exists and is not already deleted, and get their role and username
+    const [existingUser] = await pool.execute(
+      'SELECT id, role, username FROM users WHERE id = ? AND deleted_at IS NULL',
+      [id]
+    );
+
+    if (existingUser.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Prevent deletion of super_admin users
+    if (existingUser[0].role === 'super_admin') {
+      return res.status(403).json({ message: 'Cannot delete super admin users' });
+    }
+
+    // Prevent deletion of users with username 'sysadmin'
+    if (existingUser[0].username === 'sysadmin') {
+      return res.status(403).json({ message: 'Cannot delete sysadmin user' });
+    }
+
+    // Soft delete user
+    const [result] = await pool.execute(
+      'UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};

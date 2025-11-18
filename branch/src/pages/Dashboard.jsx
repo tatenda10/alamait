@@ -26,7 +26,7 @@ const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [accountBalance, setAccountBalance] = useState(null);
   const [pettyCashTransactions, setPettyCashTransactions] = useState([]);
-  const [roomOccupancy, setRoomOccupancy] = useState(null);
+  const [bedOccupancy, setBedOccupancy] = useState(null);
 
   const getAuthHeaders = () => ({
     headers: {
@@ -61,24 +61,43 @@ const Dashboard = () => {
         setPettyCashTransactions([]);
       }
 
-      // Fetch room occupancy
+      // Fetch bed occupancy
       try {
         const roomsResponse = await axios.get(`${BASE_URL}/rooms`, getAuthHeaders());
         if (roomsResponse.data && Array.isArray(roomsResponse.data)) {
-          const totalRooms = roomsResponse.data.length;
-          const occupiedRooms = roomsResponse.data.filter(room => room.status === 'occupied').length;
-          const occupancyRate = totalRooms > 0 ? ((occupiedRooms / totalRooms) * 100).toFixed(1) : 0;
+          const rooms = roomsResponse.data;
           
-          setRoomOccupancy({
-            totalRooms,
-            occupiedRooms,
-            availableRooms: totalRooms - occupiedRooms,
+          // Fetch beds for all rooms
+          const bedsPromises = rooms.map(async (room) => {
+            try {
+              const bedsResponse = await axios.get(`${BASE_URL}/beds/room/${room.id}`, getAuthHeaders());
+              return bedsResponse.data || [];
+            } catch (err) {
+              console.error(`Error fetching beds for room ${room.id}:`, err);
+              return [];
+            }
+          });
+          
+          const bedsResults = await Promise.all(bedsPromises);
+          const allBeds = bedsResults.flat();
+          
+          // Filter out deleted beds
+          const activeBeds = allBeds.filter(bed => !bed.deleted_at);
+          const totalBeds = activeBeds.length;
+          const occupiedBeds = activeBeds.filter(bed => bed.status === 'occupied').length;
+          const availableBeds = activeBeds.filter(bed => bed.status === 'available').length;
+          const occupancyRate = totalBeds > 0 ? ((occupiedBeds / totalBeds) * 100).toFixed(1) : 0;
+          
+          setBedOccupancy({
+            totalBeds,
+            occupiedBeds,
+            availableBeds,
             occupancyRate: parseFloat(occupancyRate)
           });
         }
-      } catch (roomError) {
-        console.error('Error fetching room occupancy:', roomError);
-        setRoomOccupancy(null);
+      } catch (bedError) {
+        console.error('Error fetching bed occupancy:', bedError);
+        setBedOccupancy(null);
       }
 
     } catch (error) {
@@ -189,8 +208,8 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Room Occupancy Card */}
-        {roomOccupancy && (
+        {/* Bed Occupancy Card */}
+        {bedOccupancy && (
           <div className="mb-4">
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3 sm:p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -201,13 +220,13 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-xs sm:text-sm font-medium text-green-900">Room Occupancy</h3>
-                    <p className="text-xs text-green-600">{roomOccupancy.occupiedRooms} of {roomOccupancy.totalRooms} rooms occupied</p>
+                    <h3 className="text-xs sm:text-sm font-medium text-green-900">Bed Occupancy</h3>
+                    <p className="text-xs text-green-600">{bedOccupancy.occupiedBeds} of {bedOccupancy.totalBeds} beds occupied</p>
                   </div>
                 </div>
                 <div className="text-left sm:text-right">
                   <div className="text-lg sm:text-xl font-bold text-green-900">
-                    {roomOccupancy.occupancyRate}%
+                    {bedOccupancy.occupancyRate}%
                   </div>
                   <p className="text-xs text-green-600">Occupancy Rate</p>
                 </div>
@@ -355,6 +374,7 @@ const getIconForStat = (name) => {
   switch (name) {
     case 'Total Students':
       return <UsersIcon className={iconClass} />;
+    case 'Bed Occupancy':
     case 'Room Occupancy':
       return <BuildingOfficeIcon className={iconClass} />;
     case 'Monthly Revenue':

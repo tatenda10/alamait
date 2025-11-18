@@ -1,4 +1,5 @@
 const db = require('../services/db');
+const { updateAccountBalance } = require('../services/accountBalanceService');
 
 // Generate monthly invoices for all active students
 const generateMonthlyInvoices = async (req, res) => {
@@ -10,7 +11,9 @@ const generateMonthlyInvoices = async (req, res) => {
     const { 
       invoice_month, // Format: YYYY-MM
       invoice_date,
-      description_prefix = 'Monthly Rent'
+      description_prefix = 'Monthly Rent',
+      boarding_house_id,
+      students = [] // Optional: array of {enrollment_id, amount} for adjusted amounts
     } = req.body;
 
     // Validate required fields
@@ -21,46 +24,47 @@ const generateMonthlyInvoices = async (req, res) => {
       });
     }
 
+    if (!boarding_house_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: boarding_house_id'
+      });
+    }
+
     // Parse the invoice month
     const [year, month] = invoice_month.split('-');
     const invoiceDate = invoice_date || new Date();
     
-    // Check if invoices for this month already exist
-    const [existingInvoices] = await connection.query(
-      `SELECT COUNT(*) as count 
-       FROM student_invoices 
-       WHERE DATE_FORMAT(invoice_date, '%Y-%m') = ? AND deleted_at IS NULL`,
-      [invoice_month]
-    );
-
-    if (existingInvoices[0].count > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `Invoices for ${invoice_month} already exist`
-      });
-    }
-
-    // Get all active enrollments with their monthly rent
+    // Get all active enrollments with bed assignments for the boarding house
+    // Only include students who are Active and have a bed assigned (status = 'occupied')
     const [activeEnrollments] = await connection.query(
       `SELECT 
         se.id as enrollment_id,
         se.student_id,
-        se.agreed_amount as monthly_rent,
+        COALESCE(b.price, r.price_per_bed, se.agreed_amount) as monthly_rent,
         se.currency,
         s.full_name as student_name,
         r.name as room_name,
         bh.name as boarding_house_name,
-        COALESCE(sab.current_balance, 0) as current_balance
+        bh.id as boarding_house_id,
+        COALESCE(sab.current_balance, 0) as current_balance,
+        b.id as bed_id,
+        b.bed_number
       FROM student_enrollments se
       JOIN students s ON se.student_id = s.id
       JOIN rooms r ON se.room_id = r.id
       JOIN boarding_houses bh ON se.boarding_house_id = bh.id
-      LEFT JOIN student_account_balances sab ON sab.enrollment_id = se.id
+      INNER JOIN beds b ON b.enrollment_id = se.id 
+        AND b.student_id = se.student_id
+        AND b.status = 'occupied'
+        AND b.deleted_at IS NULL
+      LEFT JOIN student_account_balances sab ON sab.enrollment_id = se.id AND sab.student_id = s.id
       WHERE se.deleted_at IS NULL
-        AND se.start_date <= LAST_DAY(STR_TO_DATE(?, '%Y-%m'))
-        AND (se.expected_end_date IS NULL OR se.expected_end_date >= STR_TO_DATE(?, '%Y-%m-01'))
-        AND s.status = 'Active'`,
-      [invoice_month, invoice_month]
+        AND se.boarding_house_id = ?
+        AND s.status = 'Active'
+        AND s.deleted_at IS NULL
+      ORDER BY s.full_name`,
+      [boarding_house_id]
     );
 
     if (activeEnrollments.length === 0) {
@@ -73,11 +77,21 @@ const generateMonthlyInvoices = async (req, res) => {
     const generatedInvoices = [];
     const errors = [];
 
+    // Create a map of adjusted amounts if provided
+    const adjustedAmounts = {};
+    if (students && students.length > 0) {
+      students.forEach(student => {
+        adjustedAmounts[student.enrollment_id] = parseFloat(student.amount);
+      });
+    }
+
     // Generate invoice for each active enrollment
     for (const enrollment of activeEnrollments) {
       try {
-        // Create invoice for monthly rent
-        const invoiceAmount = parseFloat(enrollment.monthly_rent);
+        // Use adjusted amount if provided, otherwise use monthly rent
+        const invoiceAmount = adjustedAmounts[enrollment.enrollment_id] 
+          ? adjustedAmounts[enrollment.enrollment_id]
+          : parseFloat(enrollment.monthly_rent);
         
         // Create invoice
         const [invoiceResult] = await connection.query(
@@ -138,8 +152,9 @@ const generateMonthlyInvoices = async (req, res) => {
             enrollment.currency,
             `Monthly invoice - ${enrollment.student_name} - ${invoice_month}`,
             invoiceDate,
-            enrollment.boarding_house_id || 1, // Default to boarding house 1
-            1 // Default to user 1
+            enrollment.boarding_house_id,
+            req.user?.id || 1, // Use authenticated user or default to user 1
+            'posted' // Status for the transaction
           ]
         );
 
@@ -177,8 +192,8 @@ const generateMonthlyInvoices = async (req, res) => {
             'debit',
             invoiceAmount,
             `Monthly invoice - Debit Accounts Receivable`,
-            enrollment.boarding_house_id || 1,
-            1
+            enrollment.boarding_house_id,
+            req.user?.id || 1
           ]
         );
 
@@ -200,9 +215,26 @@ const generateMonthlyInvoices = async (req, res) => {
             'credit',
             invoiceAmount,
             `Monthly invoice - Credit Rentals Income`,
-            enrollment.boarding_house_id || 1,
-            1
+            enrollment.boarding_house_id,
+            req.user?.id || 1
           ]
+        );
+
+        // Update current_account_balances for both accounts
+        await updateAccountBalance(
+          receivableAccount[0].id,
+          invoiceAmount,
+          'debit',
+          enrollment.boarding_house_id,
+          connection
+        );
+
+        await updateAccountBalance(
+          revenueAccount[0].id,
+          invoiceAmount,
+          'credit',
+          enrollment.boarding_house_id,
+          connection
         );
 
         generatedInvoices.push({
@@ -310,7 +342,91 @@ const getMonthlyInvoiceSummary = async (req, res) => {
   }
 };
 
+// Preview invoices for a boarding house and month (without generating them)
+const previewMonthlyInvoices = async (req, res) => {
+  try {
+    const { boarding_house_id, invoice_month } = req.query;
+
+    if (!boarding_house_id || !invoice_month) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: boarding_house_id and invoice_month'
+      });
+    }
+
+    // Get all active enrollments with bed assignments for the boarding house
+    // Only include students who are Active and have a bed assigned (status = 'occupied')
+    const [activeEnrollments] = await db.query(
+      `SELECT 
+        se.id as enrollment_id,
+        se.student_id,
+        COALESCE(b.price, r.price_per_bed, se.agreed_amount) as monthly_rent,
+        se.currency,
+        s.full_name as student_name,
+        s.student_number,
+        r.name as room_name,
+        bh.name as boarding_house_name,
+        bh.id as boarding_house_id,
+        COALESCE(sab.current_balance, 0) as current_balance,
+        se.start_date,
+        se.expected_end_date,
+        b.id as bed_id,
+        b.bed_number
+      FROM student_enrollments se
+      JOIN students s ON se.student_id = s.id
+      JOIN rooms r ON se.room_id = r.id
+      JOIN boarding_houses bh ON se.boarding_house_id = bh.id
+      INNER JOIN beds b ON b.enrollment_id = se.id 
+        AND b.student_id = se.student_id
+        AND b.status = 'occupied'
+        AND b.deleted_at IS NULL
+      LEFT JOIN student_account_balances sab ON sab.enrollment_id = se.id AND sab.student_id = s.id
+      WHERE se.deleted_at IS NULL
+        AND se.boarding_house_id = ?
+        AND s.status = 'Active'
+        AND s.deleted_at IS NULL
+      ORDER BY s.full_name`,
+      [boarding_house_id]
+    );
+
+    // Transform data for preview
+    const previewData = activeEnrollments.map(enrollment => ({
+      enrollment_id: enrollment.enrollment_id,
+      student_id: enrollment.student_id,
+      student_name: enrollment.student_name,
+      student_number: enrollment.student_number,
+      room_name: enrollment.room_name,
+      monthly_rent: parseFloat(enrollment.monthly_rent),
+      currency: enrollment.currency,
+      current_balance: parseFloat(enrollment.current_balance),
+      start_date: enrollment.start_date,
+      expected_end_date: enrollment.expected_end_date
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        invoice_month: invoice_month,
+        boarding_house_id: parseInt(boarding_house_id),
+        boarding_house_name: activeEnrollments.length > 0 ? activeEnrollments[0].boarding_house_name : '',
+        total_students: previewData.length,
+        total_amount: previewData.reduce((sum, student) => sum + student.monthly_rent, 0),
+        students: previewData
+      }
+    });
+
+  } catch (error) {
+    console.error('Error previewing monthly invoices:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   generateMonthlyInvoices,
-  getMonthlyInvoiceSummary
+  getMonthlyInvoiceSummary,
+  previewMonthlyInvoices
 };

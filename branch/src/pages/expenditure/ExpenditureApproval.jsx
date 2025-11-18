@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Dialog, Transition } from '@headlessui/react';
 import { 
   CheckIcon, 
   XMarkIcon, 
@@ -22,9 +23,13 @@ const ExpenditureApproval = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('all'); // all, pending, approved, actioned
   const [receiptFile, setReceiptFile] = useState(null);
+  const [successData, setSuccessData] = useState(null);
+  const [errorData, setErrorData] = useState(null);
 
   const priorities = [
     { value: 'low', label: 'Low', color: 'bg-green-100 text-green-800' },
@@ -70,27 +75,84 @@ const ExpenditureApproval = () => {
         formData.append('receipt', receiptFile);
       }
       
-      const response = await axios.post(`${BASE_URL}/expenditure-requests/${requestId}/confirm`, 
+      // Get auth headers
+      const token = localStorage.getItem('token');
+      
+      // For FormData, don't set Content-Type - let axios/browser set it automatically with boundary
+      const response = await axios.post(
+        `${BASE_URL}/expenditure-requests/${requestId}/confirm`, 
         formData, 
         {
-          ...getAuthHeaders(),
           headers: {
-            ...getAuthHeaders().headers,
-            'Content-Type': 'multipart/form-data'
+            'Authorization': `Bearer ${token}`
+            // Don't set Content-Type for FormData - browser/axios will set it with boundary
           }
         }
       );
       
-      setExpenditureRequests(prev => prev.map(request => 
-        request.id === requestId ? response.data : request
-      ));
+      // Refresh the list to get updated status
+      await fetchExpenditureRequests();
       
-      toast.success('Expenditure confirmed and added to expenses');
+      // Close confirm modal and show success modal
       setShowConfirmModal(false);
       setReceiptFile(null);
+      
+      // Set success data
+      setSuccessData({
+        title: selectedRequest.title,
+        amount: selectedRequest.amount,
+        category: selectedRequest.category
+      });
+      
+      // Show success modal
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Error confirming expenditure:', error);
-      toast.error(`Failed to confirm expenditure: ${error.response?.data?.error || error.message}`);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      // Close confirm modal
+      setShowConfirmModal(false);
+      setReceiptFile(null);
+      
+      // Extract error message from response
+      let errorMessage = 'Failed to confirm expenditure';
+      let currentBalance = null;
+      let requiredAmount = null;
+      let accountName = 'Petty Cash';
+      
+      if (error.response?.data) {
+        // Check for different error formats
+        if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        }
+        
+        // Extract balance information if available
+        if (error.response.data.currentBalance !== undefined) {
+          currentBalance = error.response.data.currentBalance;
+          requiredAmount = error.response.data.requiredAmount || 0;
+          accountName = error.response.data.accountName || 'Petty Cash';
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Set error data
+      setErrorData({
+        message: errorMessage,
+        currentBalance,
+        requiredAmount,
+        accountName,
+        title: selectedRequest?.title,
+        amount: selectedRequest?.amount
+      });
+      
+      // Show error modal
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -595,6 +657,185 @@ const ExpenditureApproval = () => {
             </div>
           </div>
         )}
+
+        {/* Success Modal */}
+        <Transition appear show={showSuccessModal} as={React.Fragment}>
+          <Dialog as="div" className="relative z-50" onClose={() => setShowSuccessModal(false)}>
+            <Transition.Child
+              as={React.Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0"
+              enterTo="opacity-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
+            >
+              <div className="fixed inset-0 bg-black bg-opacity-25" />
+            </Transition.Child>
+
+            <div className="fixed inset-0 overflow-y-auto">
+              <div className="flex min-h-full items-center justify-center p-4 text-center">
+                <Transition.Child
+                  as={React.Fragment}
+                  enter="ease-out duration-300"
+                  enterFrom="opacity-0 scale-95"
+                  enterTo="opacity-100 scale-100"
+                  leave="ease-in duration-200"
+                  leaveFrom="opacity-100 scale-100"
+                  leaveTo="opacity-0 scale-95"
+                >
+                  <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="flex-shrink-0 w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                        <CheckCircleIcon className="h-10 w-10 text-green-600" />
+                      </div>
+                    </div>
+                    
+                    <Dialog.Title as="h3" className="text-lg font-semibold text-gray-900 text-center mb-2">
+                      Expenditure Confirmed Successfully
+                    </Dialog.Title>
+                    
+                    <div className="mt-4 space-y-2">
+                      <p className="text-sm text-gray-600 text-center">
+                        The expenditure has been confirmed and added to expenses.
+                      </p>
+                      
+                      {successData && (
+                        <div className="bg-gray-50 rounded-lg p-4 mt-4 space-y-2">
+                          <div className="flex justify-between">
+                            <span className="text-xs text-gray-600">Title:</span>
+                            <span className="text-xs font-medium text-gray-900">{successData.title}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-xs text-gray-600">Amount:</span>
+                            <span className="text-xs font-medium text-gray-900">${parseFloat(successData.amount || 0).toFixed(2)}</span>
+                          </div>
+                          {successData.category && (
+                            <div className="flex justify-between">
+                              <span className="text-xs text-gray-600">Category:</span>
+                              <span className="text-xs font-medium text-gray-900">{successData.category}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex justify-end">
+                      <button
+                        type="button"
+                        className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+                        onClick={() => {
+                          setShowSuccessModal(false);
+                          setSuccessData(null);
+                        }}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </Dialog.Panel>
+                </Transition.Child>
+              </div>
+            </div>
+          </Dialog>
+        </Transition>
+
+        {/* Error Modal */}
+        <Transition appear show={showErrorModal} as={React.Fragment}>
+          <Dialog as="div" className="relative z-50" onClose={() => setShowErrorModal(false)}>
+            <Transition.Child
+              as={React.Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0"
+              enterTo="opacity-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100"
+              leaveTo="opacity-0"
+            >
+              <div className="fixed inset-0 bg-black bg-opacity-25" />
+            </Transition.Child>
+
+            <div className="fixed inset-0 overflow-y-auto">
+              <div className="flex min-h-full items-center justify-center p-4 text-center">
+                <Transition.Child
+                  as={React.Fragment}
+                  enter="ease-out duration-300"
+                  enterFrom="opacity-0 scale-95"
+                  enterTo="opacity-100 scale-100"
+                  leave="ease-in duration-200"
+                  leaveFrom="opacity-100 scale-100"
+                  leaveTo="opacity-0 scale-95"
+                >
+                  <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="flex-shrink-0 w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                        <XCircleIcon className="h-10 w-10 text-red-600" />
+                      </div>
+                    </div>
+                    
+                    <Dialog.Title as="h3" className="text-lg font-semibold text-gray-900 text-center mb-2">
+                      Unable to Confirm Expenditure
+                    </Dialog.Title>
+                    
+                    <div className="mt-4 space-y-2">
+                      {errorData?.currentBalance !== null && errorData?.currentBalance !== undefined ? (
+                        <>
+                          <p className="text-sm text-gray-600 text-center font-medium text-red-600">
+                            Insufficient {errorData.accountName} Balance
+                          </p>
+                          <div className="bg-red-50 rounded-lg p-4 mt-4 space-y-3 border border-red-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-700">Current Balance:</span>
+                              <span className="text-sm font-semibold text-gray-900">${parseFloat(errorData.currentBalance || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-700">Required Amount:</span>
+                              <span className="text-sm font-semibold text-red-600">${parseFloat(errorData.requiredAmount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t border-red-200">
+                              <span className="text-sm font-medium text-gray-700">Shortfall:</span>
+                              <span className="text-sm font-bold text-red-600">
+                                ${(parseFloat(errorData.requiredAmount || 0) - parseFloat(errorData.currentBalance || 0)).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                          {errorData.title && (
+                            <div className="bg-gray-50 rounded-lg p-3 mt-3">
+                              <div className="text-xs text-gray-600 mb-1">Expenditure Request:</div>
+                              <div className="text-sm font-medium text-gray-900">{errorData.title}</div>
+                              {errorData.amount && (
+                                <div className="text-xs text-gray-600 mt-1">Amount: ${parseFloat(errorData.amount).toFixed(2)}</div>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500 text-center mt-3">
+                            Please add more funds to the petty cash account before confirming this expenditure.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-gray-600 text-center">
+                          {errorData?.message || 'An error occurred while confirming the expenditure.'}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex justify-end">
+                      <button
+                        type="button"
+                        className="inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
+                        onClick={() => {
+                          setShowErrorModal(false);
+                          setErrorData(null);
+                        }}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </Dialog.Panel>
+                </Transition.Child>
+              </div>
+            </div>
+          </Dialog>
+        </Transition>
       </div>
     </div>
   );

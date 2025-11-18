@@ -16,7 +16,7 @@ const Layout = ({ children }) => {
       setCurrentSection('students');
     } else if (path.includes('/reports')) {
       setCurrentSection('reports');
-    } else if (path.includes('/accounting') || path.includes('/expenses') || path.includes('/income') || path.includes('/petty-cash') || path.includes('/suppliers') || path.includes('/chart-of-accounts') || path.includes('/banking') || path.includes('/account-transactions')) {
+    } else if (path.includes('/accounting') || path.includes('/expenses') || path.includes('/income') || path.includes('/petty-cash') || path.includes('/suppliers') || path.includes('/chart-of-accounts') || path.includes('/banking') || path.includes('/account-transactions') || path.includes('/manual-balance-update')) {
       setCurrentSection('accounting');
     } else {
       setCurrentSection('configuration');

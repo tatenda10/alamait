@@ -6,6 +6,7 @@ import BASE_URL from '../../utils/api';
 
 const ChangePassword = () => {
   const [formData, setFormData] = useState({
+    username: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -27,16 +28,20 @@ const ChangePassword = () => {
       newErrors.currentPassword = 'Current password is required';
     }
 
-    if (!formData.newPassword) {
-      newErrors.newPassword = 'New password is required';
-    } else if (formData.newPassword.length < 8) {
-      newErrors.newPassword = 'Password must be at least 8 characters long';
+    if (formData.username && formData.username.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters long';
     }
 
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your new password';
-    } else if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+    if (formData.newPassword) {
+      if (formData.newPassword.length < 8) {
+        newErrors.newPassword = 'Password must be at least 8 characters long';
+      }
+      
+      if (!formData.confirmPassword) {
+        newErrors.confirmPassword = 'Please confirm your new password';
+      } else if (formData.newPassword !== formData.confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
+      }
     }
 
     setErrors(newErrors);
@@ -74,12 +79,21 @@ const ChangePassword = () => {
 
     setLoading(true);
     try {
+      const updateData = {
+        currentPassword: formData.currentPassword
+      };
+
+      if (formData.username) {
+        updateData.username = formData.username;
+      }
+
+      if (formData.newPassword) {
+        updateData.newPassword = formData.newPassword;
+      }
+
       const response = await axios.post(
-        `${BASE_URL}/auth/change-password`,
-        {
-          current_password: formData.currentPassword,
-          new_password: formData.newPassword
-        },
+        `${BASE_URL}/branch-auth/change-password`,
+        updateData,
         {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -87,9 +101,10 @@ const ChangePassword = () => {
         }
       );
 
-      toast.success('Password changed successfully');
+      toast.success('Credentials updated successfully');
       // Clear form
       setFormData({
+        username: '',
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
@@ -145,14 +160,36 @@ const ChangePassword = () => {
   return (
     <div className="px-6 mt-5 py-8">
       <div className="mb-8">
-        <h1 className="text-lg font-semibold text-gray-900">Change Password</h1>
+        <h1 className="text-lg font-semibold text-gray-900">Change Login Credentials</h1>
         <p className="mt-1 text-xs text-gray-600">
-          Update your password to keep your account secure
+          Update your username and/or password to keep your account secure
         </p>
       </div>
 
       <div className="bg-white border border-gray-200">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+              New Username (optional)
+            </label>
+            <input
+              type="text"
+              name="username"
+              id="username"
+              value={formData.username}
+              onChange={handleChange}
+              className={`block w-full px-3 py-2 text-sm border mt-1 ${
+                errors.username
+                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                  : 'border-gray-200 focus:border-[#E78D69] focus:ring-[#E78D69]'
+              }`}
+              placeholder="Enter new username (leave blank to keep current)"
+            />
+            {errors.username && (
+              <p className="mt-1 text-sm text-red-600">{errors.username}</p>
+            )}
+          </div>
+
           {renderPasswordInput(
             "currentPassword",
             "Current Password",
@@ -161,11 +198,11 @@ const ChangePassword = () => {
 
           {renderPasswordInput(
             "newPassword",
-            "New Password",
-            "Enter your new password"
+            "New Password (optional)",
+            "Enter your new password (leave blank to keep current)"
           )}
 
-          {renderPasswordInput(
+          {formData.newPassword && renderPasswordInput(
             "confirmPassword",
             "Confirm New Password",
             "Confirm your new password"
@@ -184,10 +221,10 @@ const ChangePassword = () => {
               {loading ? (
                 <>
                   <span className="animate-spin h-4 w-4 border-b-2 border-white mr-2"></span>
-                  Changing Password...
+                  Updating Credentials...
                 </>
               ) : (
-                'Change Password'
+                'Update Credentials'
               )}
             </button>
           </div>

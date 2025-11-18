@@ -30,3 +30,14 @@ body::-webkit-scrollbar {
 .animate-fade-in-right {
   animation: fadeInRight 0.3s both;
 }
+
+/* Hide spinner arrows on number inputs */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}

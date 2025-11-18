@@ -124,5 +124,6 @@ const { authenticate, authorize } = require('../middleware/auth');
 router.post('/', authenticate, authorize(['super_admin']), controller.createUser);
 router.get('/', authenticate, authorize(['super_admin']), controller.listUsers);
 router.put('/:id', authenticate, authorize(['super_admin']), controller.updateUser);
+router.delete('/:id', authenticate, authorize(['super_admin']), controller.deleteUser);
 
 module.exports = router; 

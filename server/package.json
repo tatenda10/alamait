@@ -6,7 +6,10 @@
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "import-july": "node scripts/import_july_data.js",
-    "test-excel": "node scripts/test_excel_structure.js"
+    "test-excel": "node scripts/test_excel_structure.js",
+    "get-coa-balances": "node scripts/getCOABalances.js",
+    "fix-gracious-balance": "node scripts/fix_gracious_balance.js",
+    "recalculate-coa-balances": "node scripts/recalculate_coa_balances.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

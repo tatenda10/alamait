@@ -36,9 +36,6 @@ exports.createBoardingHouse = async (req, res) => {
       [boarding_house_id, admin_user_id]
     );
 
-    // Create predefined chart of accounts for the new boarding house
-    await createPredefinedChartOfAccounts(connection, boarding_house_id, created_by);
-
     await connection.commit();
 
     // Fetch the created boarding house with admin info
@@ -198,8 +195,9 @@ exports.updateExistingBoardingHouses = async (req, res) => {
     let updatedCount = 0;
     
     for (const house of boardingHouses) {
+      // Chart of accounts creation removed - using global chart of accounts now
       // Create predefined chart of accounts for each boarding house
-      await createPredefinedChartOfAccounts(connection, house.id, req.user?.id || 1);
+      // await createPredefinedChartOfAccounts(connection, house.id, req.user?.id || 1);
       
       // Remove generic "Operating Expenses" if it exists and replace with specific accounts
       await connection.query(

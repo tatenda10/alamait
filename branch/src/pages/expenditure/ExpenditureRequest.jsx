@@ -546,7 +546,7 @@ const ExpenditureRequest = () => {
                           onChange={handleInputChange}
                           min="0"
                           step="0.01"
-                          className="w-full border border-gray-300 pl-7 pr-3 py-2 text-xs focus:ring-1 focus:ring-[#E78D69] focus:border-transparent"
+                          className="w-full border border-gray-300 pl-7 pr-3 py-2 text-xs focus:ring-1 focus:ring-[#E78D69] focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           placeholder="0.00"
                           required
                         />

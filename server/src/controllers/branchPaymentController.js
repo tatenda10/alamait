@@ -27,9 +27,9 @@ const recordBranchPayment = async (req, res) => {
       });
     }
     
-    // Check if student exists and get their boarding house
+    // Check if student exists
     const [students] = await connection.query(
-      `SELECT id, full_name, boarding_house_id 
+      `SELECT id, full_name 
        FROM students 
        WHERE id = ? AND deleted_at IS NULL`,
       [student_id]
@@ -43,7 +43,48 @@ const recordBranchPayment = async (req, res) => {
     }
     
     const student = students[0];
-    const boardingHouseId = student.boarding_house_id;
+    
+    // Get boarding house from student's active enrollment
+    const [enrollments] = await connection.query(
+      `SELECT boarding_house_id 
+       FROM student_enrollments 
+       WHERE student_id = ? 
+         AND deleted_at IS NULL 
+         AND checkout_date IS NULL
+       ORDER BY start_date DESC 
+       LIMIT 1`,
+      [student_id]
+    );
+    
+    let boardingHouseId = null;
+    if (enrollments.length > 0) {
+      boardingHouseId = enrollments[0].boarding_house_id;
+    }
+    
+    // If no enrollment, try to get from user's boarding house or header
+    if (!boardingHouseId) {
+      boardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
+    }
+    
+    // Validate that boarding house exists
+    if (boardingHouseId) {
+      const [boardingHouses] = await connection.query(
+        `SELECT id FROM boarding_houses WHERE id = ? AND deleted_at IS NULL`,
+        [boardingHouseId]
+      );
+      
+      if (boardingHouses.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Invalid boarding house ID: ${boardingHouseId}. The boarding house does not exist.` 
+        });
+      }
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot determine boarding house. Student has no active enrollment and no boarding house specified.' 
+      });
+    }
     
     // Create payment record with pending status
     const [paymentResult] = await connection.query(
@@ -76,14 +117,14 @@ const recordBranchPayment = async (req, res) => {
     const paymentId = paymentResult.insertId;
     
     // Create journal entries for petty cash and accounts receivable
-    await createBranchPaymentJournals(connection, paymentId, student_id, parseFloat(amount), boardingHouseId, userId);
+    await createBranchPaymentJournals(connection, paymentId, student_id, parseFloat(amount), boardingHouseId, userId, payment_date);
     
     // Update petty cash balance (use user's boarding house, not student's)
     const userBoardingHouseId = req.headers['boarding-house-id'] || req.user.boarding_house_id;
     await updatePettyCashBalance(connection, userId, parseFloat(amount), 'cash_inflow', `Payment from ${student.full_name}`, userBoardingHouseId);
     
     // Update student account balance and create student payment record
-    await updateStudentAccountBalance(connection, student_id, parseFloat(amount), paymentId, boardingHouseId, userId);
+    await updateStudentAccountBalance(connection, student_id, parseFloat(amount), paymentId, boardingHouseId, userId, payment_date);
     
     // Get the created payment with student details
     const [newPayment] = await connection.query(
@@ -406,20 +447,39 @@ const getStudentPayments = async (req, res) => {
 };
 
 // Helper function to create journal entries for branch payments
-const createBranchPaymentJournals = async (connection, paymentId, studentId, amount, boardingHouseId, userId) => {
+const createBranchPaymentJournals = async (connection, paymentId, studentId, amount, boardingHouseId, userId, paymentDate) => {
   try {
-    // Find petty cash account
-    const [pettyCashAccounts] = await connection.query(
-      `SELECT id FROM chart_of_accounts 
-       WHERE name LIKE '%Petty Cash%' AND type = 'Asset' AND deleted_at IS NULL 
+    // Find petty cash account - use same pattern as expenditure confirmation
+    let [pettyCashAccounts] = await connection.query(
+      `SELECT id, code, name FROM chart_of_accounts 
+       WHERE name LIKE '%Cash%' AND type = 'Asset' AND deleted_at IS NULL 
        ORDER BY id LIMIT 1`
     );
     
+    // If not found, try Petty Cash specifically
     if (pettyCashAccounts.length === 0) {
-      throw new Error('Petty Cash account not found');
+      [pettyCashAccounts] = await connection.query(
+        `SELECT id, code, name FROM chart_of_accounts 
+         WHERE name LIKE '%Petty Cash%' AND type = 'Asset' AND deleted_at IS NULL 
+         ORDER BY id LIMIT 1`
+      );
+    }
+    
+    // If still not found, try by account code (10001 is typically Petty Cash)
+    if (pettyCashAccounts.length === 0) {
+      [pettyCashAccounts] = await connection.query(
+        `SELECT id, code, name FROM chart_of_accounts 
+         WHERE code = '10001' AND type = 'Asset' AND deleted_at IS NULL 
+         LIMIT 1`
+      );
+    }
+    
+    if (pettyCashAccounts.length === 0) {
+      throw new Error('Petty Cash account not found in chart of accounts');
     }
     
     const pettyCashAccountId = pettyCashAccounts[0].id;
+    console.log(`Found Petty Cash account: ID=${pettyCashAccountId}, Code=${pettyCashAccounts[0].code}, Name=${pettyCashAccounts[0].name}`);
     
     // Find accounts receivable account
     const [arAccounts] = await connection.query(
@@ -442,7 +502,7 @@ const createBranchPaymentJournals = async (connection, paymentId, studentId, amo
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'posted')`,
       [
         'branch_payment',
-        new Date().toISOString().split('T')[0],
+        paymentDate || new Date().toISOString().split('T')[0],
         `BP-${paymentId}`,
         `Branch Payment - Student ${studentId}`,
         amount,
@@ -454,21 +514,79 @@ const createBranchPaymentJournals = async (connection, paymentId, studentId, amo
     const transactionId = transactionResult.insertId;
     
     // Create journal entries
+    // Use payment date for journal entries to match transaction date
+    const journalDate = paymentDate ? paymentDate + ' 00:00:00' : null;
+    
     // Debit: Petty Cash (Asset increase)
-    await connection.query(
-      `INSERT INTO journal_entries (
-        transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by, created_at
-      ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
-      [transactionId, pettyCashAccountId, amount, `Petty Cash - Branch Payment ${paymentId}`, boardingHouseId, userId]
-    );
+    if (journalDate) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by, created_at
+        ) VALUES (?, ?, 'debit', ?, ?, ?, ?, ?)`,
+        [transactionId, pettyCashAccountId, amount, `Petty Cash - Branch Payment ${paymentId}`, boardingHouseId, userId, journalDate]
+      );
+    } else {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by, created_at
+        ) VALUES (?, ?, 'debit', ?, ?, ?, ?, NOW())`,
+        [transactionId, pettyCashAccountId, amount, `Petty Cash - Branch Payment ${paymentId}`, boardingHouseId, userId]
+      );
+    }
     
     // Credit: Accounts Receivable (Asset decrease)
-    await connection.query(
-      `INSERT INTO journal_entries (
-        transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by, created_at
-      ) VALUES (?, ?, 'credit', ?, ?, ?, ?, NOW())`,
-      [transactionId, arAccountId, amount, `Accounts Receivable - Branch Payment ${paymentId}`, boardingHouseId, userId]
-    );
+    if (journalDate) {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by, created_at
+        ) VALUES (?, ?, 'credit', ?, ?, ?, ?, ?)`,
+        [transactionId, arAccountId, amount, `Accounts Receivable - Branch Payment ${paymentId}`, boardingHouseId, userId, journalDate]
+      );
+    } else {
+      await connection.query(
+        `INSERT INTO journal_entries (
+          transaction_id, account_id, entry_type, amount, description, boarding_house_id, created_by, created_at
+        ) VALUES (?, ?, 'credit', ?, ?, ?, ?, NOW())`,
+        [transactionId, arAccountId, amount, `Accounts Receivable - Branch Payment ${paymentId}`, boardingHouseId, userId]
+      );
+    }
+    
+    // Update account balances using the account balance service
+    const { updateAccountBalance } = require('../services/accountBalanceService');
+    
+    console.log(`Updating COA balances: Petty Cash ID=${pettyCashAccountId}, AR ID=${arAccountId}, Amount=${amount}, BoardingHouse=${boardingHouseId}`);
+    
+    // Update Petty Cash account balance (debit increases asset)
+    try {
+      await updateAccountBalance(
+        pettyCashAccountId,
+        amount,
+        'debit',
+        boardingHouseId,
+        connection
+      );
+      console.log(`Successfully updated Petty Cash COA balance (account ID: ${pettyCashAccountId})`);
+    } catch (error) {
+      console.error(`Error updating Petty Cash COA balance:`, error);
+      throw error;
+    }
+    
+    // Update Accounts Receivable account balance (credit decreases asset)
+    try {
+      await updateAccountBalance(
+        arAccountId,
+        amount,
+        'credit',
+        boardingHouseId,
+        connection
+      );
+      console.log(`Successfully updated Accounts Receivable COA balance (account ID: ${arAccountId})`);
+    } catch (error) {
+      console.error(`Error updating Accounts Receivable COA balance:`, error);
+      throw error;
+    }
+    
+    console.log(`Updated COA balances for Petty Cash (${pettyCashAccountId}) and Accounts Receivable (${arAccountId})`);
     
   } catch (error) {
     console.error('Error creating branch payment journals:', error);
@@ -481,65 +599,77 @@ const updatePettyCashBalance = async (connection, userId, amount, type, descript
   try {
     console.log(`Updating petty cash balance: User ${userId}, Amount ${amount}, Type ${type}, Boarding House ${boardingHouseId}`);
     
-    // Check if user has a petty cash account
-    const [accounts] = await connection.query(
-      `SELECT id, current_balance FROM petty_cash_accounts 
-       WHERE user_id = ? AND boarding_house_id = ?`,
-      [userId, boardingHouseId]
+    // First check if this is a petty cash user (has petty_cash_user_id)
+    // If not, check if it's a regular user that needs to be linked to a petty cash account
+    const [pettyCashUser] = await connection.query(
+      `SELECT id FROM petty_cash_users WHERE id = ? AND deleted_at IS NULL`,
+      [userId]
     );
     
-    console.log(`Found ${accounts.length} accounts for user ${userId} in boarding house ${boardingHouseId}`);
+    let pettyCashUserId = null;
+    if (pettyCashUser.length > 0) {
+      // This is a petty cash user
+      pettyCashUserId = userId;
+    } else {
+      // Check if there's a petty cash user linked to this regular user
+      const [linkedUser] = await connection.query(
+        `SELECT id FROM petty_cash_users WHERE user_id = ? AND deleted_at IS NULL`,
+        [userId]
+      );
+      if (linkedUser.length > 0) {
+        pettyCashUserId = linkedUser[0].id;
+      }
+    }
+    
+    if (!pettyCashUserId) {
+      console.log(`No petty cash user found for user ${userId}. Cannot update petty cash balance.`);
+      throw new Error(`No petty cash account found for user ${userId}`);
+    }
+    
+    // Check if user has a petty cash account using petty_cash_user_id
+    const [accounts] = await connection.query(
+      `SELECT id, current_balance FROM petty_cash_accounts 
+       WHERE petty_cash_user_id = ? AND boarding_house_id = ? AND deleted_at IS NULL`,
+      [pettyCashUserId, boardingHouseId]
+    );
+    
+    console.log(`Found ${accounts.length} accounts for petty cash user ${pettyCashUserId} in boarding house ${boardingHouseId}`);
     
     if (accounts.length === 0) {
-      console.log(`Creating new petty cash account for user ${userId}`);
-      // Create petty cash account for user if it doesn't exist
-      const [newAccount] = await connection.query(
-        `INSERT INTO petty_cash_accounts (user_id, boarding_house_id, account_name, account_code, current_balance, created_by, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-        [userId, boardingHouseId, `Petty Cash - User ${userId}`, `PC-${userId.toString().padStart(3, '0')}`, 0, userId]
-      );
-      
-      const accountId = newAccount.insertId;
-      console.log(`Created account with ID ${accountId}`);
-      
-      // Add transaction
-      await connection.query(
-        `INSERT INTO petty_cash_transactions (
-          user_id, boarding_house_id, transaction_type, amount, description, transaction_date, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW())`,
-        [userId, boardingHouseId, type, amount, description, userId]
-      );
-      
-      // Update account balance
-      await connection.query(
-        `UPDATE petty_cash_accounts SET current_balance = ? WHERE id = ?`,
-        [amount, accountId]
-      );
-      console.log(`Updated new account balance to ${amount}`);
-    } else {
-      const account = accounts[0];
-      const oldBalance = account.current_balance;
-      const newBalance = type === 'cash_inflow' 
-        ? parseFloat(oldBalance) + parseFloat(amount)
-        : parseFloat(oldBalance) - parseFloat(amount);
-      
-      console.log(`Updating existing account ${account.id}: ${oldBalance} -> ${newBalance} (${type})`);
-      
-      // Add transaction
-      await connection.query(
-        `INSERT INTO petty_cash_transactions (
-          user_id, boarding_house_id, transaction_type, amount, description, transaction_date, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW())`,
-        [userId, boardingHouseId, type, amount, description, userId]
-      );
-      
-      // Update account balance
-      await connection.query(
-        `UPDATE petty_cash_accounts SET current_balance = ? WHERE id = ?`,
-        [newBalance, account.id]
-      );
-      console.log(`Updated account ${account.id} balance to ${newBalance}`);
+      console.log(`No petty cash account found. Cannot update balance without an account.`);
+      throw new Error(`No petty cash account found for petty cash user ${pettyCashUserId}`);
     }
+    
+    const account = accounts[0];
+    const oldBalance = parseFloat(account.current_balance || 0);
+    const amountDecimal = parseFloat(amount);
+    const newBalance = type === 'cash_inflow' 
+      ? oldBalance + amountDecimal
+      : oldBalance - amountDecimal;
+    
+    // Round to 2 decimal places to avoid floating point precision issues
+    const roundedNewBalance = Math.round(newBalance * 100) / 100;
+    
+    console.log(`Updating existing account ${account.id}: ${oldBalance} -> ${roundedNewBalance} (${type})`);
+    
+    // Add transaction - use user_id (the table uses user_id, not petty_cash_user_id)
+    // Use the original userId (which could be a regular user or petty cash user)
+    await connection.query(
+      `INSERT INTO petty_cash_transactions (
+        user_id, boarding_house_id, transaction_type, amount, description, transaction_date, created_by, created_at
+      ) VALUES (?, ?, ?, ?, ?, NOW(), ?, NOW())`,
+      [userId, boardingHouseId, type, amountDecimal, description, userId]
+    );
+    
+    // Update account balance with rounded value
+    await connection.query(
+      `UPDATE petty_cash_accounts SET current_balance = ?, updated_at = NOW() WHERE id = ?`,
+      [roundedNewBalance, account.id]
+    );
+    console.log(`Updated account ${account.id} balance to ${roundedNewBalance}`);
+    
+    // Note: COA balance is updated in createBranchPaymentJournals, so we don't update it here
+    // to avoid double updates
     
   } catch (error) {
     console.error('Error updating petty cash balance:', error);
@@ -548,7 +678,7 @@ const updatePettyCashBalance = async (connection, userId, amount, type, descript
 };
 
 // Helper function to update student account balance and create payment record
-const updateStudentAccountBalance = async (connection, studentId, amount, branchPaymentId, boardingHouseId, userId) => {
+const updateStudentAccountBalance = async (connection, studentId, amount, branchPaymentId, boardingHouseId, userId, paymentDate) => {
   try {
     console.log(`Updating student account balance: Student ${studentId}, Amount ${amount}`);
     
@@ -612,11 +742,12 @@ const updateStudentAccountBalance = async (connection, studentId, amount, branch
         notes,
         created_by,
         status
-      ) VALUES (?, ?, ?, NOW(), 'cash', 'branch_payment', ?, ?, ?, 'completed')`,
+      ) VALUES (?, ?, ?, ?, 'cash', 'branch_payment', ?, ?, ?, 'completed')`,
       [
         studentId,
         enrollment.id,
         amount,
+        paymentDate || new Date().toISOString().split('T')[0],
         `BP-${branchPaymentId}`,
         `Branch payment recorded by user ${userId}`,
         userId

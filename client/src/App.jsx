@@ -16,8 +16,10 @@ import AddStudent from './pages/students/AddStudent';
 import EditStudent from './pages/students/EditStudent';
 import ViewStudent from './pages/students/ViewStudent';
 import AssignRoom from './pages/students/AssignRoom';
+import AddPreviousBalance from './pages/students/AddPreviousBalance';
 import PettyCash from './pages/pettycash/Pettycash';
 import PettyCashReconciliation from './pages/pettycash/PettyCashReconciliation';
+import PettyCashTransactions from './pages/pettycash/PettyCashTransactions';
 import PendingExpenses from './pages/pettycash/PendingExpenses';
 import Banking from './pages/banking/Banking';
 import IncomeStatement from './pages/reports/IncomeStatement';
@@ -42,7 +44,7 @@ import TrialBalance from './pages/accounting/TrialBalance';
 import ExpenditureRequests from './pages/expenses/ExpenditureRequests';
 import BudgetRequests from './pages/expenses/BudgetRequests';
 import BalanceSheet from './pages/reports/BalanceSheet';
-import MonthlyInvoices from './pages/accounting/MonthlyInvoices';
+import BulkInvoiceGeneration from './pages/accounting/BulkInvoiceGeneration';
 
 const App = () => {
   return (
@@ -63,6 +65,7 @@ const App = () => {
         <Route path="students/:studentId/edit" element={<EditStudent />} />
         <Route path="students/:studentId" element={<ViewStudent />} />
         <Route path="students/assign-room/:studentId" element={<AssignRoom />} />
+        <Route path="students/previous-balance" element={<AddPreviousBalance />} />
         <Route path="students/enrollments" element={<div>Enrollments Page</div>} />
         <Route path="students/payment-schedules" element={<div>Payment Schedules Page</div>} />
         <Route path="students/payments" element={<div>Student Payments Page</div>} />
@@ -80,7 +83,8 @@ const App = () => {
         <Route path="accounting/balance-bd-cd" element={<BalanceBDCD />} />
         <Route path="accounting/account-ledger/:accountId/:periodId" element={<AccountLedger />} />
         <Route path="accounting/trial-balance" element={<TrialBalance />} />
-        <Route path="accounting/monthly-invoices" element={<MonthlyInvoices />} />
+        <Route path="accounting/monthly-invoices" element={<BulkInvoiceGeneration />} />
+        <Route path="accounting/manual-balance-update" element={<AddPreviousBalance />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="expenses/add" element={<AddExpense />} />
         <Route path="expenses/edit/:id" element={<EditExpense />} />
@@ -89,6 +93,7 @@ const App = () => {
         <Route path="expenses/budget-requests" element={<BudgetRequests />} />
         <Route path="income" element={<Income />} />
         <Route path="petty-cash" element={<PettyCash />} />
+        <Route path="petty-cash/transactions/:userId" element={<PettyCashTransactions />} />
         <Route path="petty-cash/reconciliation" element={<PettyCashReconciliation />} />
         <Route path="petty-cash/reconciliation/:accountId" element={<PettyCashReconciliation />} />
         <Route path="petty-cash/pending-expenses" element={<PendingExpenses />} />

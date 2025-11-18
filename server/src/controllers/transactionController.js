@@ -571,13 +571,43 @@ exports.updateTransaction = async (req, res) => {
          WHERE transaction_id = ?`,
         [transaction_date, totalAmount, totalAmount, description, reference_no, expenseAccountId, id]
       );
+
+      // If expense uses petty cash, update the petty_cash_transactions record
+      // Match by reference_number and description to find the related petty_cash_transaction
+      if (expense.payment_method === 'petty_cash' || expense.payment_method === 'Petty Cash') {
+        await connection.query(
+          `UPDATE petty_cash_transactions 
+           SET transaction_date = ?,
+               amount = ?,
+               description = ?,
+               reference_number = ?
+           WHERE reference_number = ? 
+             AND transaction_type = 'expense'
+             AND deleted_at IS NULL
+           LIMIT 1`,
+          [transaction_date, totalAmount, description, reference_no, expense.reference_number || reference_no]
+        );
+      }
     }
+
+    // Get old journal entries before deleting them (for balance reversal)
+    const [oldJournalEntries] = await connection.query(
+      'SELECT account_id, entry_type, amount FROM journal_entries WHERE transaction_id = ?',
+      [id]
+    );
 
     // Delete existing journal entries
     await connection.query(
       'DELETE FROM journal_entries WHERE transaction_id = ?',
       [id]
     );
+
+    // Recalculate account balances for old accounts (reverse the old entries)
+    // The database triggers should handle this, but we'll explicitly recalculate to be sure
+    const affectedAccountIds = new Set();
+    oldJournalEntries.forEach(entry => {
+      affectedAccountIds.add(entry.account_id);
+    });
 
     // Create new journal entries
     for (const entry of journal_entries) {
@@ -591,7 +621,7 @@ exports.updateTransaction = async (req, res) => {
           boarding_house_id,
           created_by,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           entry.account_id,
@@ -599,9 +629,70 @@ exports.updateTransaction = async (req, res) => {
           entry.amount || 0,
           entry.description,
           transaction.boarding_house_id || req.user.boarding_house_id,
-          req.user.id
+          req.user.id,
+          `${transaction_date} 00:00:00` // Convert date to datetime for created_at to match the transaction date
         ]
       );
+      affectedAccountIds.add(entry.account_id);
+    }
+
+    // Recalculate account balances for all affected accounts
+    // This ensures balances are correct after the update
+    const { recalculateAllAccountBalances } = require('../services/accountBalanceService');
+    for (const accountId of affectedAccountIds) {
+      // Get all journal entries for this account and recalculate
+      const [accountEntries] = await connection.query(
+        `SELECT 
+          SUM(CASE 
+            WHEN coa.type IN ('Asset', 'Expense') AND je.entry_type = 'debit' THEN je.amount
+            WHEN coa.type IN ('Asset', 'Expense') AND je.entry_type = 'credit' THEN -je.amount
+            WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND je.entry_type = 'credit' THEN je.amount
+            WHEN coa.type IN ('Liability', 'Equity', 'Revenue') AND je.entry_type = 'debit' THEN -je.amount
+            ELSE 0
+          END) as balance,
+          SUM(CASE WHEN je.entry_type = 'debit' THEN je.amount ELSE 0 END) as total_debits,
+          SUM(CASE WHEN je.entry_type = 'credit' THEN je.amount ELSE 0 END) as total_credits,
+          COUNT(DISTINCT je.transaction_id) as transaction_count,
+          MAX(t.transaction_date) as last_transaction_date
+        FROM chart_of_accounts coa
+        LEFT JOIN journal_entries je ON coa.id = je.account_id AND je.deleted_at IS NULL
+        LEFT JOIN transactions t ON je.transaction_id = t.id AND t.deleted_at IS NULL AND t.status = 'posted'
+        WHERE coa.id = ? AND coa.deleted_at IS NULL
+        GROUP BY coa.id`,
+        [accountId]
+      );
+
+      if (accountEntries.length > 0 && accountEntries[0].balance !== null) {
+        const balance = accountEntries[0];
+        await connection.query(
+          `INSERT INTO current_account_balances (
+            account_id, account_code, account_name, account_type,
+            current_balance, total_debits, total_credits, transaction_count,
+            last_transaction_date, updated_at
+          )
+          SELECT 
+            coa.id, coa.code, coa.name, coa.type,
+            ?, ?, ?, ?,
+            ?, NOW()
+          FROM chart_of_accounts coa
+          WHERE coa.id = ?
+          ON DUPLICATE KEY UPDATE
+            current_balance = VALUES(current_balance),
+            total_debits = VALUES(total_debits),
+            total_credits = VALUES(total_credits),
+            transaction_count = VALUES(transaction_count),
+            last_transaction_date = VALUES(last_transaction_date),
+            updated_at = NOW()`,
+          [
+            balance.balance || 0,
+            balance.total_debits || 0,
+            balance.total_credits || 0,
+            balance.transaction_count || 0,
+            balance.last_transaction_date || transaction_date,
+            accountId
+          ]
+        );
+      }
     }
 
     // Fetch the updated transaction with its entries

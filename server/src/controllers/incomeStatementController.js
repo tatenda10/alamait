@@ -109,124 +109,141 @@ const generateIncomeStatement = async (req, res) => {
  * This shows rental income based on when invoices were created (credit entries to revenue accounts)
  */
 const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
+  const connection = await db.getConnection();
   
-  let query = `
-    SELECT 
-      coa.name as account_name,
-      coa.type as account_type,
-      coa.id as account_id,
-      coa.code as account_code,
-      SUM(je.amount) as amount,
-      COUNT(DISTINCT t.id) as transaction_count,
-      bh.name as boarding_house_name
-    FROM journal_entries je
-    JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts coa ON je.account_id = coa.id
-    JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-    WHERE DATE(t.transaction_date) BETWEEN ? AND ?
-      AND je.entry_type = 'credit'
-      AND coa.type = 'Revenue'
-      AND je.deleted_at IS NULL
-      AND t.deleted_at IS NULL
-      AND coa.deleted_at IS NULL
-      AND bh.deleted_at IS NULL
-  `;
+  try {
+    let query = `
+      SELECT 
+        coa.name as account_name,
+        coa.type as account_type,
+        coa.id as account_id,
+        coa.code as account_code,
+        SUM(je.amount) as amount,
+        COUNT(DISTINCT t.id) as transaction_count,
+        bh.name as boarding_house_name
+      FROM journal_entries je
+      JOIN transactions t ON je.transaction_id = t.id
+      JOIN chart_of_accounts coa ON je.account_id = coa.id
+      JOIN boarding_houses bh ON je.boarding_house_id = bh.id
+      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+        AND je.entry_type = 'credit'
+        AND coa.type = 'Revenue'
+        AND je.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND coa.deleted_at IS NULL
+        AND bh.deleted_at IS NULL
+    `;
 
-  let params = [startDate, endDate];
+    let params = [startDate, endDate];
 
-  if (!isConsolidated && boardingHouseId) {
-    query += ' AND je.boarding_house_id = ?';
-    params.push(boardingHouseId);
+    if (!isConsolidated && boardingHouseId) {
+      query += ' AND je.boarding_house_id = ?';
+      params.push(boardingHouseId);
+    }
+
+    query += `
+      GROUP BY coa.id, coa.name, coa.type, coa.code, bh.id, bh.name
+      ORDER BY coa.code, bh.name
+    `;
+
+    console.log('Revenue Query (from journal entries):', query);
+    console.log('Revenue Params:', params);
+
+    const [results] = await connection.query(query, params);
+  
+    console.log('\n=== REVENUE RESULTS BREAKDOWN ===');
+    console.log('Total revenue records found:', results.length);
+    
+    results.forEach((row, index) => {
+      console.log(`\n${index + 1}. ${row.account_name} (${row.account_code})`);
+      console.log(`   Boarding House: ${row.boarding_house_name}`);
+      console.log(`   Amount: $${row.amount}`);
+      console.log(`   Transaction Count: ${row.transaction_count}`);
+    });
+    
+    const totalRevenue = results.reduce((sum, row) => sum + Number(row.amount), 0);
+    console.log(`\nTOTAL REVENUE: $${totalRevenue}`);
+    console.log('=================================\n');
+    
+    return results.map(row => ({
+      account_id: row.account_id,
+      account_name: row.account_name,
+      account_type: row.account_type,
+      account_code: row.account_code,
+      amount: Number(row.amount), // Preserve exact decimal precision without rounding
+      transaction_count: row.transaction_count,
+      boarding_house_name: row.boarding_house_name
+    }));
+  } catch (error) {
+    console.error('Error in getRevenueData:', error);
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  query += `
-    GROUP BY coa.id, coa.name, coa.type, coa.code, bh.id, bh.name
-    ORDER BY coa.code, bh.name
-  `;
-
-  console.log('Revenue Query (from journal entries):', query);
-  console.log('Revenue Params:', params);
-
-  const [results] = await db.query(query, params);
-  
-  console.log('\n=== REVENUE RESULTS BREAKDOWN ===');
-  console.log('Total revenue records found:', results.length);
-  
-  results.forEach((row, index) => {
-    console.log(`\n${index + 1}. ${row.account_name} (${row.account_code})`);
-    console.log(`   Boarding House: ${row.boarding_house_name}`);
-    console.log(`   Amount: $${row.amount}`);
-    console.log(`   Transaction Count: ${row.transaction_count}`);
-  });
-  
-  const totalRevenue = results.reduce((sum, row) => sum + Number(row.amount), 0);
-  console.log(`\nTOTAL REVENUE: $${totalRevenue}`);
-  console.log('=================================\n');
-  
-  return results.map(row => ({
-    account_id: row.account_id,
-    account_name: row.account_name,
-    account_type: row.account_type,
-    account_code: row.account_code,
-    amount: Number(row.amount), // Preserve exact decimal precision without rounding
-    transaction_count: row.transaction_count,
-    boarding_house_name: row.boarding_house_name
-  }));
 };
 
 /**
  * Get expense data from journal entries - includes ALL expenses (regular and petty cash)
  */
 const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
-  let query = `
-    SELECT 
-      coa.name as account_name,
-      coa.type as account_type,
-      coa.id as account_id,
-      coa.code as account_code,
-      SUM(je.amount) as amount,
-      COUNT(DISTINCT t.id) as transaction_count,
-      bh.name as boarding_house_name
-    FROM journal_entries je
-    JOIN transactions t ON je.transaction_id = t.id
-    JOIN chart_of_accounts coa ON je.account_id = coa.id
-    JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-    WHERE DATE(t.transaction_date) BETWEEN ? AND ?
-      AND t.status = 'posted'
-      AND je.entry_type = 'debit'
-      AND coa.type = 'Expense'
-      AND je.deleted_at IS NULL
-      AND t.deleted_at IS NULL
-      AND coa.deleted_at IS NULL
-      AND bh.deleted_at IS NULL
-  `;
-
-  let params = [startDate, endDate];
-
-  if (!isConsolidated && boardingHouseId) {
-    query += ' AND je.boarding_house_id = ?';
-    params.push(boardingHouseId);
-  }
-
-  query += `
-    GROUP BY coa.id, coa.name, coa.type, coa.code, bh.id, bh.name
-    ORDER BY coa.code, bh.name
-  `;
-
-  console.log('Expense Query:', query);
-  console.log('Expense Params:', params);
-
-  const [results] = await db.query(query, params);
+  const connection = await db.getConnection();
   
-  return results.map(row => ({
-    account_id: row.account_id,
-    account_name: row.account_name,
-    account_type: row.account_type,
-    account_code: row.account_code,
-    amount: Number(row.amount), // Preserve exact decimal precision without rounding
-    transaction_count: row.transaction_count,
-    boarding_house_name: row.boarding_house_name
-  }));
+  try {
+    let query = `
+      SELECT 
+        coa.name as account_name,
+        coa.type as account_type,
+        coa.id as account_id,
+        coa.code as account_code,
+        SUM(je.amount) as amount,
+        COUNT(DISTINCT t.id) as transaction_count,
+        bh.name as boarding_house_name
+      FROM journal_entries je
+      JOIN transactions t ON je.transaction_id = t.id
+      JOIN chart_of_accounts coa ON je.account_id = coa.id
+      JOIN boarding_houses bh ON je.boarding_house_id = bh.id
+      WHERE DATE(t.transaction_date) BETWEEN ? AND ?
+        AND t.status = 'posted'
+        AND je.entry_type = 'debit'
+        AND coa.type = 'Expense'
+        AND je.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND coa.deleted_at IS NULL
+        AND bh.deleted_at IS NULL
+    `;
+
+    let params = [startDate, endDate];
+
+    if (!isConsolidated && boardingHouseId) {
+      query += ' AND je.boarding_house_id = ?';
+      params.push(boardingHouseId);
+    }
+
+    query += `
+      GROUP BY coa.id, coa.name, coa.type, coa.code, bh.id, bh.name
+      ORDER BY coa.code, bh.name
+    `;
+
+    console.log('Expense Query:', query);
+    console.log('Expense Params:', params);
+
+    const [results] = await connection.query(query, params);
+    
+    return results.map(row => ({
+      account_id: row.account_id,
+      account_name: row.account_name,
+      account_type: row.account_type,
+      account_code: row.account_code,
+      amount: Number(row.amount), // Preserve exact decimal precision without rounding
+      transaction_count: row.transaction_count,
+      boarding_house_name: row.boarding_house_name
+    }));
+  } catch (error) {
+    console.error('Error in getExpenseData:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 /**
@@ -234,7 +251,10 @@ const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidate
  * Matches the logic from accountsPayableController.js
  */
 const getAccountsPayableData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
-  let query = `
+  const connection = await db.getConnection();
+  
+  try {
+    let query = `
     SELECT 
       e.id,
       e.reference_number as invoice_number,
@@ -283,37 +303,43 @@ const getAccountsPayableData = async (startDate, endDate, boardingHouseId, isCon
 
   query += ' ORDER BY e.expense_date DESC, e.created_at DESC';
 
-  console.log('=== ACCOUNTS PAYABLE FUNCTION ===');
-  console.log('Date Range:', { startDate, endDate });
-  console.log('Boarding House ID:', boardingHouseId);
-  console.log('Is Consolidated:', isConsolidated);
-  console.log('Query:', query);
-  console.log('Params:', params);
+    console.log('=== ACCOUNTS PAYABLE FUNCTION ===');
+    console.log('Date Range:', { startDate, endDate });
+    console.log('Boarding House ID:', boardingHouseId);
+    console.log('Is Consolidated:', isConsolidated);
+    console.log('Query:', query);
+    console.log('Params:', params);
 
-  const [results] = await db.query(query, params);
+    const [results] = await connection.query(query, params);
 
-  console.log('Total Payables Found:', results.length);
-  console.log('Payables Total Balance:', results.reduce((sum, p) => sum + parseFloat(p.balance), 0));
+    console.log('Total Payables Found:', results.length);
+    console.log('Payables Total Balance:', results.reduce((sum, p) => sum + parseFloat(p.balance), 0));
 
-  return results.map(row => ({
-    id: row.id,
-    invoice_number: row.invoice_number,
-    date: row.date,
-    due_date: row.due_date,
-    amount: parseFloat(row.amount),
-    balance: parseFloat(row.balance),
-    status: row.status,
-    description: row.description,
-    payment_method: row.payment_method,
-    notes: row.notes,
-    created_at: row.created_at,
-    account_name: row.account_name,
-    supplier_name: row.supplier_name,
-    supplier_contact: row.supplier_contact,
-    boarding_house_name: row.boarding_house_name,
-    boarding_house_id: row.boarding_house_id,
-    days_overdue: row.days_overdue
-  }));
+    return results.map(row => ({
+      id: row.id,
+      invoice_number: row.invoice_number,
+      date: row.date,
+      due_date: row.due_date,
+      amount: parseFloat(row.amount),
+      balance: parseFloat(row.balance),
+      status: row.status,
+      description: row.description,
+      payment_method: row.payment_method,
+      notes: row.notes,
+      created_at: row.created_at,
+      account_name: row.account_name,
+      supplier_name: row.supplier_name,
+      supplier_contact: row.supplier_contact,
+      boarding_house_name: row.boarding_house_name,
+      boarding_house_id: row.boarding_house_id,
+      days_overdue: row.days_overdue
+    }));
+  } catch (error) {
+    console.error('Error in getAccountsPayableData:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 /**
@@ -650,13 +676,21 @@ const getAccountsReceivableData = async (startDate, endDate, boardingHouseId, is
  * Get boarding houses for reference
  */
 const getBoardingHouses = async () => {
-  const [results] = await db.query(`
-    SELECT id, name 
-    FROM boarding_houses 
-    WHERE deleted_at IS NULL 
-    ORDER BY name
-  `);
-  return results;
+  const connection = await db.getConnection();
+  try {
+    const [results] = await connection.query(`
+      SELECT id, name 
+      FROM boarding_houses 
+      WHERE deleted_at IS NULL 
+      ORDER BY name
+    `);
+    return results;
+  } catch (error) {
+    console.error('Error in getBoardingHouses:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 /**

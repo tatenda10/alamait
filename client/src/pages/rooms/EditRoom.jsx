@@ -5,8 +5,6 @@ import BASE_URL from '../../context/Api';
 import {
   ArrowLeftIcon,
   HomeIcon,
-  CurrencyDollarIcon,
-  UserGroupIcon,
   BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 
@@ -19,13 +17,13 @@ export default function EditRoom() {
   const [formData, setFormData] = useState({
     room_name: '',
     boarding_house_id: '',
-    capacity: 1,
-    monthly_rent: '',
     description: '',
     amenities: '',
     status: 'available'
   });
   const [errors, setErrors] = useState({});
+  const [hasOccupiedBeds, setHasOccupiedBeds] = useState(false);
+  const [originalBoardingHouseId, setOriginalBoardingHouseId] = useState('');
 
   useEffect(() => {
     fetchRoom();
@@ -43,11 +41,16 @@ export default function EditRoom() {
       // Handle new API response structure
       const room = response.data.success ? response.data.data : response.data;
       
+      // Check if room has occupied beds
+      const occupiedBeds = room.occupied_beds_count || room.occupiedBeds || 0;
+      const hasOccupied = occupiedBeds > 0;
+      
+      setHasOccupiedBeds(hasOccupied);
+      setOriginalBoardingHouseId(room.boarding_house_id || '');
+      
       setFormData({
         room_name: room.room_name || room.name || '',
         boarding_house_id: room.boarding_house_id || '',
-        capacity: room.capacity || 1,
-        monthly_rent: room.monthly_rent || room.price_per_bed || '',
         description: room.description || '',
         amenities: room.amenities || '',
         status: room.status || 'available'
@@ -99,12 +102,9 @@ export default function EditRoom() {
       newErrors.boarding_house_id = 'Please select a boarding house';
     }
 
-    if (!formData.capacity || formData.capacity < 1) {
-      newErrors.capacity = 'Capacity must be at least 1';
-    }
-
-    if (!formData.monthly_rent || parseFloat(formData.monthly_rent) <= 0) {
-      newErrors.monthly_rent = 'Monthly rent must be greater than 0';
+    // Check if boarding house is being changed and room has occupied beds
+    if (hasOccupiedBeds && formData.boarding_house_id !== originalBoardingHouseId) {
+      newErrors.boarding_house_id = 'Cannot change boarding house when room has occupied beds. Please move students first.';
     }
 
     setErrors(newErrors);
@@ -214,11 +214,12 @@ export default function EditRoom() {
                   name="boarding_house_id"
                   value={formData.boarding_house_id}
                   onChange={handleInputChange}
+                  disabled={hasOccupiedBeds}
                   className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
                     errors.boarding_house_id
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                       : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
-                  }`}
+                  } ${hasOccupiedBeds ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
                   <option value="">Select a boarding house</option>
                   {boardingHouses.map((house) => (
@@ -228,69 +229,14 @@ export default function EditRoom() {
                   ))}
                 </select>
               </div>
+              {hasOccupiedBeds && (
+                <p className="mt-1 text-xs text-yellow-600">
+                  Boarding house cannot be changed when room has occupied beds. Please move students first.
+                </p>
+              )}
               {errors.boarding_house_id && (
                 <p className="mt-1 text-xs text-red-600">{errors.boarding_house_id}</p>
               )}
-            </div>
-
-            {/* Capacity and Monthly Rent */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div>
-                <label htmlFor="capacity" className="block text-xs font-medium text-gray-700">
-                  Capacity *
-                </label>
-                <div className="mt-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <UserGroupIcon className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="number"
-                    id="capacity"
-                    name="capacity"
-                    min="1"
-                    value={formData.capacity}
-                    onChange={handleInputChange}
-                    className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
-                      errors.capacity
-                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                        : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
-                    }`}
-                    placeholder="1"
-                  />
-                </div>
-                {errors.capacity && (
-                  <p className="mt-1 text-xs text-red-600">{errors.capacity}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="monthly_rent" className="block text-xs font-medium text-gray-700">
-                  Monthly Rent *
-                </label>
-                <div className="mt-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="number"
-                    id="monthly_rent"
-                    name="monthly_rent"
-                    step="0.01"
-                    min="0"
-                    value={formData.monthly_rent}
-                    onChange={handleInputChange}
-                    className={`block w-full pl-9 pr-3 py-2 border text-xs focus:outline-none focus:ring-1 ${
-                      errors.monthly_rent
-                        ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                        : 'border-gray-300 focus:ring-[#f58020] focus:border-[#f58020]'
-                    }`}
-                    placeholder="0.00"
-                  />
-                </div>
-                {errors.monthly_rent && (
-                  <p className="mt-1 text-xs text-red-600">{errors.monthly_rent}</p>
-                )}
-              </div>
             </div>
 
             {/* Status */}

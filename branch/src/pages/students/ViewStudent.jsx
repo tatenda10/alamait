@@ -17,6 +17,7 @@ import {
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import BASE_URL from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 import Checkout from '../../components/Checkout';

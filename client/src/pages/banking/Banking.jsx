@@ -347,38 +347,50 @@ const Banking = () => {
         </div>
       </div>
 
-      {/* Account Balances Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-4 border border-gray-200">
+      {/* Account Balances Summary - Showing actual COA balances */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-gray-600">Petty Cash</p>
+              <p className="text-lg font-bold text-gray-900">
+                ${(bankingData.balances['10001'] || 0).toFixed(2)}
+              </p>
+            </div>
+            <FaHandHoldingUsd className="h-5 w-5 text-orange-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">Cash on Hand</p>
               <p className="text-lg font-bold text-gray-900">
-                ${bankingData.balances['10002']?.toFixed(2) || '0.00'}
+                ${(bankingData.balances['10002'] || 0).toFixed(2)}
               </p>
             </div>
             <FaHandHoldingUsd className="h-5 w-5 text-green-500" />
           </div>
         </div>
 
-        <div className="bg-white p-4 border border-gray-200">
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">CBZ Bank Account</p>
               <p className="text-lg font-bold text-gray-900">
-                ${bankingData.balances['10003']?.toFixed(2) || '0.00'}
+                ${(bankingData.balances['10003'] || 0).toFixed(2)}
               </p>
             </div>
             <FaUniversity className="h-5 w-5 text-blue-500" />
           </div>
         </div>
 
-        <div className="bg-white p-4 border border-gray-200">
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium text-gray-600">CBZ Vault</p>
               <p className="text-lg font-bold text-gray-900">
-                ${bankingData.balances['10004']?.toFixed(2) || '0.00'}
+                ${(bankingData.balances['10004'] || 0).toFixed(2)}
               </p>
             </div>
             <FaDollarSign className="h-5 w-5 text-purple-500" />

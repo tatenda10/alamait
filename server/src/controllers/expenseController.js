@@ -1,6 +1,7 @@
 const db = require('../services/db');
 const path = require('path');
 const fs = require('fs').promises;
+const { updateAccountBalance } = require('../services/accountBalanceService');
 
 // Record an expense
 exports.recordExpense = async (req, res) => {
@@ -250,6 +251,31 @@ exports.recordExpense = async (req, res) => {
       ]
     );
 
+    // Update account balances for both accounts
+    console.log('Updating account balances for expense:');
+    console.log('Expense Account ID:', expense_account_id, 'Amount:', expenseAmount, 'Type: debit');
+    console.log('Credit Account ID:', creditAccountId, 'Amount:', expenseAmount, 'Type: credit');
+    
+    // Update expense account balance (debit increases expense)
+    await updateAccountBalance(
+      expense_account_id,
+      expenseAmount,
+      'debit',
+      boardingHouseId,
+      connection
+    );
+
+    // Update credit account balance (credit decreases asset/liability)
+    await updateAccountBalance(
+      creditAccountId,
+      expenseAmount,
+      'credit',
+      boardingHouseId,
+      connection
+    );
+    
+    console.log('Account balance updates completed');
+
     // If payment is made from petty cash, update petty cash account
     // NOTE: Petty cash is now user-specific and should be managed through the dedicated petty cash system
     // This old boarding-house-based petty cash code is commented out
@@ -495,6 +521,31 @@ exports.updateExpense = async (req, res) => {
         userId
       ]
     );
+
+    // Update account balances for both accounts
+    console.log('Updating account balances for expense update:');
+    console.log('Expense Account ID:', expense_account_id, 'Amount:', expenseAmount, 'Type: debit');
+    console.log('Credit Account ID:', creditAccountId, 'Amount:', expenseAmount, 'Type: credit');
+    
+    // Update expense account balance (debit increases expense)
+    await updateAccountBalance(
+      expense_account_id,
+      expenseAmount,
+      'debit',
+      boardingHouseId,
+      connection
+    );
+
+    // Update credit account balance (credit decreases asset/liability)
+    await updateAccountBalance(
+      creditAccountId,
+      expenseAmount,
+      'credit',
+      boardingHouseId,
+      connection
+    );
+    
+    console.log('Account balance updates completed');
 
     // Handle petty cash integration for expense updates
     const oldPaymentMethod = expense.payment_method;

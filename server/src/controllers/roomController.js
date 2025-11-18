@@ -222,12 +222,16 @@ const createRoom = async (req, res) => {
       boarding_house_id 
     } = req.body;
 
-    // Use rent if provided, otherwise use price_per_bed
-    const rentValue = rent || price_per_bed;
+    // Use rent if provided, otherwise use price_per_bed, or default to 0
+    const rentValue = rent || price_per_bed || 0;
+    // Capacity is optional now - it will be calculated from beds
+    // Default to 0 if not provided
+    const roomCapacity = capacity || 0;
+    const availableBeds = capacity || 0;
     
-    // Validate required fields
-    if (!name || !capacity || !rentValue || !boarding_house_id) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    // Validate required fields (capacity is now optional)
+    if (!name || !boarding_house_id) {
+      return res.status(400).json({ message: 'Missing required fields: name and boarding_house_id are required' });
     }
 
     const [result] = await connection.query(
@@ -244,8 +248,8 @@ const createRoom = async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, 'active', ?, NOW(), NOW())`,
       [
         name, 
-        capacity, 
-        capacity, 
+        roomCapacity, 
+        availableBeds, 
         rentValue, // Store rent as price_per_bed
         description, 
         boarding_house_id
@@ -286,20 +290,19 @@ const updateRoom = async (req, res) => {
     
     const { id } = req.params;
     const { 
-      name, 
-      capacity, 
-      rent, // Frontend sends 'rent' but we need 'price_per_bed'
-      price_per_bed, // Alternative field name
-      admin_fee,
-      security_deposit,
-      additional_rent,
+      room_name,
+      name,
+      boarding_house_id,
       description, 
       status 
     } = req.body;
 
-    // Get current room data to calculate available_beds adjustment
+    // Use room_name if provided, otherwise use name
+    const roomName = room_name || name;
+
+    // Get current room data
     const [currentRooms] = await connection.query(
-      'SELECT capacity, available_beds FROM rooms WHERE id = ? AND deleted_at IS NULL',
+      'SELECT boarding_house_id FROM rooms WHERE id = ? AND deleted_at IS NULL',
       [id]
     );
 
@@ -307,30 +310,34 @@ const updateRoom = async (req, res) => {
       return res.status(404).json({ message: 'Room not found' });
     }
 
-    // Calculate new available_beds if capacity is changing
-    let availableBeds = currentRooms[0].available_beds;
-    if (capacity) {
-      const occupiedBeds = currentRooms[0].capacity - currentRooms[0].available_beds;
-      availableBeds = capacity - occupiedBeds;
-      if (availableBeds < 0) {
-        return res.status(400).json({ message: 'Cannot reduce capacity below current occupancy' });
+    // Check if boarding house is being changed
+    if (boarding_house_id && boarding_house_id !== currentRooms[0].boarding_house_id) {
+      // Check if room has occupied beds
+      const [occupiedBeds] = await connection.query(
+        `SELECT COUNT(*) as count 
+         FROM beds 
+         WHERE room_id = ? 
+           AND status = 'occupied' 
+           AND deleted_at IS NULL`,
+        [id]
+      );
+
+      if (occupiedBeds[0].count > 0) {
+        return res.status(400).json({ 
+          message: 'Cannot change boarding house when room has occupied beds. Please move students first.' 
+        });
       }
     }
-
-    // Use rent if provided, otherwise use price_per_bed
-    const rentValue = rent || price_per_bed;
     
     const [result] = await connection.query(
       `UPDATE rooms
        SET name = COALESCE(?, name),
-           capacity = COALESCE(?, capacity),
-           available_beds = ?,
-           price_per_bed = COALESCE(?, price_per_bed),
+           boarding_house_id = COALESCE(?, boarding_house_id),
            description = COALESCE(?, description),
            status = COALESCE(?, status),
            updated_at = NOW()
        WHERE id = ? AND deleted_at IS NULL`,
-      [name, capacity, availableBeds, rentValue, description, status, id]
+      [roomName, boarding_house_id, description, status, id]
     );
 
     if (result.affectedRows === 0) {
@@ -342,17 +349,8 @@ const updateRoom = async (req, res) => {
       [id]
     );
 
-    // Transform the response to match frontend expectations
-    const transformedRoom = {
-      ...updatedRoom[0],
-      rent: parseFloat(updatedRoom[0].price_per_bed || 0),
-      adminFee: parseFloat(admin_fee || 0),
-      securityDeposit: parseFloat(security_deposit || 0),
-      additionalRent: parseFloat(additional_rent || 0)
-    };
-
     await connection.commit();
-    res.json(transformedRoom);
+    res.json(updatedRoom[0]);
   } catch (error) {
     await connection.rollback();
     console.error('Error in updateRoom:', error);

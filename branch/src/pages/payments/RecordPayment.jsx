@@ -24,6 +24,8 @@ const RecordPayment = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successData, setSuccessData] = useState(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: '',
     payment_method: 'cash',
@@ -150,17 +152,24 @@ const RecordPayment = () => {
         }
       });
 
-      toast.success('Payment recorded successfully and pending admin approval');
-      setShowPaymentModal(false);
-      setSelectedStudent(null);
-      setPaymentForm({
-        amount: '',
-        payment_method: 'cash',
-        payment_date: new Date().toISOString().split('T')[0],
-        description: '',
-        reference_number: '',
-        receipt: null
-      });
+      if (response.data.success) {
+        setSuccessData({
+          studentName: selectedStudent.first_name + ' ' + selectedStudent.last_name,
+          amount: paymentForm.amount,
+          referenceNumber: paymentForm.reference_number || response.data.payment?.reference_number
+        });
+        setShowSuccessModal(true);
+        setShowPaymentModal(false);
+        setSelectedStudent(null);
+        setPaymentForm({
+          amount: '',
+          payment_method: 'cash',
+          payment_date: new Date().toISOString().split('T')[0],
+          description: '',
+          reference_number: '',
+          receipt: null
+        });
+      }
     } catch (error) {
       console.error('Error recording payment:', error);
       console.error('Error response:', error.response?.data);
@@ -477,6 +486,87 @@ const RecordPayment = () => {
           </div>
         </Dialog>
       </Transition.Root>
+
+      {/* Success Modal */}
+      <Transition appear show={showSuccessModal} as={React.Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setShowSuccessModal(false)}>
+          <Transition.Child
+            as={React.Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-25" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={React.Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all">
+                  <div className="flex items-center justify-center mb-4">
+                    <div className="flex-shrink-0 w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                      <CheckCircleIcon className="h-10 w-10 text-green-600" />
+                    </div>
+                  </div>
+                  
+                  <Dialog.Title as="h3" className="text-lg font-semibold text-gray-900 text-center mb-2">
+                    Payment Recorded Successfully
+                  </Dialog.Title>
+                  
+                  <div className="mt-4 space-y-2">
+                    <p className="text-sm text-gray-600 text-center">
+                      Payment has been recorded and is pending admin approval.
+                    </p>
+                    
+                    {successData && (
+                      <div className="bg-gray-50 rounded-lg p-4 mt-4 space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-xs text-gray-600">Student:</span>
+                          <span className="text-xs font-medium text-gray-900">{successData.studentName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-xs text-gray-600">Amount:</span>
+                          <span className="text-xs font-medium text-gray-900">${parseFloat(successData.amount).toFixed(2)}</span>
+                        </div>
+                        {successData.referenceNumber && (
+                          <div className="flex justify-between">
+                            <span className="text-xs text-gray-600">Reference:</span>
+                            <span className="text-xs font-medium text-gray-900">{successData.referenceNumber}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="button"
+                      className="inline-flex justify-center rounded-md border border-transparent bg-[#E78D69] px-4 py-2 text-sm font-medium text-white hover:bg-[#E78D69]/90 focus:outline-none focus:ring-2 focus:ring-[#E78D69] focus:ring-offset-2"
+                      onClick={() => {
+                        setShowSuccessModal(false);
+                        setSuccessData(null);
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </div>
   );
 };

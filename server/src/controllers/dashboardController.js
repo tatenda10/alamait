@@ -7,7 +7,8 @@ const getDashboardData = async (req, res) => {
   try {
     console.log('📊 Fetching boarding houses data...');
     
-    // Get all boarding houses data
+    // Get all boarding houses data with bed occupancy
+    // Monthly revenue now uses invoices created for the current month (based on invoice_date)
     const [boardingHouses] = await connection.query(
       `SELECT 
         bh.id,
@@ -15,16 +16,20 @@ const getDashboardData = async (req, res) => {
         bh.location,
         COUNT(DISTINCT r.id) as total_rooms,
         COUNT(DISTINCT CASE WHEN se.id IS NOT NULL AND se.deleted_at IS NULL AND se.checkout_date IS NULL THEN r.id END) as occupied_rooms,
+        COUNT(DISTINCT b.id) as total_beds,
+        COUNT(DISTINCT CASE WHEN b.status = 'occupied' AND b.deleted_at IS NULL THEN b.id END) as occupied_beds,
+        COUNT(DISTINCT CASE WHEN b.status = 'available' AND b.deleted_at IS NULL THEN b.id END) as available_beds,
         COUNT(DISTINCT se.id) as total_students,
         COUNT(DISTINCT u.id) as staff_count,
-        COALESCE(SUM(sp.amount), 0) as monthly_revenue
+        COALESCE(SUM(si.amount), 0) as monthly_revenue
        FROM boarding_houses bh
        LEFT JOIN rooms r ON bh.id = r.boarding_house_id AND r.deleted_at IS NULL
+       LEFT JOIN beds b ON r.id = b.room_id
        LEFT JOIN student_enrollments se ON r.id = se.room_id AND se.deleted_at IS NULL AND se.checkout_date IS NULL
        LEFT JOIN users u ON bh.id = u.boarding_house_id AND u.role = 'staff' AND u.deleted_at IS NULL
-       LEFT JOIN student_payments sp ON se.id = sp.enrollment_id 
-         AND sp.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
-         AND sp.deleted_at IS NULL
+       LEFT JOIN student_invoices si ON se.id = si.enrollment_id 
+         AND DATE_FORMAT(si.invoice_date, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+         AND si.deleted_at IS NULL
        WHERE bh.deleted_at IS NULL
        GROUP BY bh.id, bh.name, bh.location
        ORDER BY bh.name`
@@ -33,20 +38,60 @@ const getDashboardData = async (req, res) => {
     console.log('🏠 Boarding houses found:', boardingHouses.length);
     console.log('🏠 Boarding houses data:', boardingHouses);
 
-    // Calculate overall KPIs
+    // Calculate overall KPIs using beds
     const totalBoardingHouses = boardingHouses.length;
     const totalRooms = boardingHouses.reduce((sum, bh) => sum + (bh.total_rooms || 0), 0);
+    const totalBeds = boardingHouses.reduce((sum, bh) => sum + (bh.total_beds || 0), 0);
+    const totalOccupiedBeds = boardingHouses.reduce((sum, bh) => sum + (bh.occupied_beds || 0), 0);
     const totalStudents = boardingHouses.reduce((sum, bh) => sum + (bh.total_students || 0), 0);
-    const totalOccupiedRooms = boardingHouses.reduce((sum, bh) => sum + (bh.occupied_rooms || 0), 0);
-    const averageOccupancyRate = totalRooms > 0 ? ((totalOccupiedRooms / totalRooms) * 100).toFixed(1) : 0;
+    const averageOccupancyRate = totalBeds > 0 ? ((totalOccupiedBeds / totalBeds) * 100).toFixed(1) : 0;
     const totalMonthlyRevenue = boardingHouses.reduce((sum, bh) => sum + (bh.monthly_revenue || 0), 0);
+    
+    // Get student prepayments total (positive balances = students who overpaid)
+    // Only include active enrollments (not checked out)
+    const [prepaymentsResult] = await connection.query(`
+      SELECT COALESCE(SUM(sab.current_balance), 0) as total_prepayments
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND se.deleted_at IS NULL
+        AND se.checkout_date IS NULL
+        AND (s.status = 'Active' OR s.status IS NULL)
+        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance > 0
+        AND sab.deleted_at IS NULL
+    `);
+    
+    // Get student debtors total (negative balances = students who owe)
+    // Only include active enrollments (not checked out)
+    const [debtorsResult] = await connection.query(`
+      SELECT COALESCE(SUM(ABS(sab.current_balance)), 0) as total_debtors
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND se.deleted_at IS NULL
+        AND se.checkout_date IS NULL
+        AND (s.status = 'Active' OR s.status IS NULL)
+        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND sab.current_balance < 0
+        AND sab.deleted_at IS NULL
+    `);
+    
+    const totalPrepayments = parseFloat(prepaymentsResult[0]?.total_prepayments || 0);
+    const totalDebtors = parseFloat(debtorsResult[0]?.total_debtors || 0);
     
     console.log('📊 Calculated KPIs:');
     console.log('  - Total Boarding Houses:', totalBoardingHouses);
     console.log('  - Total Rooms:', totalRooms);
+    console.log('  - Total Beds:', totalBeds);
+    console.log('  - Total Occupied Beds:', totalOccupiedBeds);
     console.log('  - Total Students:', totalStudents);
-    console.log('  - Average Occupancy Rate:', averageOccupancyRate);
-    console.log('  - Total Monthly Revenue:', totalMonthlyRevenue);
+    console.log('  - Average Bed Occupancy Rate:', averageOccupancyRate);
+    console.log('  - Total Monthly Revenue (from invoices):', totalMonthlyRevenue);
+    console.log('  - Total Student Prepayments:', totalPrepayments);
+    console.log('  - Total Student Debtors:', totalDebtors);
 
     // Get recent activities (last 10) - only enrollments and payments
     console.log('📋 Fetching recent activities...');
@@ -72,29 +117,29 @@ const getDashboardData = async (req, res) => {
     );
     console.log('📋 Activities found:', activities.length);
 
-    // Get monthly revenue metrics for the last 3 months (income only)
+    // Get monthly revenue metrics for the last 6 months (income only)
     console.log('📈 Fetching monthly metrics...');
     const [monthlyMetrics] = await connection.query(
       `WITH RECURSIVE months AS (
         SELECT 
-          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%Y-%m-01') as month_start,
-          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 MONTH), '%b') as month_name,
+          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01') as month_start,
+          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%b %Y') as month_name,
           1 as month_num
         UNION ALL
         SELECT 
           DATE_ADD(month_start, INTERVAL 1 MONTH),
-          DATE_FORMAT(DATE_ADD(month_start, INTERVAL 1 MONTH), '%b'),
+          DATE_FORMAT(DATE_ADD(month_start, INTERVAL 1 MONTH), '%b %Y'),
           month_num + 1
         FROM months
-        WHERE month_num < 3
+        WHERE month_num < 6
       )
       SELECT 
         m.month_name,
         m.month_start,
-        COALESCE(SUM(sp.amount), 0) as income
+        COALESCE(SUM(si.amount), 0) as income
        FROM months m
-       LEFT JOIN student_payments sp ON DATE_FORMAT(sp.created_at, '%Y-%m-01') = m.month_start
-         AND sp.deleted_at IS NULL
+       LEFT JOIN student_invoices si ON DATE_FORMAT(si.invoice_date, '%Y-%m-01') = m.month_start
+         AND si.deleted_at IS NULL
        GROUP BY m.month_name, m.month_start
        ORDER BY m.month_start`
     );
@@ -119,14 +164,17 @@ const getDashboardData = async (req, res) => {
          AND sps.deleted_at IS NULL`
     );
 
-    // Format boarding houses data
+    // Format boarding houses data with bed occupancy
     const housesData = boardingHouses.map(bh => ({
       id: bh.id,
       name: bh.name,
       admin: 'Admin', // You might want to get actual admin names
       students: bh.total_students || 0,
       rooms: bh.total_rooms || 0,
-      occupancy: bh.total_rooms > 0 ? Math.round(((bh.occupied_rooms || 0) / bh.total_rooms) * 100) : 0,
+      total_beds: bh.total_beds || 0,
+      occupied_beds: bh.occupied_beds || 0,
+      available_beds: bh.available_beds || 0,
+      occupancy: bh.total_beds > 0 ? Math.round(((bh.occupied_beds || 0) / bh.total_beds) * 100) : 0,
       last: 'Recently', // You might want to calculate actual last activity
       monthly_revenue: bh.monthly_revenue || 0
     }));
@@ -148,10 +196,11 @@ const getDashboardData = async (req, res) => {
       kpis: [
         { label: 'Total Boarding Houses', value: totalBoardingHouses, icon: 'home' },
         { label: 'Total Rooms', value: totalRooms, icon: 'bed' },
+        { label: 'Total Beds', value: totalBeds, icon: 'bed' },
         { label: 'Total Students Enrolled', value: totalStudents, icon: 'users' },
-        { label: 'Average Occupancy Rate', value: `${averageOccupancyRate}%`, icon: 'chart-pie' },
-        { label: 'Active Rooms', value: totalOccupiedRooms, icon: 'bed' },
-        { label: 'Available Rooms', value: totalRooms - totalOccupiedRooms, icon: 'bed' }
+        { label: 'Average Bed Occupancy Rate', value: `${averageOccupancyRate}%`, icon: 'chart-pie' },
+        { label: 'Occupied Beds', value: totalOccupiedBeds, icon: 'bed' },
+        { label: 'Available Beds', value: totalBeds - totalOccupiedBeds, icon: 'bed' }
       ],
       houses: housesData,
       activities: activitiesData,
@@ -159,9 +208,13 @@ const getDashboardData = async (req, res) => {
       summary: {
         totalBoardingHouses,
         totalRooms,
+        totalBeds,
+        totalOccupiedBeds,
         totalStudents,
         averageOccupancyRate,
         totalMonthlyRevenue,
+        totalPrepayments,
+        totalDebtors,
         pendingPayments: pendingPayments[0].count,
         overduePayments: overduePayments[0].count
       }
@@ -203,14 +256,14 @@ const getDashboardStats = async (req, res) => {
       [boardingHouseId]
     );
 
-    // Get room occupancy
-    const [roomStats] = await connection.query(
+    // Get bed occupancy (not room occupancy)
+    const [bedStats] = await connection.query(
       `SELECT 
-        COUNT(DISTINCT r.id) as total_rooms,
-        COUNT(DISTINCT CASE WHEN se.id IS NOT NULL AND se.deleted_at IS NULL AND se.checkout_date IS NULL THEN r.id END) as occupied_rooms,
-        COUNT(DISTINCT CASE WHEN se.id IS NULL OR se.deleted_at IS NOT NULL OR se.checkout_date IS NOT NULL THEN r.id END) as available_rooms
+        COUNT(DISTINCT b.id) as total_beds,
+        COUNT(DISTINCT CASE WHEN b.status = 'occupied' AND b.deleted_at IS NULL THEN b.id END) as occupied_beds,
+        COUNT(DISTINCT CASE WHEN b.status = 'available' AND b.deleted_at IS NULL THEN b.id END) as available_beds
        FROM rooms r
-       LEFT JOIN student_enrollments se ON r.id = se.room_id
+       LEFT JOIN beds b ON r.id = b.room_id
        WHERE r.boarding_house_id = ? AND r.deleted_at IS NULL`,
       [boardingHouseId]
     );
@@ -281,7 +334,9 @@ const getDashboardStats = async (req, res) => {
     );
 
     // Calculate percentages and format response
-    const occupancyRate = (roomStats[0].occupied_rooms / roomStats[0].total_rooms) * 100;
+    const totalBeds = bedStats[0].total_beds || 0;
+    const occupiedBeds = bedStats[0].occupied_beds || 0;
+    const occupancyRate = totalBeds > 0 ? ((occupiedBeds / totalBeds) * 100) : 0;
     const lastMonthRevenue = await getLastMonthRevenue(connection, boardingHouseId);
     const currentRevenue = parseFloat(revenue[0].total_amount) || 0;
     const revenueChange = lastMonthRevenue > 0 ? ((currentRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
@@ -296,11 +351,11 @@ const getDashboardStats = async (req, res) => {
           subtitle: 'Active enrollment'
         },
         {
-          name: 'Room Occupancy',
+          name: 'Bed Occupancy',
           value: `${occupancyRate.toFixed(1)}%`,
           change: '+2.1%',
           changeType: 'positive',
-          subtitle: `${roomStats[0].occupied_rooms} of ${roomStats[0].total_rooms} rooms`
+          subtitle: `${occupiedBeds} of ${totalBeds} beds`
         },
         {
           name: 'Monthly Revenue',
@@ -312,8 +367,8 @@ const getDashboardStats = async (req, res) => {
       ],
       secondaryStats: [
         {
-          name: 'Available Rooms',
-          value: roomStats[0].available_rooms.toString(),
+          name: 'Available Beds',
+          value: (bedStats[0].available_beds || 0).toString(),
           change: '-5',
           changeType: 'negative'
         },
@@ -367,36 +422,57 @@ const getKPIs = async (req, res) => {
   const connection = await db.getConnection();
   
   try {
-    console.log('🔄 Fetching real-time KPIs...');
+    console.log('🔄 Fetching real-time KPIs from COA...');
 
-    // Get Cash balance (10001)
-    const [cashResult] = await connection.query(`
-      SELECT COALESCE(cab.current_balance, 0) as balance
-      FROM current_account_balances cab
-      JOIN chart_of_accounts coa ON cab.account_id = coa.id
-      WHERE coa.code = '10001'
+    // Get all cash and bank account balances from COA in one query
+    // Account codes: 10001 (Petty Cash), 10002 (Cash), 10003 (CBZ Bank), 10004 (CBZ Vault)
+    // Using current_account_balances table directly
+    const [balancesResult] = await connection.query(`
+      SELECT 
+        coa.id as account_id,
+        coa.code as account_code,
+        coa.name as account_name,
+        COALESCE(cab.current_balance, 0) as current_balance
+      FROM chart_of_accounts coa
+      LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+      WHERE coa.code IN ('10001', '10002', '10003', '10004')
         AND coa.deleted_at IS NULL
+        AND coa.type = 'Asset'
+      ORDER BY coa.code
     `);
 
-    // Get CBZ Bank Account balance (10002)
-    const [cbzBankResult] = await connection.query(`
-      SELECT COALESCE(cab.current_balance, 0) as balance
-      FROM current_account_balances cab
-      JOIN chart_of_accounts coa ON cab.account_id = coa.id
-      WHERE coa.code = '10002'
-        AND coa.deleted_at IS NULL
-    `);
+    console.log('📊 COA Balances Query Result:', JSON.stringify(balancesResult, null, 2));
 
-    // Get CBZ Vault balance (10003)
-    const [cbzVaultResult] = await connection.query(`
-      SELECT COALESCE(cab.current_balance, 0) as balance
-      FROM current_account_balances cab
-      JOIN chart_of_accounts coa ON cab.account_id = coa.id
-      WHERE coa.code = '10003'
-        AND coa.deleted_at IS NULL
-    `);
+    // Initialize balances
+    let cash = 0;
+    let cbzBank = 0;
+    let cbzVault = 0;
+    let pettyCashCOA = 0;
 
-    // Get total petty cash (sum of all petty cash accounts)
+    // Map balances by account code
+    balancesResult.forEach(balance => {
+      const code = balance.account_code;
+      const amount = parseFloat(balance.current_balance || 0);
+      
+      console.log(`💰 Mapping balance: ${code} (${balance.account_name}) = ${amount}`);
+      
+      switch(code) {
+        case '10001': // Petty Cash (COA)
+          pettyCashCOA = amount;
+          break;
+        case '10002': // Cash on Hand
+          cash = amount;
+          break;
+        case '10003': // CBZ Bank Account
+          cbzBank = amount;
+          break;
+        case '10004': // CBZ Vault
+          cbzVault = amount;
+          break;
+      }
+    });
+
+    // Get total petty cash from petty_cash_accounts table (user petty cash accounts)
     const [pettyCashResult] = await connection.query(`
       SELECT COALESCE(SUM(pca.current_balance), 0) as total_petty_cash
       FROM petty_cash_accounts pca
@@ -404,15 +480,13 @@ const getKPIs = async (req, res) => {
         AND pca.status = 'active'
     `);
 
-    const cash = parseFloat(cashResult[0]?.balance || 0);
-    const cbzBank = parseFloat(cbzBankResult[0]?.balance || 0);
-    const cbzVault = parseFloat(cbzVaultResult[0]?.balance || 0);
-    const totalPettyCash = parseFloat(pettyCashResult[0].total_petty_cash);
+    const totalPettyCash = parseFloat(pettyCashResult[0]?.total_petty_cash || 0);
 
-    console.log('📊 Real-time KPIs:', {
+    console.log('📊 Real-time KPIs from COA:', {
       cash,
       cbzBank,
       cbzVault,
+      pettyCashCOA,
       totalPettyCash
     });
 
@@ -424,7 +498,7 @@ const getKPIs = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in getKPIs:', error);
+    console.error('❌ Error in getKPIs:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch KPIs',

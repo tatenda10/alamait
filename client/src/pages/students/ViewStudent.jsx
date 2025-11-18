@@ -1040,6 +1040,26 @@ export default function ViewStudent() {
             </div>
           </div>
 
+          {/* Balance Management Section */}
+          <div className="mt-8">
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-xs font-medium text-gray-900">Balance Management</h4>
+                <button
+                  onClick={() => navigate('/dashboard/accounting/manual-balance-update')}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-[#f58020] rounded hover:bg-[#f58020]/90 transition-colors"
+                  title="Manual Balance Update (Debit or Credit)"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Manual Balance Update
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                Manually adjust student account balances (debit or credit). This affects Accounts Receivable and Revenue accounts.
+              </p>
+            </div>
+          </div>
+
           {/* Add Payment Form */}
           <div className="mt-8">
             <div className="border-t border-gray-200 pt-6">

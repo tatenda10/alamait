@@ -168,6 +168,7 @@ export default function AssignRoom() {
     try {
       // Validation checks
       if (!selectedRoom) throw new Error('Please select a room');
+      if (!selectedBed) throw new Error('Please select a bed. Bed selection is required.');
       if (!startDate) throw new Error('Please select a start date');
       if (!endDate) throw new Error('Please select an end date');
       if (!monthlyRate) throw new Error('Please enter the monthly rate');

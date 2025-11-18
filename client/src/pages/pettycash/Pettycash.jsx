@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   FaPlus, 
   FaDollarSign,
@@ -6,15 +7,34 @@ import {
   FaArrowDown,
   FaUser
 } from 'react-icons/fa';
+import { 
+  CheckCircleIcon,
+  XCircleIcon,
+  XMarkIcon
+} from '@heroicons/react/24/outline';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 
 const PettyCash = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [showAddCashModal, setShowAddCashModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [successData, setSuccessData] = useState(null);
+  const [errorData, setErrorData] = useState(null);
+  const [showEditUserModal, setShowEditUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editUserForm, setEditUserForm] = useState({
+    username: '',
+    full_name: '',
+    email: '',
+    password: '',
+    confirm_password: ''
+  });
   
   // Petty cash data
   const [pettyCashData, setPettyCashData] = useState({
@@ -61,6 +81,7 @@ const PettyCash = () => {
     boarding_house_id: '',
     account_name: '',
     initial_balance: '',
+    transaction_date: new Date().toISOString().split('T')[0],
     notes: ''
   });
 
@@ -115,9 +136,9 @@ const PettyCash = () => {
   };
 
   const handleViewTransactions = (account) => {
-    setSelectedAccount(account);
-    fetchTransactionHistory(account.user_id);
-    setShowTransactionModal(true);
+    // Navigate to dedicated transactions page
+    const userId = account.user_id || account.petty_cash_user_id;
+    navigate(`/dashboard/petty-cash/transactions/${userId}`);
   };
 
   const handleAddCash = async (e) => {
@@ -136,27 +157,48 @@ const PettyCash = () => {
         account_id: addCashForm.account_id
       };
       
-      await axios.post(`${BASE_URL}/petty-cash/add-cash`, cashData, {
+      const response = await axios.post(`${BASE_URL}/petty-cash/add-cash`, cashData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
+      // Close the add cash modal
+      setShowAddCashModal(false);
+      resetAddCashForm();
+      
+      // Show success modal
       const sourceNames = {
         '10002': 'Cash on Hand',
         '10003': 'CBZ Bank Account',
         '10004': 'CBZ Vault'
       };
       const sourceName = sourceNames[addCashForm.source_account] || 'selected account';
-      toast.success(`Cash added successfully from ${sourceName}`);
-      setShowAddCashModal(false);
-      resetAddCashForm();
+      
+      setSuccessData({
+        amount: cashData.amount,
+        sourceAccount: sourceName,
+        description: cashData.description
+      });
+      setShowSuccessModal(true);
+      
+      // Refresh data
       fetchPettyCashData();
     } catch (error) {
       console.error('Error adding cash:', error);
       const errorMessage = error.response?.data?.message || 'Failed to add cash';
-      toast.error(errorMessage);
+      
+      // Close the add cash modal
+      setShowAddCashModal(false);
+      
+      // Show error modal
+      setErrorData({
+        message: errorMessage,
+        amount: addCashForm.amount,
+        sourceAccount: addCashForm.source_account
+      });
+      setShowErrorModal(true);
     }
   };
 
@@ -261,6 +303,7 @@ const PettyCash = () => {
         boarding_house_id: createAccountForm.boarding_house_id,
         account_name: createAccountForm.account_name,
         initial_balance: parseFloat(createAccountForm.initial_balance) || 0,
+        transaction_date: createAccountForm.transaction_date,
         password: createAccountForm.password,
         notes: createAccountForm.notes
       };
@@ -301,8 +344,85 @@ const PettyCash = () => {
       boarding_house_id: '',
       account_name: '',
       initial_balance: '',
+      transaction_date: new Date().toISOString().split('T')[0],
       notes: ''
     });
+  };
+
+  const handleEditUser = (account) => {
+    setEditingUser(account);
+    setEditUserForm({
+      username: account.username || '',
+      full_name: account.full_name || account.username || '',
+      email: account.email || '',
+      password: '',
+      confirm_password: ''
+    });
+    setShowEditUserModal(true);
+  };
+
+  const handleUpdateUser = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Validate passwords match if password is provided
+      if (editUserForm.password && editUserForm.password !== editUserForm.confirm_password) {
+        toast.error('Passwords do not match');
+        return;
+      }
+      
+      // Validate password length if provided
+      if (editUserForm.password && editUserForm.password.length < 6) {
+        toast.error('Password must be at least 6 characters long');
+        return;
+      }
+
+      const updateData = {
+        username: editUserForm.username,
+        full_name: editUserForm.full_name,
+        email: editUserForm.email
+      };
+
+      // Only include password if provided
+      if (editUserForm.password) {
+        updateData.password = editUserForm.password;
+      }
+      
+      await axios.put(`${BASE_URL}/petty-cash-admin/users/${editingUser.petty_cash_user_id}`, updateData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      toast.success('User credentials updated successfully');
+      setShowEditUserModal(false);
+      setEditingUser(null);
+      setEditUserForm({
+        username: '',
+        full_name: '',
+        email: '',
+        password: '',
+        confirm_password: ''
+      });
+      fetchPettyCashData();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      const errorMessage = error.response?.data?.message || 'Failed to update user credentials';
+      toast.error(errorMessage);
+    }
+  };
+
+  const resetEditUserForm = () => {
+    setEditUserForm({
+      username: '',
+      full_name: '',
+      email: '',
+      password: '',
+      confirm_password: ''
+    });
+    setEditingUser(null);
   };
 
 
@@ -464,12 +584,22 @@ const PettyCash = () => {
                       {formatDate(account.created_at)}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handleViewTransactions(account)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        View Transactions
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleEditUser(account)}
+                          className="text-xs text-green-600 hover:text-green-800 font-medium"
+                          title="Edit User Credentials"
+                        >
+                          Edit
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          onClick={() => handleViewTransactions(account)}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          View Transactions
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -902,6 +1032,22 @@ const PettyCash = () => {
                   />
                 </div>
 
+                {parseFloat(createAccountForm.initial_balance) > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Transaction Date*</label>
+                    <input
+                      type="date"
+                      required={parseFloat(createAccountForm.initial_balance) > 0}
+                      value={createAccountForm.transaction_date}
+                      onChange={(e) => setCreateAccountForm({...createAccountForm, transaction_date: e.target.value})}
+                      className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Date for the initial balance transaction (used in journals)
+                    </p>
+                  </div>
+                )}
+
                 <div className="mb-4">
                   <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
                   <textarea
@@ -934,6 +1080,246 @@ const PettyCash = () => {
         </div>
       )}
 
+      {/* Success Modal */}
+      {showSuccessModal && successData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircleIcon className="h-6 w-6 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Cash Added Successfully
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    setSuccessData(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-4">
+                  Cash has been successfully added to the petty cash account.
+                </p>
+                
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Amount:</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      ${parseFloat(successData.amount).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-600">Source Account:</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {successData.sourceAccount}
+                    </span>
+                  </div>
+                  {successData.description && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Description:</span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {successData.description}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    setSuccessData(null);
+                  }}
+                  className="px-4 py-2 bg-[#f58020] text-white text-xs font-medium rounded hover:bg-[#f58020]/90 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Modal */}
+      {showErrorModal && errorData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                    <XCircleIcon className="h-6 w-6 text-red-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Transaction Failed
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowErrorModal(false);
+                    setErrorData(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="mb-6">
+                <p className="text-sm text-red-600 mb-4 font-medium">
+                  {errorData.message}
+                </p>
+                
+                {errorData.amount && (
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Requested Amount:</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        ${parseFloat(errorData.amount).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowErrorModal(false);
+                    setErrorData(null);
+                  }}
+                  className="px-4 py-2 bg-[#f58020] text-white text-xs font-medium rounded hover:bg-[#f58020]/90 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditUserModal && editingUser && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-900">Edit User Credentials</h3>
+                <button
+                  onClick={() => {
+                    setShowEditUserModal(false);
+                    resetEditUserForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+              <form onSubmit={handleUpdateUser}>
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Username*</label>
+                  <input
+                    type="text"
+                    required
+                    value={editUserForm.username}
+                    onChange={(e) => setEditUserForm({...editUserForm, username: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Enter username"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Full Name*</label>
+                  <input
+                    type="text"
+                    required
+                    value={editUserForm.full_name}
+                    onChange={(e) => setEditUserForm({...editUserForm, full_name: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Enter full name"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Email*</label>
+                  <input
+                    type="email"
+                    required
+                    value={editUserForm.email}
+                    onChange={(e) => setEditUserForm({...editUserForm, email: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Enter email"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">New Password (optional)</label>
+                  <input
+                    type="password"
+                    value={editUserForm.password}
+                    onChange={(e) => setEditUserForm({...editUserForm, password: e.target.value})}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Leave blank to keep current password"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Leave blank if you don't want to change the password
+                  </p>
+                </div>
+
+                {editUserForm.password && (
+                  <div className="mb-4">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Confirm New Password*</label>
+                    <input
+                      type="password"
+                      required={!!editUserForm.password}
+                      value={editUserForm.confirm_password}
+                      onChange={(e) => setEditUserForm({...editUserForm, confirm_password: e.target.value})}
+                      className="w-full px-3 py-2 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditUserModal(false);
+                      resetEditUserForm();
+                    }}
+                    className="px-4 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-xs font-medium text-white transition-colors"
+                    style={{ backgroundColor: '#f58020' }}
+                  >
+                    Update User
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

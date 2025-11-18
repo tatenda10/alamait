@@ -1,337 +1,431 @@
 import React, { useState, useEffect } from 'react';
+import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import BASE_URL from '../context/Api';
+import {
+  ChartBarIcon,
+  BuildingOfficeIcon,
+  UsersIcon,
+  BanknotesIcon,
+  WalletIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/outline';
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 const Dashboard = () => {
-  const { user } = useAuth();
-  const [stats, setStats] = useState({
-    totalBoardingHouses: 0,
-    totalStudents: 0,
-    totalRevenue: 0,
-    totalExpenses: 0
-  });
+  const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState({
+    kpis: {
+      cash: 0,
+      cbzBank: 0,
+      cbzVault: 0,
+      totalPettyCash: 0,
+    },
+    summary: {
+      totalBoardingHouses: 0,
+      totalRooms: 0,
+      totalStudents: 0,
+      averageOccupancyRate: 0,
+      totalMonthlyRevenue: 0,
+      pendingPayments: 0,
+      overduePayments: 0,
+    },
+    houses: [],
+    monthlyMetrics: [],
+    activities: [],
+    pettyCash: {},
+  });
 
   useEffect(() => {
-    fetchDashboardStats();
+    fetchDashboardData();
   }, []);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
 
-      // Fetch dashboard data using the same endpoints as client
-      const [monthlyResponse, invoiceResponse, expensesResponse, paymentResponse, activitiesResponse, roomsResponse] = await Promise.all([
-        axios.get(`${BASE_URL}/dashboard/monthly-revenue`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+      // Fetch all dashboard data in parallel
+      const [dashboardRes, kpisRes, pettyCashRes, activitiesRes] = await Promise.all([
+        axios.get(`${BASE_URL}/dashboard/data`, { headers }).catch(err => {
+          console.error('Error fetching dashboard data:', err);
+          return { data: { summary: {}, houses: [], monthlyMetrics: [] } };
         }),
-        axios.get(`${BASE_URL}/dashboard/invoice-status`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        axios.get(`${BASE_URL}/dashboard/kpis`, { headers }).catch(err => {
+          console.error('Error fetching KPIs:', err);
+          return { data: { cash: 0, cbzBank: 0, cbzVault: 0, totalPettyCash: 0 } };
         }),
-        axios.get(`${BASE_URL}/dashboard/expense-categories`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        axios.get(`${BASE_URL}/dashboard/petty-cash-balances`, { headers }).catch(err => {
+          console.error('Error fetching petty cash:', err);
+          return { data: {} };
         }),
-        axios.get(`${BASE_URL}/dashboard/payment-methods`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        axios.get(`${BASE_URL}/dashboard/activities`, { headers }).catch(err => {
+          console.error('Error fetching activities:', err);
+          return { data: [] };
         }),
-        axios.get(`${BASE_URL}/dashboard/activities`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        axios.get(`${BASE_URL}/rooms/all`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
       ]);
 
-      // Calculate stats from API responses
-      const rooms = roomsResponse.data || [];
-      const monthlyData = monthlyResponse.data || [];
-      const expensesData = expensesResponse.data || [];
-      
-      setStats({
-        totalBoardingHouses: 3, // This would need a separate API call
-        totalStudents: 45, // This would need a separate API call
-        totalRevenue: monthlyData.reduce((sum, item) => sum + (item.total || 0), 0),
-        totalExpenses: expensesData.reduce((sum, item) => sum + (item.total || 0), 0)
+      console.log('📊 Dashboard Data Received:', {
+        kpis: kpisRes.data,
+        summary: dashboardRes.data.summary,
+      });
+
+      setDashboardData({
+        kpis: kpisRes.data || { cash: 0, cbzBank: 0, cbzVault: 0, totalPettyCash: 0 },
+        summary: dashboardRes.data.summary || {},
+        houses: dashboardRes.data.houses || [],
+        monthlyMetrics: dashboardRes.data.monthlyMetrics || [],
+        activities: activitiesRes.data || [],
+        pettyCash: pettyCashRes.data || {},
       });
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
-      // Fallback to mock data if API fails
-      setStats({
-        totalBoardingHouses: 3,
-        totalStudents: 45,
-        totalRevenue: 125000,
-        totalExpenses: 85000
-      });
+      console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const statCards = [
-    {
-      name: 'Total Boarding Houses',
-      value: stats.totalBoardingHouses,
-      icon: '🏢',
-      color: '#3b82f6'
-    },
-    {
-      name: 'Total Students',
-      value: stats.totalStudents,
-      icon: '👥',
-      color: '#10b981'
-    },
-    {
-      name: 'Total Revenue',
-      value: `$${stats.totalRevenue.toLocaleString()}`,
-      icon: '💰',
-      color: '#f59e0b'
-    },
-    {
-      name: 'Total Expenses',
-      value: `$${stats.totalExpenses.toLocaleString()}`,
-      icon: '📊',
-      color: '#ef4444'
-    }
-  ];
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount || 0);
+  };
+
+  const formatNumber = (num) => {
+    return new Intl.NumberFormat('en-US').format(num || 0);
+  };
+
+
+  // Prepare chart data
+  const revenueExpenseData = dashboardData.monthlyMetrics.map((metric) => ({
+    month: metric.month,
+    revenue: metric.income || 0,
+    expenses: 0, // Placeholder - would need expenses data
+  }));
+
+  const branchRevenueData = dashboardData.houses.map((house) => ({
+    name: house.name,
+    revenue: house.monthly_revenue || 0,
+  }));
+
+  const COLORS = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#EC4899'];
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '200px'
-      }}>
-        <div style={{
-          width: '40px',
-          height: '40px',
-          border: '4px solid #e5e7eb',
-          borderTop: '4px solid #3b82f6',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-      </div>
+      <Layout>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#f58020]"></div>
+        </div>
+      </Layout>
     );
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        padding: '30px',
-        marginBottom: '30px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 'bold', color: '#1f2937', margin: '0 0 8px' }}>
-              Boss Dashboard
-            </h1>
-            <p style={{ color: '#6b7280', margin: '0' }}>
-              Welcome back, {user?.name || user?.username}!
-            </p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{
-              width: '12px',
-              height: '12px',
-              backgroundColor: '#10b981',
-              borderRadius: '50%',
-              marginRight: '8px'
-            }}></div>
-            <span style={{ fontSize: '14px', color: '#6b7280' }}>System Online</span>
-          </div>
+    <Layout>
+      <div className="max-w-7xl mx-auto space-y-3">
+        {/* Header */}
+        <div className="mb-3">
+          <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-0.5 text-xs text-gray-500">Welcome back, {user?.username || 'Boss'}</p>
         </div>
-      </div>
 
-      {/* Stats Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '20px',
-        marginBottom: '30px'
-      }}>
-        {statCards.map((card) => (
-          <div key={card.name} style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '24px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{
-                width: '48px',
-                height: '48px',
-                backgroundColor: card.color,
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px',
-                marginRight: '16px'
-              }}>
-                {card.icon}
-              </div>
+        {/* Top KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Total Students */}
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280', margin: '0 0 4px' }}>
-                  {card.name}
-                </h3>
-                <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', margin: '0' }}>
-                  {card.value}
+                <p className="text-xs font-medium text-gray-600">Total Students</p>
+                <p className="text-lg font-bold text-blue-600 mt-0.5">
+                  {formatNumber(dashboardData.summary.totalStudents)}
                 </p>
               </div>
+              <UsersIcon className="h-6 w-6 text-blue-500" />
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* Quick Actions */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        padding: '30px',
-        marginBottom: '30px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-      }}>
-        <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', margin: '0 0 20px' }}>
-          Quick Actions
-        </h2>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '16px'
-        }}>
-          <button style={{
-            padding: '20px',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-            cursor: 'pointer',
-            textAlign: 'left',
-            transition: 'background-color 0.2s'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '32px', marginRight: '16px' }}>🏢</span>
+          {/* Bed Occupancy Rate */}
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '0 0 4px' }}>
-                  Manage Boarding Houses
-                </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>
-                  View and manage all boarding houses
+                <p className="text-xs font-medium text-gray-600">Bed Occupancy Rate</p>
+                <p className="text-lg font-bold text-purple-600 mt-0.5">
+                  {dashboardData.summary.averageOccupancyRate || 0}%
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {formatNumber(dashboardData.summary.totalOccupiedBeds || 0)} / {formatNumber(dashboardData.summary.totalBeds || 0)} beds
                 </p>
               </div>
-            </div>
-          </button>
-          
-          <button style={{
-            padding: '20px',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-            cursor: 'pointer',
-            textAlign: 'left',
-            transition: 'background-color 0.2s'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '32px', marginRight: '16px' }}>👥</span>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '0 0 4px' }}>
-                  View All Students
-                </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>
-                  Manage students across all houses
-                </p>
-              </div>
-            </div>
-          </button>
-          
-          <button style={{
-            padding: '20px',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            backgroundColor: 'white',
-            cursor: 'pointer',
-            textAlign: 'left',
-            transition: 'background-color 0.2s'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '32px', marginRight: '16px' }}>📊</span>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937', margin: '0 0 4px' }}>
-                  Financial Reports
-                </h3>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>
-                  View comprehensive financial reports
-                </p>
-              </div>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        padding: '30px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-      }}>
-        <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', margin: '0 0 20px' }}>
-          Recent Activity
-        </h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '16px',
-            backgroundColor: '#f0fdf4',
-            borderRadius: '8px'
-          }}>
-            <span style={{ fontSize: '20px', marginRight: '12px' }}>✅</span>
-            <div>
-              <p style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937', margin: '0 0 4px' }}>
-                System Status
-              </p>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>
-                All systems operational
-              </p>
-            </div>
-          </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '16px',
-            backgroundColor: '#eff6ff',
-            borderRadius: '8px'
-          }}>
-            <span style={{ fontSize: '20px', marginRight: '12px' }}>⚠️</span>
-            <div>
-              <p style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937', margin: '0 0 4px' }}>
-                New Students
-              </p>
-              <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>
-                5 new student applications pending review
-              </p>
+              <ChartBarIcon className="h-6 w-6 text-purple-500" />
             </div>
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
+        {/* Financial Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600">Cash on Hand</p>
+                <p className="text-base font-bold text-green-600 mt-0.5">
+                  {formatCurrency(dashboardData.kpis.cash)}
+                </p>
+              </div>
+              <BanknotesIcon className="h-5 w-5 text-green-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600">CBZ Bank</p>
+                <p className="text-base font-bold text-blue-600 mt-0.5">
+                  {formatCurrency(dashboardData.kpis.cbzBank)}
+                </p>
+              </div>
+              <BuildingOfficeIcon className="h-5 w-5 text-blue-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600">CBZ Vault</p>
+                <p className="text-base font-bold text-indigo-600 mt-0.5">
+                  {formatCurrency(dashboardData.kpis.cbzVault)}
+                </p>
+              </div>
+              <BuildingOfficeIcon className="h-5 w-5 text-indigo-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600">Total Petty Cash</p>
+                <p className="text-base font-bold text-purple-600 mt-0.5">
+                  {formatCurrency(dashboardData.kpis.totalPettyCash)}
+                </p>
+              </div>
+              <WalletIcon className="h-5 w-5 text-purple-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Student Financials */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600">Student Prepayments</p>
+                <p className="text-base font-bold text-emerald-600 mt-0.5">
+                  {formatCurrency(dashboardData.summary.totalPrepayments || 0)}
+                </p>
+              </div>
+              <ArrowTrendingUpIcon className="h-5 w-5 text-emerald-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-600">Student Debtors (Total Owing)</p>
+                <p className="text-base font-bold text-red-600 mt-0.5">
+                  {formatCurrency(dashboardData.summary.totalDebtors || 0)}
+                </p>
+              </div>
+              <ArrowTrendingDownIcon className="h-5 w-5 text-red-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Monthly Revenue vs Expenses */}
+          <div className="bg-white p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Monthly Revenue Trend</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={revenueExpenseData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#10B981"
+                  fill="#10B981"
+                  fillOpacity={0.6}
+                  name="Revenue"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Branch Revenue Comparison */}
+          <div className="bg-white p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Revenue by Branch</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={branchRevenueData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Bar dataKey="revenue" fill="#3B82F6" name="Revenue" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Branch Performance Table */}
+        <div className="bg-white border border-gray-200">
+          <div className="p-3 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900">Branch Performance</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Branch
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Students
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Beds
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Bed Occupancy
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Monthly Revenue
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {dashboardData.houses.map((house) => (
+                  <tr key={house.id} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
+                      {house.name}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                      {formatNumber(house.students)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                      {formatNumber(house.occupied_beds || 0)} / {formatNumber(house.total_beds || 0)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                      <span
+                        className={`px-1.5 py-0.5 text-xs font-semibold ${
+                          house.occupancy >= 80
+                            ? 'bg-green-100 text-green-800'
+                            : house.occupancy >= 60
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {house.occupancy}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
+                      {formatCurrency(house.monthly_revenue)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Quick Stats & Alerts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Quick Stats */}
+          <div className="bg-white p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Quick Stats</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="text-center p-2 bg-gray-50">
+                <p className="text-lg font-bold text-gray-900">
+                  {formatNumber(dashboardData.summary.totalBoardingHouses)}
+                </p>
+                <p className="text-xs text-gray-600 mt-0.5">Boarding Houses</p>
+              </div>
+              <div className="text-center p-2 bg-gray-50">
+                <p className="text-lg font-bold text-gray-900">
+                  {formatNumber(dashboardData.summary.totalBeds || 0)}
+                </p>
+                <p className="text-xs text-gray-600 mt-0.5">Total Beds</p>
+              </div>
+              <div className="text-center p-2 bg-gray-50">
+                <p className="text-lg font-bold text-gray-900">
+                  {formatNumber(dashboardData.summary.totalOccupiedBeds || 0)}
+                </p>
+                <p className="text-xs text-gray-600 mt-0.5">Occupied Beds</p>
+              </div>
+              <div className="text-center p-2 bg-gray-50">
+                <p className="text-lg font-bold text-gray-900">
+                  {formatNumber((dashboardData.summary.totalBeds || 0) - (dashboardData.summary.totalOccupiedBeds || 0))}
+                </p>
+                <p className="text-xs text-gray-600 mt-0.5">Available Beds</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activities */}
+          <div className="bg-white p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Recent Activities</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {dashboardData.activities.length > 0 ? (
+                dashboardData.activities.slice(0, 5).map((activity, index) => (
+                  <div key={index} className="flex items-start space-x-2 p-1.5 hover:bg-gray-50">
+                    <div className="flex-shrink-0">
+                      {activity.type === 'payment' ? (
+                        <CheckCircleIcon className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <UsersIcon className="h-4 w-4 text-blue-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-900">{activity.description}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-gray-500">No recent activities</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Layout>
   );
 };
 

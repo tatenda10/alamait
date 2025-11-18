@@ -14,37 +14,57 @@ exports.getAccountBalances = async (req, res) => {
       });
     }
 
-    // Get current account balances
+    // Get current account balances from COA - join with chart_of_accounts to ensure we get correct accounts
+    // Cash and Bank accounts: 10001 (Petty Cash), 10002 (Cash), 10003 (CBZ Bank), 10004 (CBZ Vault)
     const [balancesResult] = await connection.query(
       `SELECT 
-        account_code,
-        current_balance,
-        total_debits,
-        total_credits,
-        last_transaction_date
-       FROM current_account_balances 
-       WHERE account_code IN ('10002', '10003', '10004')
-       ORDER BY account_code`
+        coa.code as account_code,
+        coa.name as account_name,
+        coa.type as account_type,
+        COALESCE(cab.current_balance, 0) as current_balance,
+        COALESCE(cab.total_debits, 0) as total_debits,
+        COALESCE(cab.total_credits, 0) as total_credits,
+        cab.last_transaction_date
+       FROM chart_of_accounts coa
+       LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+       WHERE coa.code IN ('10001', '10002', '10003', '10004')
+         AND coa.deleted_at IS NULL
+         AND coa.type = 'Asset'
+       ORDER BY coa.code`
     );
 
     // Format balances into an object
     const balances = {};
+    const accounts = [];
+    
     balancesResult.forEach(balance => {
-      balances[balance.account_code] = parseFloat(balance.current_balance || 0);
+      const accountCode = balance.account_code;
+      balances[accountCode] = parseFloat(balance.current_balance || 0);
+      accounts.push({
+        account_code: accountCode,
+        account_name: balance.account_name,
+        account_type: balance.account_type,
+        current_balance: parseFloat(balance.current_balance || 0),
+        total_debits: parseFloat(balance.total_debits || 0),
+        total_credits: parseFloat(balance.total_credits || 0),
+        last_transaction_date: balance.last_transaction_date
+      });
     });
 
-    // Ensure all accounts exist
-    const accountCodes = ['10002', '10003', '10004'];
+    // Ensure all cash and bank accounts exist (set to 0 if not found)
+    const accountCodes = ['10001', '10002', '10003', '10004'];
     accountCodes.forEach(code => {
       if (!balances[code]) {
         balances[code] = 0;
       }
     });
 
+    console.log('💰 Cash and Bank Account Balances from COA:', balances);
+
     res.json({
       success: true,
       balances: balances,
-      accounts: balancesResult
+      accounts: accounts
     });
 
   } catch (error) {
@@ -399,13 +419,16 @@ exports.transfer = async (req, res) => {
       });
     }
 
-    // Check if from account has sufficient balance
+    // Check if from account has sufficient balance - get from COA
     const [fromBalanceResult] = await connection.query(
-      `SELECT current_balance FROM current_account_balances WHERE account_code = ?`,
+      `SELECT COALESCE(cab.current_balance, 0) as current_balance
+       FROM chart_of_accounts coa
+       LEFT JOIN current_account_balances cab ON coa.id = cab.account_id
+       WHERE coa.code = ? AND coa.deleted_at IS NULL`,
       [from_account]
     );
     
-    const fromCurrentBalance = fromBalanceResult.length > 0 ? parseFloat(fromBalanceResult[0].current_balance) : 0;
+    const fromCurrentBalance = fromBalanceResult.length > 0 ? parseFloat(fromBalanceResult[0].current_balance || 0) : 0;
     
     if (fromCurrentBalance < transferAmount) {
       return res.status(400).json({

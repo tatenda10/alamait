@@ -133,62 +133,223 @@ const createExpenditureRequest = async (req, res) => {
 
 // Approve expenditure request
 const approveExpenditureRequest = async (req, res) => {
+  const connection = await db.getConnection();
+  
   try {
+    await connection.beginTransaction();
+    
     const { id } = req.params;
-    const approvedBy = req.user.id;
+    const approvedBy = req.user?.id;
+    
+    // First check if the request exists and is pending
+    const [existing] = await connection.query(
+      'SELECT * FROM expenditure_requests WHERE id = ?',
+      [id]
+    );
+    
+    if (existing.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Expenditure request not found' });
+    }
+    
+    if (existing[0].status !== 'pending') {
+      await connection.rollback();
+      return res.status(400).json({ 
+        error: `Expenditure request is already ${existing[0].status}`,
+        currentStatus: existing[0].status
+      });
+    }
+    
+    // Verify that the user exists in the users table if approvedBy is provided
+    let finalApprovedBy = null;
+    if (approvedBy) {
+      const [userCheck] = await connection.query(
+        'SELECT id FROM users WHERE id = ? AND deleted_at IS NULL',
+        [approvedBy]
+      );
+      if (userCheck.length > 0) {
+        finalApprovedBy = approvedBy;
+      } else {
+        console.warn(`User ID ${approvedBy} not found in users table, setting approved_by to NULL`);
+      }
+    }
     
     const query = `
       UPDATE expenditure_requests 
-      SET status = 'approved', approved_by = ?, approved_date = NOW()
+      SET status = 'approved', 
+          approved_by = ?, 
+          approved_date = NOW(),
+          updated_at = NOW()
       WHERE id = ? AND status = 'pending'
     `;
     
-    const [result] = await db.query(query, [approvedBy, id]);
+    const [result] = await connection.query(query, [finalApprovedBy, id]);
     
     if (result.affectedRows === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Expenditure request not found or already processed' });
     }
     
-    // Fetch updated expenditure request
-    const updatedRequest = await getExpenditureRequestById(id);
+    await connection.commit();
+    
+    // Fetch updated expenditure request using a new query to ensure we get the latest data
+    const [updated] = await db.query(
+      `SELECT 
+        er.*,
+        u1.username as submitted_by_name,
+        u2.username as approved_by_name,
+        u3.username as rejected_by_name,
+        bh.name as boarding_house_name
+      FROM expenditure_requests er
+      LEFT JOIN users u1 ON er.submitted_by = u1.id
+      LEFT JOIN users u2 ON er.approved_by = u2.id
+      LEFT JOIN users u3 ON er.rejected_by = u3.id
+      LEFT JOIN boarding_houses bh ON er.boarding_house_id = bh.id
+      WHERE er.id = ?`,
+      [id]
+    );
+    
+    if (updated.length === 0) {
+      return res.status(404).json({ error: 'Expenditure request not found after update' });
+    }
+    
+    const updatedRequest = updated[0];
+    
+    // Get attachments
+    const [attachments] = await db.query(
+      `SELECT id, file_name, file_size, mime_type, uploaded_at
+       FROM expenditure_attachments 
+       WHERE expenditure_request_id = ?`,
+      [id]
+    );
+    updatedRequest.attachments = attachments.map(att => att.file_name);
+    
     res.json(updatedRequest);
     
   } catch (error) {
+    await connection.rollback();
     console.error('Error approving expenditure request:', error);
-    res.status(500).json({ error: 'Failed to approve expenditure request' });
+    res.status(500).json({ error: 'Failed to approve expenditure request: ' + error.message });
+  } finally {
+    connection.release();
   }
 };
 
 // Reject expenditure request
 const rejectExpenditureRequest = async (req, res) => {
+  const connection = await db.getConnection();
+  
   try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    const rejectedBy = req.user.id;
+    await connection.beginTransaction();
     
-    if (!reason) {
+    const { id } = req.params;
+    // Accept both 'reason' and 'rejection_reason' for compatibility
+    const { reason, rejection_reason } = req.body;
+    const rejectionReason = reason || rejection_reason;
+    const rejectedBy = req.user?.id;
+    
+    if (!rejectionReason) {
+      await connection.rollback();
       return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+    
+    // First check if the request exists and is pending
+    const [existing] = await connection.query(
+      'SELECT * FROM expenditure_requests WHERE id = ?',
+      [id]
+    );
+    
+    if (existing.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Expenditure request not found' });
+    }
+    
+    if (existing[0].status !== 'pending') {
+      await connection.rollback();
+      return res.status(400).json({ 
+        error: `Expenditure request is already ${existing[0].status}`,
+        currentStatus: existing[0].status
+      });
+    }
+    
+    // Verify that the user exists in the users table if rejectedBy is provided
+    let finalRejectedBy = null;
+    if (rejectedBy) {
+      const [userCheck] = await connection.query(
+        'SELECT id FROM users WHERE id = ? AND deleted_at IS NULL',
+        [rejectedBy]
+      );
+      if (userCheck.length > 0) {
+        finalRejectedBy = rejectedBy;
+      } else {
+        console.warn(`User ID ${rejectedBy} not found in users table, setting rejected_by to NULL`);
+      }
     }
     
     const query = `
       UPDATE expenditure_requests 
-      SET status = 'rejected', rejected_by = ?, rejected_date = NOW(), rejection_reason = ?
+      SET status = 'rejected', 
+          rejected_by = ?, 
+          rejected_date = NOW(), 
+          rejection_reason = ?,
+          updated_at = NOW()
       WHERE id = ? AND status = 'pending'
     `;
     
-    const [result] = await db.query(query, [rejectedBy, reason, id]);
+    const [result] = await connection.query(query, [finalRejectedBy, rejectionReason, id]);
     
     if (result.affectedRows === 0) {
+      await connection.rollback();
+      connection.release();
       return res.status(404).json({ error: 'Expenditure request not found or already processed' });
     }
     
-    // Fetch updated expenditure request
-    const updatedRequest = await getExpenditureRequestById(id);
+    await connection.commit();
+    
+    console.log(`Expenditure request ${id} rejected successfully by user ${rejectedBy}`);
+    
+    // Fetch updated expenditure request using the same connection to ensure we get the latest data
+    const [updated] = await connection.query(
+      `SELECT 
+        er.*,
+        u1.username as submitted_by_name,
+        u2.username as approved_by_name,
+        u3.username as rejected_by_name,
+        bh.name as boarding_house_name
+      FROM expenditure_requests er
+      LEFT JOIN users u1 ON er.submitted_by = u1.id
+      LEFT JOIN users u2 ON er.approved_by = u2.id
+      LEFT JOIN users u3 ON er.rejected_by = u3.id
+      LEFT JOIN boarding_houses bh ON er.boarding_house_id = bh.id
+      WHERE er.id = ?`,
+      [id]
+    );
+    
+    if (updated.length === 0) {
+      connection.release();
+      return res.status(404).json({ error: 'Expenditure request not found after update' });
+    }
+    
+    const updatedRequest = updated[0];
+    
+    // Get attachments
+    const [attachments] = await connection.query(
+      `SELECT id, file_name, file_size, mime_type, uploaded_at
+       FROM expenditure_attachments 
+       WHERE expenditure_request_id = ?`,
+      [id]
+    );
+    updatedRequest.attachments = attachments.map(att => att.file_name);
+    
+    connection.release();
     res.json(updatedRequest);
     
   } catch (error) {
+    await connection.rollback();
     console.error('Error rejecting expenditure request:', error);
-    res.status(500).json({ error: 'Failed to reject expenditure request' });
+    console.error('Error stack:', error.stack);
+    connection.release();
+    res.status(500).json({ error: 'Failed to reject expenditure request: ' + error.message });
   }
 };
 
@@ -371,12 +532,15 @@ const getExpenditureRequestById = async (id) => {
 };
 
 // Integrate confirmed expenditure with main expenses system
-const integrateWithMainExpenses = async (expenditureRequest, confirmedBy, receiptPath) => {
-  const connection = await db.getConnection();
+const integrateWithMainExpenses = async (expenditureRequest, confirmedBy, receiptPath, providedConnection = null) => {
+  const connection = providedConnection || await db.getConnection();
   const { updateAccountBalance } = require('../services/accountBalanceService');
+  const shouldReleaseConnection = !providedConnection;
   
   try {
-    await connection.beginTransaction();
+    if (!providedConnection) {
+      await connection.beginTransaction();
+    }
 
     // Find the expense account ID from the category name
     const [expenseAccounts] = await connection.query(
@@ -507,35 +671,92 @@ const integrateWithMainExpenses = async (expenditureRequest, confirmedBy, receip
     
     console.log('Account balance updates completed');
 
-    await connection.commit();
+    if (!providedConnection) {
+      await connection.commit();
+    }
     console.log(`Expenditure request ${expenditureRequest.id} integrated with main expenses system`);
 
   } catch (error) {
-    await connection.rollback();
+    if (!providedConnection) {
+      await connection.rollback();
+    }
     console.error('Error integrating with main expenses:', error);
     throw error;
   } finally {
-    connection.release();
+    if (shouldReleaseConnection) {
+      connection.release();
+    }
   }
 };
 
 // Confirm expenditure and update status to 'actioned'
 const confirmExpenditure = async (req, res) => {
+  const connection = await db.getConnection();
+  
   try {
+    await connection.beginTransaction();
+    
     const { id } = req.params;
     const confirmedBy = req.user.id;
 
     // Check if expenditure request exists and is approved
-    const [requests] = await db.query(
+    const [requests] = await connection.query(
       'SELECT * FROM expenditure_requests WHERE id = ? AND status = ?',
       [id, 'approved']
     );
 
     if (requests.length === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Expenditure request not found or not approved' });
     }
 
     const expenditureRequest = requests[0];
+
+    // Find cash account (petty cash) to check balance
+    const [cashAccounts] = await connection.query(
+      `SELECT id, code, name FROM chart_of_accounts 
+       WHERE name LIKE '%Cash%' AND type = 'Asset' AND deleted_at IS NULL 
+       ORDER BY id LIMIT 1`
+    );
+
+    if (cashAccounts.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Cash account not found' });
+    }
+
+    const cashAccountId = cashAccounts[0].id;
+    const cashAccountCode = cashAccounts[0].code;
+    const cashAccountName = cashAccounts[0].name;
+
+    // Check current balance of petty cash account
+    const [balanceResult] = await connection.query(
+      'SELECT current_balance FROM current_account_balances WHERE account_id = ?',
+      [cashAccountId]
+    );
+
+    const currentBalance = balanceResult.length > 0 
+      ? parseFloat(balanceResult[0].current_balance || 0) 
+      : 0;
+
+    const expenditureAmount = parseFloat(expenditureRequest.amount);
+
+    // Check if balance is sufficient
+    if (currentBalance < expenditureAmount) {
+      await connection.rollback();
+      console.log('Insufficient balance check failed:', {
+        currentBalance,
+        expenditureAmount,
+        cashAccountId,
+        cashAccountName
+      });
+      return res.status(400).json({ 
+        error: `Insufficient petty cash balance. Current balance: $${currentBalance.toFixed(2)}, Required: $${expenditureAmount.toFixed(2)}`,
+        message: `Insufficient petty cash balance. Current balance: $${currentBalance.toFixed(2)}, Required: $${expenditureAmount.toFixed(2)}`,
+        currentBalance: currentBalance,
+        requiredAmount: expenditureAmount,
+        accountName: cashAccountName
+      });
+    }
 
     // Handle file upload if receipt is provided
     let receiptPath = null;
@@ -547,7 +768,7 @@ const confirmExpenditure = async (req, res) => {
         INSERT INTO expenditure_attachments (expenditure_request_id, file_name, file_path, file_size, mime_type, uploaded_by)
         VALUES (?, ?, ?, ?, ?, ?)
       `;
-      await db.query(attachmentQuery, [
+      await connection.query(attachmentQuery, [
         id,
         req.file.filename,
         receiptPath,
@@ -563,18 +784,129 @@ const confirmExpenditure = async (req, res) => {
       SET status = 'actioned', updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
-    await db.query(updateQuery, [id]);
+    await connection.query(updateQuery, [id]);
 
-    // Integrate with main expenses system
-    await integrateWithMainExpenses(expenditureRequest, confirmedBy, receiptPath);
+    // Integrate with main expenses system (this will use the connection from the transaction)
+    await integrateWithMainExpenses(expenditureRequest, confirmedBy, receiptPath, connection);
+
+    // Update petty cash user account balance (deduct the expenditure amount)
+    // Use the user who submitted the request, not the one confirming it
+    // This ensures the correct user's petty cash account is deducted
+    await updatePettyCashUserBalance(connection, expenditureRequest.submitted_by, expenditureAmount, expenditureRequest.boarding_house_id, `Expenditure: ${expenditureRequest.title}`);
+
+    await connection.commit();
 
     // Return updated expenditure request
     const updatedRequest = await getExpenditureRequestById(id);
     res.json(updatedRequest);
 
   } catch (error) {
+    await connection.rollback();
     console.error('Error confirming expenditure:', error);
-    res.status(500).json({ error: 'Failed to confirm expenditure' });
+    console.error('Error stack:', error.stack);
+    
+    // If it's a known error with a message, return it
+    if (error.message && error.message.includes('Insufficient')) {
+      return res.status(400).json({ 
+        error: error.message,
+        currentBalance: error.currentBalance,
+        requiredAmount: error.requiredAmount
+      });
+    }
+    
+    // Return the error message
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ 
+      error: error.message || 'Failed to confirm expenditure',
+      details: error.stack
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+// Helper function to update petty cash user account balance
+const updatePettyCashUserBalance = async (connection, userId, amount, boardingHouseId, description) => {
+  try {
+    console.log(`Updating petty cash user balance: User ${userId}, Amount ${amount}, Boarding House ${boardingHouseId}`);
+    
+    // First check if this is a petty cash user (has petty_cash_user_id)
+    // If not, check if it's a regular user that needs to be linked to a petty cash account
+    const [pettyCashUser] = await connection.query(
+      `SELECT id FROM petty_cash_users WHERE id = ? AND deleted_at IS NULL`,
+      [userId]
+    );
+    
+    let pettyCashUserId = null;
+    if (pettyCashUser.length > 0) {
+      // This is a petty cash user
+      pettyCashUserId = userId;
+    } else {
+      // Check if there's a petty cash user linked to this regular user
+      const [linkedUser] = await connection.query(
+        `SELECT id FROM petty_cash_users WHERE user_id = ? AND deleted_at IS NULL`,
+        [userId]
+      );
+      if (linkedUser.length > 0) {
+        pettyCashUserId = linkedUser[0].id;
+      }
+    }
+    
+    if (!pettyCashUserId) {
+      console.log(`No petty cash user found for user ${userId}. Cannot update petty cash balance.`);
+      // Don't throw error - just log it, as the expenditure might be confirmed by an admin user
+      return;
+    }
+    
+    // Check if user has a petty cash account using petty_cash_user_id
+    const [accounts] = await connection.query(
+      `SELECT id, current_balance FROM petty_cash_accounts 
+       WHERE petty_cash_user_id = ? AND boarding_house_id = ? AND deleted_at IS NULL`,
+      [pettyCashUserId, boardingHouseId]
+    );
+    
+    console.log(`Found ${accounts.length} accounts for petty cash user ${pettyCashUserId} in boarding house ${boardingHouseId}`);
+    
+    if (accounts.length === 0) {
+      console.log(`No petty cash account found for petty cash user ${pettyCashUserId} in boarding house ${boardingHouseId}.`);
+      // Don't throw error - just log it
+      return;
+    }
+    
+    const account = accounts[0];
+    const oldBalance = parseFloat(account.current_balance || 0);
+    const amountDecimal = parseFloat(amount);
+    const newBalance = oldBalance - amountDecimal; // Deduct the expenditure amount
+    
+    // Round to 2 decimal places to avoid floating point precision issues
+    const roundedNewBalance = Math.round(newBalance * 100) / 100;
+    
+    console.log(`Updating petty cash account ${account.id}: ${oldBalance} -> ${roundedNewBalance} (expenditure deduction)`);
+    
+    // Add transaction record - use user_id (the table uses user_id, not petty_cash_user_id)
+    await connection.query(
+      `INSERT INTO petty_cash_transactions (
+        user_id, boarding_house_id, transaction_type, amount, description, transaction_date, created_by, created_at
+      ) VALUES (?, ?, 'cash_outflow', ?, ?, NOW(), ?, NOW())`,
+      [userId, boardingHouseId, amountDecimal, description, userId]
+    );
+    
+    // Update account balance with rounded value (deduct expenditure)
+    await connection.query(
+      `UPDATE petty_cash_accounts 
+       SET current_balance = ?, 
+           total_outflows = COALESCE(total_outflows, 0) + ?,
+           updated_at = NOW() 
+       WHERE id = ?`,
+      [roundedNewBalance, amountDecimal, account.id]
+    );
+    
+    console.log(`Updated petty cash account ${account.id} balance to ${roundedNewBalance}`);
+    
+  } catch (error) {
+    console.error('Error updating petty cash user balance:', error);
+    // Don't throw error - just log it, as the expenditure confirmation should still succeed
+    // The COA balance has already been updated, so this is just for tracking the user's account
   }
 };
 

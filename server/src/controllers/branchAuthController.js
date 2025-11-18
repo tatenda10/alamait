@@ -140,13 +140,13 @@ exports.getProfile = async (req, res) => {
 exports.changePassword = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword, username } = req.body;
 
     // Validate input
-    if (!currentPassword || !newPassword) {
+    if (!currentPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Current password and new password are required'
+        message: 'Current password is required'
       });
     }
 
@@ -180,23 +180,52 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    // Check if username is being changed and if it already exists
+    if (username && username !== user.username) {
+      const [usernameCheck] = await pool.execute(
+        'SELECT id FROM users WHERE username = ? AND id != ? AND deleted_at IS NULL',
+        [username, userId]
+      );
 
-    // Update password
-    await pool.execute(
-      'UPDATE users SET password = ?, updated_at = NOW() WHERE id = ?',
-      [hashedPassword, userId]
-    );
+      if (usernameCheck.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username already exists'
+        });
+      }
+    }
+
+    // Prepare update query
+    let updateQuery = 'UPDATE users SET updated_at = NOW()';
+    let updateParams = [];
+
+    // Add username update if provided
+    if (username && username !== user.username) {
+      updateQuery += ', username = ?';
+      updateParams.push(username);
+    }
+
+    // Add password update if provided
+    if (newPassword) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+      updateQuery += ', password = ?';
+      updateParams.push(hashedPassword);
+    }
+
+    updateQuery += ' WHERE id = ?';
+    updateParams.push(userId);
+
+    // Update user
+    await pool.execute(updateQuery, updateParams);
 
     res.json({
       success: true,
-      message: 'Password updated successfully'
+      message: 'Credentials updated successfully'
     });
 
   } catch (err) {
-    console.error('Change boarding house password error:', err);
+    console.error('Change boarding house credentials error:', err);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
