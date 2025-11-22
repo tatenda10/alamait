@@ -62,44 +62,63 @@ const getBalanceSheet = async (req, res) => {
       WHERE deleted_at IS NULL AND status = 'active'
     `);
     const pettyCashBalance = parseFloat(pettyCashResult[0]?.total_balance || 0);
+
+    // Get Student Debtors and Prepayments
+    const [studentBalances] = await connection.query(`
+      SELECT 
+        SUM(CASE WHEN sab.current_balance < 0 THEN ABS(sab.current_balance) ELSE 0 END) as total_debtors,
+        SUM(CASE WHEN sab.current_balance > 0 THEN sab.current_balance ELSE 0 END) as total_prepayments
+      FROM students s
+      JOIN student_enrollments se ON s.id = se.student_id
+      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
+      WHERE s.deleted_at IS NULL
+        AND sab.deleted_at IS NULL
+        AND sab.current_balance != 0
+    `);
+    
+    const studentDebtors = parseFloat(studentBalances[0]?.total_debtors || 0);
+    const studentPrepayments = parseFloat(studentBalances[0]?.total_prepayments || 0);
     
     // Process rows to calculate debit/credit balances and replace Petty Cash if needed
-    const processedRows = rows.map(row => {
-      let balance = parseFloat(row.current_balance || 0);
-      
-      // Replace Petty Cash balance with actual petty cash accounts sum
-      if (row.account_code === pettyCashCode) {
-        balance = pettyCashBalance;
-      }
-      
-      // Calculate debit and credit balances based on account type
-      let debitBalance = 0;
-      let creditBalance = 0;
-      
-      if (row.account_type === 'Asset' || row.account_type === 'Expense') {
-        if (balance > 0) {
-          debitBalance = balance;
-        } else if (balance < 0) {
-          creditBalance = Math.abs(balance);
+    // EXCLUDE Accounts Receivable (10005) - we'll show Student Debtors instead
+    const processedRows = rows
+      .filter(row => row.account_code !== '10005') // Exclude Accounts Receivable
+      .map(row => {
+        let balance = parseFloat(row.current_balance || 0);
+        
+        // Replace Petty Cash balance with actual petty cash accounts sum
+        if (row.account_code === pettyCashCode) {
+          balance = pettyCashBalance;
         }
-      } else if (row.account_type === 'Liability' || row.account_type === 'Equity' || row.account_type === 'Revenue') {
-        if (balance > 0) {
-          creditBalance = balance;
-        } else if (balance < 0) {
-          debitBalance = Math.abs(balance);
+        
+        // Calculate debit and credit balances based on account type
+        let debitBalance = 0;
+        let creditBalance = 0;
+        
+        if (row.account_type === 'Asset' || row.account_type === 'Expense') {
+          if (balance > 0) {
+            debitBalance = balance;
+          } else if (balance < 0) {
+            creditBalance = Math.abs(balance);
+          }
+        } else if (row.account_type === 'Liability' || row.account_type === 'Equity' || row.account_type === 'Revenue') {
+          if (balance > 0) {
+            creditBalance = balance;
+          } else if (balance < 0) {
+            debitBalance = Math.abs(balance);
+          }
         }
-      }
-      
-      return {
-        account_id: row.account_id,
-        account_code: row.account_code,
-        account_name: row.account_name,
-        account_type: row.account_type,
-        current_balance: balance,
-        debit_balance: debitBalance,
-        credit_balance: creditBalance
-      };
-    });
+        
+        return {
+          account_id: row.account_id,
+          account_code: row.account_code,
+          account_name: row.account_name,
+          account_type: row.account_type,
+          current_balance: balance,
+          debit_balance: debitBalance,
+          credit_balance: creditBalance
+        };
+      });
     
     // Group accounts by type
     const balanceSheet = {
@@ -112,6 +131,8 @@ const getBalanceSheet = async (req, res) => {
     
     processedRows.forEach(row => {
       const account = {
+        id: row.account_id,
+        account_id: row.account_id,
         code: row.account_code,
         name: row.account_name,
         type: row.account_type,
@@ -138,43 +159,38 @@ const getBalanceSheet = async (req, res) => {
           break;
       }
     });
+
+    // Add Student Debtors to Assets (if > 0)
+    if (studentDebtors > 0) {
+      balanceSheet.assets.push({
+        code: 'STU-DEBT',
+        name: 'Student Debtors',
+        type: 'Asset',
+        currentBalance: studentDebtors,
+        debitBalance: studentDebtors,
+        creditBalance: 0
+      });
+    }
+
+    // Add Student Prepayments to Liabilities (if > 0)
+    if (studentPrepayments > 0) {
+      balanceSheet.liabilities.push({
+        code: 'STU-PREP',
+        name: 'Student Prepayments',
+        type: 'Liability',
+        currentBalance: studentPrepayments,
+        debitBalance: 0,
+        creditBalance: studentPrepayments
+      });
+    }
     
-    // Get student debtors total (negative balances = students who owe)
-    // Include checked-out students with outstanding balances
-    const [debtorsTotal] = await connection.query(`
-      SELECT COALESCE(SUM(ABS(sab.current_balance)), 0) as total
-      FROM students s
-      JOIN student_enrollments se ON s.id = se.student_id
-      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
-      WHERE s.deleted_at IS NULL
-        AND (se.deleted_at IS NULL OR se.checkout_date IS NOT NULL)
-        AND sab.current_balance < 0
-        AND sab.deleted_at IS NULL
-    `);
-    
-    // Get student prepayments total (positive balances = students who overpaid)
-    // Only include active enrollments (not checked out) and room assignments
-    const [prepaymentsTotal] = await connection.query(`
-      SELECT COALESCE(SUM(sab.current_balance), 0) as total
-      FROM students s
-      JOIN student_enrollments se ON s.id = se.student_id
-      JOIN rooms r ON se.room_id = r.id
-      JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
-      WHERE s.deleted_at IS NULL
-        AND se.deleted_at IS NULL
-        AND se.checkout_date IS NULL
-        AND (s.status = 'Active' OR s.status IS NULL)
-        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
-        AND sab.current_balance > 0
-        AND sab.deleted_at IS NULL
-    `);
-    
-    const totalDebtors = parseFloat(debtorsTotal[0].total);
-    const totalPrepayments = parseFloat(prepaymentsTotal[0].total);
+    // Note: studentDebtors and studentPrepayments are already calculated above
+    const totalDebtors = studentDebtors;
+    const totalPrepayments = studentPrepayments;
 
     // Calculate totals
-    // Note: Accounts Receivable already includes all student balances (both debtors and prepayments)
-    // So we use AR as-is and don't add debtors/prepayments separately to avoid double counting
+    // Note: Accounts Receivable (10005) is excluded from assets
+    // Student Debtors and Student Prepayments are added separately
     const totalAssets = balanceSheet.assets.reduce((sum, acc) => sum + acc.debitBalance, 0) - 
                        balanceSheet.assets.reduce((sum, acc) => sum + acc.creditBalance, 0);
     

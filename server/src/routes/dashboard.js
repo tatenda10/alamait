@@ -9,7 +9,9 @@ const {
   getInvoiceStatus,
   getExpenseCategories,
   getPaymentMethods,
-  getActivities
+  getActivities,
+  getConsolidatedMonthlyRevenueExpenses,
+  getConsolidatedExpenseCategories
 } = require('../controllers/dashboardController');
 const { authenticate } = require('../middleware/auth');
 
@@ -22,5 +24,7 @@ router.get('/invoice-status', authenticate, getInvoiceStatus);
 router.get('/expense-categories', authenticate, getExpenseCategories);
 router.get('/payment-methods', authenticate, getPaymentMethods);
 router.get('/activities', authenticate, getActivities);
+router.get('/consolidated-monthly-revenue-expenses', authenticate, getConsolidatedMonthlyRevenueExpenses);
+router.get('/consolidated-expense-categories', authenticate, getConsolidatedExpenseCategories);
 
 module.exports = router; 

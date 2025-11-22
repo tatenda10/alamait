@@ -61,7 +61,19 @@ const getMonthlyCashflowReport = async (req, res) => {
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
 
+    // Get Opening Balance Equity account ID to exclude opening balance transactions
+    const [openingBalanceEquity] = await connection.query(
+      `SELECT id, code FROM chart_of_accounts 
+       WHERE code = '30004' AND type = 'Equity' AND deleted_at IS NULL
+       LIMIT 1`
+    );
+    const openingBalanceEquityId = openingBalanceEquity.length > 0 ? openingBalanceEquity[0].id : null;
+
     // Get all transactions grouped by month
+    // Only include transactions where cash account is debited (inflow) or credited (outflow)
+    // Exclude opening balances (where credit account is Opening Balance Equity 30004)
+    // Exclude internal transfers (both debit and credit are cash accounts)
+    // IMPORTANT: Exclude September 2025 transactions - they shouldn't be in the cashflow
     const [transactions] = await connection.query(
       `SELECT 
         t.id,
@@ -88,16 +100,28 @@ const getMonthlyCashflowReport = async (req, res) => {
         ${whereClause}
         AND (je_debit.account_id IN (${cashAccountIds.map(() => '?').join(',')}) 
              OR je_credit.account_id IN (${cashAccountIds.map(() => '?').join(',')}))
+        ${openingBalanceEquityId ? `AND je_credit.account_id != ?` : ''}
       ORDER BY t.transaction_date`,
-      [start_date, end_date, ...queryParams, ...cashAccountIds, ...cashAccountIds]
+      openingBalanceEquityId 
+        ? [start_date, end_date, ...queryParams, ...cashAccountIds, ...cashAccountIds, openingBalanceEquityId]
+        : [start_date, end_date, ...queryParams, ...cashAccountIds, ...cashAccountIds]
     );
 
-    // Initialize data structures
-    const operatingIncome = {}; // { category: { month: amount } }
-    const operatingExpenses = {}; // { category: { month: amount } }
-    const investingActivities = {}; // { category: { month: amount } }
-    const financingActivities = {}; // { category: { month: amount } }
+    console.log(`📊 Total transactions found: ${transactions.length}`);
+    console.log(`💰 Cash account IDs: ${cashAccountIds.join(', ')}`);
+    console.log(`🏦 Opening Balance Equity ID: ${openingBalanceEquityId || 'Not found'}`);
+
+    // Initialize data structures - include account info for navigation
+    const operatingIncome = {}; // { category: { month: amount, account_id, account_code, account_name } }
+    const operatingExpenses = {}; // { category: { month: amount, account_id, account_code, account_name } }
+    const investingActivities = {}; // { category: { month: amount, account_id, account_code, account_name } }
+    const financingActivities = {}; // { category: { month: amount, account_id, account_code, account_name } }
     const processedTransactions = new Set();
+
+    let skippedInternalTransfers = 0;
+    let skippedOpeningBalances = 0;
+    let processedInflows = 0;
+    let processedOutflows = 0;
 
     // Process transactions
     transactions.forEach(transaction => {
@@ -118,21 +142,50 @@ const getMonthlyCashflowReport = async (req, res) => {
       const parsedAmount = Math.abs(parseFloat(amount || 0));
 
       // Determine if it's an inflow or outflow
+      // Inflow: Cash account is debited (money coming into cash)
+      // Outflow: Cash account is credited (money going out of cash)
       const isInflow = cashAccountIds.includes(debit_account_id) && !cashAccountIds.includes(credit_account_id);
       const isOutflow = cashAccountIds.includes(credit_account_id) && !cashAccountIds.includes(debit_account_id);
 
-      // Skip internal transfers
+      // Skip internal transfers between cash accounts (e.g., vault to cash)
+      // These are inflows to one cash account but outflows from another, so they cancel out
       if (cashAccountIds.includes(debit_account_id) && cashAccountIds.includes(credit_account_id)) {
-        return;
+        skippedInternalTransfers++;
+        console.log(`🔄 Skipped internal transfer: Txn ${id} | ${debit_account_code} -> ${credit_account_code} | Amount: $${parsedAmount}`);
+        return; // Skip internal transfers - they don't affect operating cash flow
+      }
+
+      // Skip opening balance transactions (credit to Opening Balance Equity 30004)
+      // Opening balances are not operating cash flows
+      if (openingBalanceEquityId && credit_account_id === openingBalanceEquityId && isInflow) {
+        skippedOpeningBalances++;
+        console.log(`📅 Skipped opening balance: Txn ${id} | Cash: ${debit_account_code} | Equity: ${credit_account_code} | Amount: $${parsedAmount}`);
+        return; // Skip opening balances - they're not operating inflows
       }
 
       let category = '';
       let activityType = 'operating'; // operating, investing, financing
+      let accountId = null;
+      let accountCode = null;
+      let accountName = null;
 
       if (isInflow) {
-        // Cash inflow
-        if (credit_account_code?.startsWith('4')) {
-          // Revenue accounts
+        // Cash inflow - use credit account info
+        // This means: Cash account is DEBITED (money coming into cash)
+        accountId = credit_account_id;
+        accountCode = credit_account_code;
+        accountName = credit_account_name;
+        
+        processedInflows++;
+        console.log(`💰 CASH INFLOW: Txn ${id} | Month: ${month_key} | Cash Account (Debit): ${debit_account_code} (${debit_account_name}) | Source Account (Credit): ${credit_account_code} (${credit_account_name}) | Amount: $${parsedAmount}`);
+        
+        // Accounts Receivable (10005) collections ARE cash inflows - when customers pay their receivables
+        if (credit_account_code === '10005') {
+          category = 'Collections from Accounts Receivable';
+          activityType = 'operating';
+          console.log(`   ✅ Operating Income: ${category} - Cash collected from receivables`);
+        } else if (credit_account_code?.startsWith('4')) {
+          // Revenue accounts (40001, 40002, etc.)
           category = credit_account_name || 'Revenue';
           
           // Special handling for rental income
@@ -140,39 +193,61 @@ const getMonthlyCashflowReport = async (req, res) => {
             category = 'Rentals for the month';
           } else if (credit_account_code === '40002' || category.toLowerCase().includes('admin')) {
             category = 'Admin Fee';
-          } else if (credit_account_code === '10005' || category.toLowerCase().includes('advance')) {
-            category = 'Rentals Paid in Advance';
           }
           
           activityType = 'operating';
+          console.log(`   ✅ Operating Income: ${category} from ${credit_account_code}`);
         } else if (credit_account_code?.startsWith('2')) {
           category = 'Loan/Advance';
           activityType = 'financing';
+          console.log(`   ✅ Financing Activity: ${category} from ${credit_account_code}`);
         } else if (credit_account_code?.startsWith('3')) {
           category = 'Owner Investment';
           activityType = 'financing';
+          console.log(`   ✅ Financing Activity: ${category} from ${credit_account_code}`);
         } else {
           category = 'Other Income';
           activityType = 'operating';
+          console.log(`   ✅ Operating Income: ${category} from ${credit_account_code}`);
         }
 
-        // Add to operating income
+        // Add to operating income (including accounts receivable collections)
         if (activityType === 'operating') {
           if (!operatingIncome[category]) {
-            operatingIncome[category] = {};
-            months.forEach(m => { operatingIncome[category][m.key] = 0; });
+            operatingIncome[category] = {
+              account_id: accountId,
+              account_code: accountCode,
+              account_name: accountName,
+              monthlyAmounts: {}
+            };
+            months.forEach(m => { operatingIncome[category].monthlyAmounts[m.key] = 0; });
           }
-          operatingIncome[category][month_key] = (operatingIncome[category][month_key] || 0) + parsedAmount;
+          const previousAmount = operatingIncome[category].monthlyAmounts[month_key] || 0;
+          operatingIncome[category].monthlyAmounts[month_key] = previousAmount + parsedAmount;
+          console.log(`   ✅ Added to ${category}: $${parsedAmount} for ${month_key} | Previous: $${previousAmount} | New Total: $${operatingIncome[category].monthlyAmounts[month_key]}`);
         } else if (activityType === 'financing') {
           if (!financingActivities[category]) {
-            financingActivities[category] = {};
-            months.forEach(m => { financingActivities[category][m.key] = 0; });
+            financingActivities[category] = {
+              account_id: accountId,
+              account_code: accountCode,
+              account_name: accountName,
+              monthlyAmounts: {}
+            };
+            months.forEach(m => { financingActivities[category].monthlyAmounts[m.key] = 0; });
           }
-          financingActivities[category][month_key] = (financingActivities[category][month_key] || 0) + parsedAmount;
+          financingActivities[category].monthlyAmounts[month_key] = (financingActivities[category].monthlyAmounts[month_key] || 0) + parsedAmount;
         }
 
       } else if (isOutflow) {
-        // Cash outflow
+        // Cash outflow - use debit account info
+        // This means: Cash account is CREDITED (money going out of cash)
+        accountId = debit_account_id;
+        accountCode = debit_account_code;
+        accountName = debit_account_name;
+        
+        processedOutflows++;
+        console.log(`💸 CASH OUTFLOW: Txn ${id} | Month: ${month_key} | Cash Account (Credit): ${credit_account_code} (${credit_account_name}) | Destination Account (Debit): ${debit_account_code} (${debit_account_name}) | Amount: $${parsedAmount}`);
+        
         if (debit_account_code?.startsWith('5')) {
           // Expense accounts
           category = debit_account_name || 'Operating Expenses';
@@ -184,20 +259,30 @@ const getMonthlyCashflowReport = async (req, res) => {
           }
 
           if (!operatingExpenses[category]) {
-            operatingExpenses[category] = {};
-            months.forEach(m => { operatingExpenses[category][m.key] = 0; });
+            operatingExpenses[category] = {
+              account_id: accountId,
+              account_code: accountCode,
+              account_name: accountName,
+              monthlyAmounts: {}
+            };
+            months.forEach(m => { operatingExpenses[category].monthlyAmounts[m.key] = 0; });
           }
-          operatingExpenses[category][month_key] = (operatingExpenses[category][month_key] || 0) + parsedAmount;
+          operatingExpenses[category].monthlyAmounts[month_key] = (operatingExpenses[category].monthlyAmounts[month_key] || 0) + parsedAmount;
 
         } else if (debit_account_code?.startsWith('2')) {
           category = 'Loan Repayment';
           activityType = 'financing';
           
           if (!financingActivities[category]) {
-            financingActivities[category] = {};
-            months.forEach(m => { financingActivities[category][m.key] = 0; });
+            financingActivities[category] = {
+              account_id: accountId,
+              account_code: accountCode,
+              account_name: accountName,
+              monthlyAmounts: {}
+            };
+            months.forEach(m => { financingActivities[category].monthlyAmounts[m.key] = 0; });
           }
-          financingActivities[category][month_key] = (financingActivities[category][month_key] || 0) + parsedAmount;
+          financingActivities[category].monthlyAmounts[month_key] = (financingActivities[category].monthlyAmounts[month_key] || 0) + parsedAmount;
 
         } else if (debit_account_code?.startsWith('1') && !cashAccountIds.includes(parseInt(debit_account_id))) {
           // Asset purchases (investing)
@@ -205,55 +290,97 @@ const getMonthlyCashflowReport = async (req, res) => {
           activityType = 'investing';
           
           if (!investingActivities[category]) {
-            investingActivities[category] = {};
-            months.forEach(m => { investingActivities[category][m.key] = 0; });
+            investingActivities[category] = {
+              account_id: accountId,
+              account_code: accountCode,
+              account_name: accountName,
+              monthlyAmounts: {}
+            };
+            months.forEach(m => { investingActivities[category].monthlyAmounts[m.key] = 0; });
           }
-          investingActivities[category][month_key] = (investingActivities[category][month_key] || 0) + parsedAmount;
+          investingActivities[category].monthlyAmounts[month_key] = (investingActivities[category].monthlyAmounts[month_key] || 0) + parsedAmount;
         }
       }
 
       processedTransactions.add(id);
     });
 
-    // Format operating income
-    const formattedOperatingIncome = Object.entries(operatingIncome).map(([category, monthlyAmounts]) => {
-      const monthlyValues = months.map(m => monthlyAmounts[m.key] || 0);
+    console.log(`\n📈 SUMMARY:`);
+    console.log(`   Total transactions processed: ${processedTransactions.size}`);
+    console.log(`   Cash inflows processed: ${processedInflows}`);
+    console.log(`   Cash outflows processed: ${processedOutflows}`);
+    console.log(`   Internal transfers skipped: ${skippedInternalTransfers}`);
+    console.log(`   Opening balances skipped: ${skippedOpeningBalances}`);
+    console.log(`   Operating income categories: ${Object.keys(operatingIncome).length}`);
+    console.log(`   Operating expense categories: ${Object.keys(operatingExpenses).length}`);
+    console.log(`   Investing activity categories: ${Object.keys(investingActivities).length}`);
+    console.log(`   Financing activity categories: ${Object.keys(financingActivities).length}`);
+    
+    // Detailed breakdown by month for operating income
+    console.log(`\n📊 OPERATING INCOME BY MONTH:`);
+    Object.entries(operatingIncome).forEach(([category, data]) => {
+      console.log(`   ${category}:`);
+      months.forEach(m => {
+        const amount = data.monthlyAmounts[m.key] || 0;
+        if (amount > 0) {
+          console.log(`      ${m.key} (${m.label}): $${amount.toFixed(2)}`);
+        }
+      });
+      const total = Object.values(data.monthlyAmounts).reduce((sum, val) => sum + val, 0);
+      console.log(`      TOTAL: $${total.toFixed(2)}\n`);
+    });
+
+    // Format operating income - include account info
+    const formattedOperatingIncome = Object.entries(operatingIncome).map(([category, data]) => {
+      const monthlyValues = months.map(m => data.monthlyAmounts[m.key] || 0);
       const total = monthlyValues.reduce((sum, val) => sum + val, 0);
       return {
         category,
+        account_id: data.account_id,
+        account_code: data.account_code,
+        account_name: data.account_name,
         monthlyValues,
         total
       };
     });
 
-    // Format operating expenses
-    const formattedOperatingExpenses = Object.entries(operatingExpenses).map(([category, monthlyAmounts]) => {
-      const monthlyValues = months.map(m => monthlyAmounts[m.key] || 0);
+    // Format operating expenses - include account info
+    const formattedOperatingExpenses = Object.entries(operatingExpenses).map(([category, data]) => {
+      const monthlyValues = months.map(m => data.monthlyAmounts[m.key] || 0);
       const total = monthlyValues.reduce((sum, val) => sum + val, 0);
       return {
         category,
+        account_id: data.account_id,
+        account_code: data.account_code,
+        account_name: data.account_name,
         monthlyValues,
         total
       };
     });
 
-    // Format investing activities
-    const formattedInvesting = Object.entries(investingActivities).map(([category, monthlyAmounts]) => {
-      const monthlyValues = months.map(m => monthlyAmounts[m.key] || 0);
+    // Format investing activities - include account info
+    const formattedInvesting = Object.entries(investingActivities).map(([category, data]) => {
+      const monthlyValues = months.map(m => data.monthlyAmounts[m.key] || 0);
       const total = monthlyValues.reduce((sum, val) => sum + val, 0);
       return {
         category,
+        account_id: data.account_id,
+        account_code: data.account_code,
+        account_name: data.account_name,
         monthlyValues,
         total
       };
     });
 
-    // Format financing activities
-    const formattedFinancing = Object.entries(financingActivities).map(([category, monthlyAmounts]) => {
-      const monthlyValues = months.map(m => monthlyAmounts[m.key] || 0);
+    // Format financing activities - include account info
+    const formattedFinancing = Object.entries(financingActivities).map(([category, data]) => {
+      const monthlyValues = months.map(m => data.monthlyAmounts[m.key] || 0);
       const total = monthlyValues.reduce((sum, val) => sum + val, 0);
       return {
         category,
+        account_id: data.account_id,
+        account_code: data.account_code,
+        account_name: data.account_name,
         monthlyValues,
         total
       };

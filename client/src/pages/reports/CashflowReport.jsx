@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FaFileDownload } from 'react-icons/fa';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 
 const CashflowReport = () => {
+  const navigate = useNavigate();
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setMonth(0, 1); // January 1st
@@ -130,6 +132,20 @@ const CashflowReport = () => {
     }).format(amount);
   };
 
+  // Handle account click - navigate to COA account transactions
+  const handleAccountClick = (account) => {
+    if (!account || !account.account_id) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const navigationUrl = `/dashboard/account-transactions/${account.account_id}?${params.toString()}`;
+    navigate(navigationUrl);
+  };
+
   if (loading) {
     return (
       <div className="px-1 mt-2 py-2">
@@ -239,7 +255,14 @@ const CashflowReport = () => {
                   
                   {reportData.operatingActivities.income.map((item, idx) => (
                     <tr key={`income-${idx}`} className="border-b border-gray-200">
-                      <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                      <td 
+                        className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap cursor-pointer hover:text-blue-600 hover:underline" 
+                        style={{ minWidth: '250px', width: '250px' }}
+                        onClick={() => handleAccountClick(item)}
+                        title="Click to view account transactions"
+                      >
+                        {item.category}
+                      </td>
                       {item.monthlyValues.map((val, mIdx) => (
                         <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
                           {val > 0 ? formatCurrency(val) : ''}
@@ -273,7 +296,14 @@ const CashflowReport = () => {
 
                   {reportData.operatingActivities.expenses.map((item, idx) => (
                     <tr key={`expense-${idx}`} className="border-b border-gray-200">
-                      <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                      <td 
+                        className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap cursor-pointer hover:text-blue-600 hover:underline" 
+                        style={{ minWidth: '250px', width: '250px' }}
+                        onClick={() => handleAccountClick(item)}
+                        title="Click to view account transactions"
+                      >
+                        {item.category}
+                      </td>
                       {item.monthlyValues.map((val, mIdx) => (
                         <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
                           {val > 0 ? formatCurrency(val) : ''}
@@ -308,7 +338,14 @@ const CashflowReport = () => {
                   {reportData.investingActivities.length > 0 ? (
                     reportData.investingActivities.map((item, idx) => (
                       <tr key={`investing-${idx}`} className="border-b border-gray-200">
-                        <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                        <td 
+                          className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap cursor-pointer hover:text-blue-600 hover:underline" 
+                          style={{ minWidth: '250px', width: '250px' }}
+                          onClick={() => handleAccountClick(item)}
+                          title="Click to view account transactions"
+                        >
+                          {item.category}
+                        </td>
                         {item.monthlyValues.map((val, mIdx) => (
                           <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
                             {val > 0 ? formatCurrency(val) : ''}
@@ -349,7 +386,14 @@ const CashflowReport = () => {
                   {reportData.financingActivities.length > 0 ? (
                     reportData.financingActivities.map((item, idx) => (
                       <tr key={`financing-${idx}`} className="border-b border-gray-200">
-                        <td className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap" style={{ minWidth: '250px', width: '250px' }}>{item.category}</td>
+                        <td 
+                          className="py-0.5 px-3 text-gray-700 sticky left-0 bg-white z-10 border-r-2 border-gray-300 whitespace-nowrap cursor-pointer hover:text-blue-600 hover:underline" 
+                          style={{ minWidth: '250px', width: '250px' }}
+                          onClick={() => handleAccountClick(item)}
+                          title="Click to view account transactions"
+                        >
+                          {item.category}
+                        </td>
                         {item.monthlyValues.map((val, mIdx) => (
                           <td key={mIdx} className="py-0.5 px-3 text-right text-gray-900 whitespace-nowrap" style={{ minWidth: '120px', width: '120px' }}>
                             {val > 0 ? formatCurrency(val) : ''}

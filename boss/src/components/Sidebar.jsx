@@ -143,7 +143,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
           <UserCircleIcon className="h-8 w-8 text-gray-400" />
           <div className="flex flex-col">
             <span className="text-sm font-medium text-gray-900">
-              {userInfo?.username || 'Boss'}
+              {userInfo?.username || 'principal'}
             </span>
             <span className="text-xs text-gray-500">
               {userInfo?.email || 'boss@alamait.com'}
@@ -184,7 +184,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
               <Dialog.Panel className="relative mr-16 flex w-full max-w-xs flex-1">
                 <div className="flex grow flex-col overflow-y-auto bg-white pb-2 shadow-xl">
                   <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
-                    <span className="text-base font-semibold text-gray-900">Boss Portal</span>
+                    <span className="text-base font-semibold text-gray-900">Principal Portal</span>
                   </div>
                   <nav className="flex-1 px-4 mt-4 overflow-y-auto">
                     <ul role="list" className="flex flex-1 flex-col gap-y-1">
@@ -213,7 +213,7 @@ export default function Sidebar({ navigation = defaultNavigation, isOpen, setIsO
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
         <div className="flex grow flex-col overflow-y-auto bg-white pb-2 shadow-xl border-r border-gray-200">
           <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
-            <span className="text-base font-semibold text-gray-900">Boss Portal</span>
+            <span className="text-base font-semibold text-gray-900">Principal Portal</span>
           </div>
           <nav className="flex-1 px-4 mt-4 overflow-y-auto">
             <ul role="list" className="flex flex-1 flex-col gap-y-1">

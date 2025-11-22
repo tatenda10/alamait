@@ -64,17 +64,14 @@ const getDashboardData = async (req, res) => {
     `);
     
     // Get student debtors total (negative balances = students who owe)
-    // Only include active enrollments (not checked out)
+    // Include checked-out students with outstanding balances (same logic as debtors report)
     const [debtorsResult] = await connection.query(`
       SELECT COALESCE(SUM(ABS(sab.current_balance)), 0) as total_debtors
       FROM students s
       JOIN student_enrollments se ON s.id = se.student_id
       JOIN student_account_balances sab ON s.id = sab.student_id AND se.id = sab.enrollment_id
       WHERE s.deleted_at IS NULL
-        AND se.deleted_at IS NULL
-        AND se.checkout_date IS NULL
-        AND (s.status = 'Active' OR s.status IS NULL)
-        AND (se.expected_end_date IS NULL OR se.expected_end_date >= CURRENT_DATE)
+        AND (se.deleted_at IS NULL OR se.checkout_date IS NOT NULL)
         AND sab.current_balance < 0
         AND sab.deleted_at IS NULL
     `);
@@ -117,8 +114,10 @@ const getDashboardData = async (req, res) => {
     );
     console.log('📋 Activities found:', activities.length);
 
-    // Get monthly revenue metrics for the last 6 months (income only)
+    // Get monthly revenue and expense metrics for the last 6 months
+    // Using EXACT same logic as income statement: journal entries based on transaction_date
     console.log('📈 Fetching monthly metrics...');
+    await connection.query("SET time_zone = '+00:00'");
     const [monthlyMetrics] = await connection.query(
       `WITH RECURSIVE months AS (
         SELECT 
@@ -136,10 +135,31 @@ const getDashboardData = async (req, res) => {
       SELECT 
         m.month_name,
         m.month_start,
-        COALESCE(SUM(si.amount), 0) as income
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(t_revenue.transaction_date, '%Y-%m-01') = m.month_start THEN je_revenue.amount ELSE 0 END), 0) as income,
+        COALESCE(SUM(CASE WHEN DATE_FORMAT(t_expense.transaction_date, '%Y-%m-01') = m.month_start THEN je_expense.amount ELSE 0 END), 0) as expenses
        FROM months m
-       LEFT JOIN student_invoices si ON DATE_FORMAT(si.invoice_date, '%Y-%m-01') = m.month_start
-         AND si.deleted_at IS NULL
+       -- Revenue: Credit entries to Revenue accounts (same as income statement)
+       LEFT JOIN journal_entries je_revenue ON je_revenue.entry_type = 'credit'
+         AND je_revenue.deleted_at IS NULL
+       LEFT JOIN transactions t_revenue ON je_revenue.transaction_id = t_revenue.id
+         AND t_revenue.deleted_at IS NULL
+         AND (t_revenue.status = 'posted' OR t_revenue.status IS NULL OR t_revenue.status = '')
+       LEFT JOIN chart_of_accounts coa_revenue ON je_revenue.account_id = coa_revenue.id
+         AND UPPER(TRIM(coa_revenue.type)) = 'REVENUE'
+         AND coa_revenue.deleted_at IS NULL
+       LEFT JOIN boarding_houses bh_revenue ON je_revenue.boarding_house_id = bh_revenue.id
+         AND bh_revenue.deleted_at IS NULL
+       -- Expenses: Debit entries to Expense accounts (same as income statement)
+       LEFT JOIN journal_entries je_expense ON je_expense.entry_type = 'debit'
+         AND je_expense.deleted_at IS NULL
+       LEFT JOIN transactions t_expense ON je_expense.transaction_id = t_expense.id
+         AND t_expense.deleted_at IS NULL
+         AND t_expense.status = 'posted'
+       LEFT JOIN chart_of_accounts coa_expense ON je_expense.account_id = coa_expense.id
+         AND coa_expense.type = 'Expense'
+         AND coa_expense.deleted_at IS NULL
+       LEFT JOIN boarding_houses bh_expense ON je_expense.boarding_house_id = bh_expense.id
+         AND bh_expense.deleted_at IS NULL
        GROUP BY m.month_name, m.month_start
        ORDER BY m.month_start`
     );
@@ -186,10 +206,12 @@ const getDashboardData = async (req, res) => {
       timestamp: activity.timestamp
     }));
 
-    // Format monthly metrics data
+    // Format monthly metrics data - convert to integers
     const monthlyMetricsData = monthlyMetrics.map(metric => ({
       month: metric.month_name,
-      income: parseFloat(metric.income)
+      income: Math.round(parseFloat(metric.income || 0)),
+      expenses: Math.round(parseFloat(metric.expenses || 0)),
+      profit: Math.round(parseFloat(metric.income || 0) - parseFloat(metric.expenses || 0))
     }));
 
     const response = {
@@ -807,6 +829,145 @@ const getActivities = async (req, res) => {
   }
 };
 
+// Get consolidated monthly revenue and expenses for boss portal (all boarding houses)
+// Uses the EXACT same logic as income statement: journal entries based on transaction_date
+const getConsolidatedMonthlyRevenueExpenses = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.query("SET time_zone = '+00:00'");
+    
+    // Get last 6 months of data - using EXACT income statement logic
+    // Revenue: Credit entries to Revenue accounts based on transaction_date
+    // Expenses: Debit entries to Expense accounts based on transaction_date
+    const [monthlyData] = await connection.query(`
+      WITH RECURSIVE months AS (
+        SELECT 
+          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m-01') as month_start,
+          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%Y-%m') as month_key,
+          DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 5 MONTH), '%b %Y') as month_name,
+          1 as month_num
+        UNION ALL
+        SELECT 
+          DATE_ADD(month_start, INTERVAL 1 MONTH),
+          DATE_FORMAT(DATE_ADD(month_start, INTERVAL 1 MONTH), '%Y-%m'),
+          DATE_FORMAT(DATE_ADD(month_start, INTERVAL 1 MONTH), '%b %Y'),
+          month_num + 1
+        FROM months
+        WHERE month_num < 6
+      )
+      SELECT 
+        m.month_name as month,
+        m.month_key,
+        m.month_start,
+        -- Revenue: Credit entries to Revenue accounts (EXACT income statement logic)
+        COALESCE((
+          SELECT SUM(je.amount)
+          FROM journal_entries je
+          INNER JOIN transactions t ON je.transaction_id = t.id AND t.deleted_at IS NULL
+          INNER JOIN chart_of_accounts coa ON je.account_id = coa.id AND coa.deleted_at IS NULL
+          WHERE DATE(t.transaction_date) >= DATE(m.month_start)
+            AND DATE(t.transaction_date) < DATE_ADD(m.month_start, INTERVAL 1 MONTH)
+            AND (t.status = 'posted' OR t.status IS NULL OR t.status = '')
+            AND je.entry_type = 'credit'
+            AND UPPER(TRIM(coa.type)) = 'REVENUE'
+            AND je.deleted_at IS NULL
+        ), 0) as revenue,
+        -- Expenses: Debit entries to Expense accounts (EXACT income statement logic)
+        COALESCE((
+          SELECT SUM(je.amount)
+          FROM journal_entries je
+          INNER JOIN transactions t ON je.transaction_id = t.id AND t.deleted_at IS NULL
+          INNER JOIN chart_of_accounts coa ON je.account_id = coa.id AND coa.deleted_at IS NULL
+          WHERE DATE(t.transaction_date) >= DATE(m.month_start)
+            AND DATE(t.transaction_date) < DATE_ADD(m.month_start, INTERVAL 1 MONTH)
+            AND t.status = 'posted'
+            AND je.entry_type = 'debit'
+            AND coa.type = 'Expense'
+            AND je.deleted_at IS NULL
+        ), 0) as expenses
+      FROM months m
+      ORDER BY m.month_start
+    `);
+    
+    console.log('📊 Monthly Revenue/Expenses Data (using income statement logic):');
+    monthlyData.forEach(month => {
+      console.log(`  ${month.month}: Revenue=$${month.revenue}, Expenses=$${month.expenses}`);
+    });
+
+    const result = monthlyData.map(item => ({
+      month: item.month,
+      revenue: Math.round(parseFloat(item.revenue || 0)),
+      expenses: Math.round(parseFloat(item.expenses || 0)),
+      profit: Math.round(parseFloat(item.revenue || 0) - parseFloat(item.expenses || 0))
+    }));
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error in getConsolidatedMonthlyRevenueExpenses:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch consolidated monthly revenue and expenses',
+      error: error.message
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+// Get consolidated expense categories for boss portal (all boarding houses)
+const getConsolidatedExpenseCategories = async (req, res) => {
+  const connection = await db.getConnection();
+  
+  try {
+    await connection.query("SET time_zone = '+00:00'");
+    const [categoryData] = await connection.query(`
+      SELECT 
+        coa.name as category,
+        COALESCE(SUM(je.amount), 0) as total_amount
+      FROM journal_entries je
+      JOIN transactions t ON je.transaction_id = t.id
+      JOIN chart_of_accounts coa ON je.account_id = coa.id
+      JOIN boarding_houses bh ON je.boarding_house_id = bh.id
+      WHERE DATE(t.transaction_date) >= DATE(DATE_SUB(CURDATE(), INTERVAL 5 MONTH))
+        AND t.status = 'posted'
+        AND je.entry_type = 'debit'
+        AND coa.type = 'Expense'
+        AND je.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND coa.deleted_at IS NULL
+        AND bh.deleted_at IS NULL
+      GROUP BY coa.id, coa.name
+      ORDER BY total_amount DESC
+      LIMIT 10
+    `);
+
+    const colors = [
+      '#EF4444', '#10B981', '#3B82F6', '#8B5CF6', 
+      '#F59E0B', '#f58020', '#06B6D4', '#EC4899', '#14B8A6', '#6366F1'
+    ];
+
+    const result = categoryData.map((item, index) => ({
+      name: item.category,
+      value: parseFloat(item.total_amount),
+      color: colors[index % colors.length]
+    }));
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error in getConsolidatedExpenseCategories:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch consolidated expense categories',
+      error: error.message
+    });
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getDashboardData,
   getDashboardStats,
@@ -816,5 +977,7 @@ module.exports = {
   getInvoiceStatus,
   getExpenseCategories,
   getPaymentMethods,
-  getActivities
+  getActivities,
+  getConsolidatedMonthlyRevenueExpenses,
+  getConsolidatedExpenseCategories
 };

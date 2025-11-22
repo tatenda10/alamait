@@ -106,34 +106,39 @@ const generateIncomeStatement = async (req, res) => {
 
 /**
  * Get revenue data from journal entries for date range
- * This shows rental income based on when invoices were created (credit entries to revenue accounts)
+ * This shows rental income based on when transactions were posted (credit entries to revenue accounts)
+ * Uses timezone-safe date comparisons to prevent date shifting issues
  */
 const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidated) => {
   const connection = await db.getConnection();
   
   try {
+    // Set timezone to UTC to prevent date conversion issues
+    await connection.query("SET time_zone = '+00:00'");
+    
+    // More robust query that handles different MySQL versions and edge cases
+    // Uses timezone-safe date comparisons and proper aggregation for ONLY_FULL_GROUP_BY compliance
+    // Use DATE() function to ensure timezone-safe comparisons
     let query = `
       SELECT 
+        coa.id as account_id,
         coa.name as account_name,
         coa.type as account_type,
-        coa.id as account_id,
         coa.code as account_code,
-        SUM(je.amount) as amount,
-        COUNT(DISTINCT t.id) as transaction_count,
-        bh.name as boarding_house_name
+        bh.id as boarding_house_id,
+        bh.name as boarding_house_name,
+        COALESCE(SUM(je.amount), 0) as amount,
+        COUNT(DISTINCT t.id) as transaction_count
       FROM journal_entries je
-      JOIN transactions t ON je.transaction_id = t.id
-      JOIN chart_of_accounts coa ON je.account_id = coa.id
-      JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-      WHERE t.transaction_date >= ? 
-        AND t.transaction_date <= ?
-        AND t.status = 'posted'
+      INNER JOIN transactions t ON je.transaction_id = t.id AND t.deleted_at IS NULL
+      INNER JOIN chart_of_accounts coa ON je.account_id = coa.id AND coa.deleted_at IS NULL
+      INNER JOIN boarding_houses bh ON je.boarding_house_id = bh.id AND bh.deleted_at IS NULL
+      WHERE DATE(t.transaction_date) >= DATE(?)
+        AND DATE(t.transaction_date) <= DATE(?)
+        AND (t.status = 'posted' OR t.status IS NULL OR t.status = '')
         AND je.entry_type = 'credit'
-        AND coa.type = 'Revenue'
+        AND UPPER(TRIM(coa.type)) = 'REVENUE'
         AND je.deleted_at IS NULL
-        AND t.deleted_at IS NULL
-        AND coa.deleted_at IS NULL
-        AND bh.deleted_at IS NULL
     `;
 
     let params = [startDate, endDate];
@@ -152,6 +157,48 @@ const getRevenueData = async (startDate, endDate, boardingHouseId, isConsolidate
     console.log('Revenue Params:', params);
 
     const [results] = await connection.query(query, params);
+  
+    // Debug: Check what transactions exist without status filter
+    const [debugResults] = await connection.query(
+      `SELECT COUNT(*) as count, COALESCE(SUM(je.amount), 0) as total
+       FROM journal_entries je
+       JOIN transactions t ON je.transaction_id = t.id
+       JOIN chart_of_accounts coa ON je.account_id = coa.id
+       JOIN boarding_houses bh ON je.boarding_house_id = bh.id
+       WHERE DATE(t.transaction_date) >= DATE(?)
+         AND DATE(t.transaction_date) <= DATE(?)
+         AND je.entry_type = 'credit'
+         AND coa.type = 'Revenue'
+         AND je.deleted_at IS NULL
+         AND t.deleted_at IS NULL
+         AND coa.deleted_at IS NULL
+         AND bh.deleted_at IS NULL`,
+      [startDate, endDate]
+    );
+    console.log('\n=== DEBUG: Revenue WITHOUT status filter ===');
+    console.log('Count:', debugResults[0].count);
+    console.log('Total:', debugResults[0].total || 0);
+    
+    // Check transaction statuses
+    const [statusCheck] = await connection.query(
+      `SELECT t.status, COUNT(*) as count
+       FROM journal_entries je
+       JOIN transactions t ON je.transaction_id = t.id
+       JOIN chart_of_accounts coa ON je.account_id = coa.id
+       WHERE DATE(t.transaction_date) >= DATE(?)
+         AND DATE(t.transaction_date) <= DATE(?)
+         AND je.entry_type = 'credit'
+         AND coa.type = 'Revenue'
+         AND je.deleted_at IS NULL
+         AND t.deleted_at IS NULL
+         AND coa.deleted_at IS NULL
+       GROUP BY t.status`,
+      [startDate, endDate]
+    );
+    console.log('\n=== Transaction Statuses ===');
+    statusCheck.forEach(s => {
+      console.log(`Status "${s.status}": ${s.count} transactions`);
+    });
   
     console.log('\n=== REVENUE RESULTS BREAKDOWN ===');
     console.log('Total revenue records found:', results.length);
@@ -191,21 +238,27 @@ const getExpenseData = async (startDate, endDate, boardingHouseId, isConsolidate
   const connection = await db.getConnection();
   
   try {
+    // Set timezone to UTC to prevent date conversion issues
+    await connection.query("SET time_zone = '+00:00'");
+    
+    // Query with proper aggregation for ONLY_FULL_GROUP_BY compliance
+    // Use DATE() function to ensure timezone-safe comparisons
     let query = `
       SELECT 
+        coa.id as account_id,
         coa.name as account_name,
         coa.type as account_type,
-        coa.id as account_id,
         coa.code as account_code,
+        bh.id as boarding_house_id,
+        bh.name as boarding_house_name,
         SUM(je.amount) as amount,
-        COUNT(DISTINCT t.id) as transaction_count,
-        bh.name as boarding_house_name
+        COUNT(DISTINCT t.id) as transaction_count
       FROM journal_entries je
       JOIN transactions t ON je.transaction_id = t.id
       JOIN chart_of_accounts coa ON je.account_id = coa.id
       JOIN boarding_houses bh ON je.boarding_house_id = bh.id
-      WHERE t.transaction_date >= ? 
-        AND t.transaction_date <= ?
+      WHERE DATE(t.transaction_date) >= DATE(?)
+        AND DATE(t.transaction_date) <= DATE(?)
         AND t.status = 'posted'
         AND je.entry_type = 'debit'
         AND coa.type = 'Expense'

@@ -9,7 +9,17 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  dateStrings: true // Return dates as strings (YYYY-MM-DD format) to prevent timezone conversion
 });
+
+// Wrap getConnection to set timezone for each connection
+const originalGetConnection = pool.getConnection.bind(pool);
+pool.getConnection = async function() {
+  const connection = await originalGetConnection();
+  // Set timezone to UTC to prevent date shifting
+  await connection.query("SET time_zone = '+00:00'");
+  return connection;
+};
 
 module.exports = pool; 

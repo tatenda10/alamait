@@ -22,13 +22,13 @@ const Login = () => {
     <div className="min-h-screen flex">
       {/* Left: Faded custom navy blue gradient (3/5) with centered text */}
       <div className="hidden md:flex md:basis-3/5 items-center justify-center" style={{ background: 'linear-gradient(135deg, #02031E 0%, #23244a 100%)', opacity: 0.9 }}>
-        <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight text-center px-8">Alamait Boss Portal</h1>
+        <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight text-center px-8">Alamait Principal Portal</h1>
       </div>
       {/* Right: Login card (2/5), no border */}
       <div className="flex flex-1 md:basis-2/5 items-center justify-center bg-white">
         <div className="w-full max-w-md p-10 rounded-2xl bg-white">
           <div className="flex flex-col items-center mb-8">
-            <h1 className="text-3xl font-extrabold text-blue-900 mb-2 tracking-tight">Boss Login</h1>
+            <h1 className="text-3xl font-extrabold text-blue-900 mb-2 tracking-tight">Principal Login</h1>
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>

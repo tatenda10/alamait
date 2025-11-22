@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FaFileDownload } from 'react-icons/fa';
 import axios from 'axios';
 import BASE_URL from '../../context/Api';
 
 const BalanceSheet = () => {
+  const navigate = useNavigate();
   const [asOfDate, setAsOfDate] = useState(getDefaultDate());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -183,9 +185,13 @@ const BalanceSheet = () => {
               <h4 className="text-xs font-bold text-gray-900 mb-4">ASSETS</h4>
               <div className="space-y-2">
                 {balanceSheetData.balanceSheet.assets
-                  .filter(asset => asset.code !== '10005' && (asset.debitBalance > 0 || asset.creditBalance > 0))
+                  .filter(asset => asset.code !== '10005' && asset.code !== 'STU-DEBT' && (asset.debitBalance > 0 || asset.creditBalance > 0))
                   .map((asset, index) => (
-                    <div key={index} className="flex justify-between text-xs">
+                    <div 
+                      key={index} 
+                      className="flex justify-between text-xs cursor-pointer hover:text-blue-600"
+                      onClick={() => navigate(`/dashboard/account-transactions/${asset.account_id || asset.id}`)}
+                    >
                       <span className="text-gray-600">{asset.name}</span>
                       <span className="text-gray-900 font-medium">
                         {asset.debitBalance > 0 ? formatCurrency(asset.debitBalance) : 
@@ -195,12 +201,15 @@ const BalanceSheet = () => {
                     </div>
                   ))}
                 
-                {/* Student Debtors */}
-                {balanceSheetData.summary.totalDebtors > 0 && (
-                  <div className="flex justify-between text-xs">
+                {/* Student Debtors - only show if it exists in balanceSheet.assets, otherwise use summary */}
+                {(balanceSheetData.balanceSheet.assets.find(a => a.code === 'STU-DEBT') || balanceSheetData.summary.totalDebtors > 0) && (
+                  <div 
+                    className="flex justify-between text-xs cursor-pointer hover:text-blue-600"
+                    onClick={() => navigate('/dashboard/reports/debtors')}
+                  >
                     <span className="text-gray-600">Student Debtors</span>
                     <span className="text-gray-900 font-medium">
-                      {formatCurrency(balanceSheetData.summary.totalDebtors)}
+                      {formatCurrency(balanceSheetData.balanceSheet.assets.find(a => a.code === 'STU-DEBT')?.debitBalance || balanceSheetData.summary.totalDebtors)}
                     </span>
                   </div>
                 )}
@@ -217,9 +226,13 @@ const BalanceSheet = () => {
               <h4 className="text-xs font-bold text-gray-900 mb-4">LIABILITIES</h4>
               <div className="space-y-2">
                 {balanceSheetData.balanceSheet.liabilities
-                  .filter(liability => liability.debitBalance > 0 || liability.creditBalance > 0)
+                  .filter(liability => liability.code !== 'STU-PREP' && (liability.debitBalance > 0 || liability.creditBalance > 0))
                   .map((liability, index) => (
-                    <div key={index} className="flex justify-between text-xs">
+                    <div 
+                      key={index} 
+                      className="flex justify-between text-xs cursor-pointer hover:text-blue-600"
+                      onClick={() => navigate(`/dashboard/account-transactions/${liability.account_id || liability.id}`)}
+                    >
                       <span className="text-gray-600">{liability.name}</span>
                       <span className="text-gray-900 font-medium">
                         {liability.creditBalance > 0 ? formatCurrency(liability.creditBalance) : 
@@ -229,12 +242,15 @@ const BalanceSheet = () => {
                     </div>
                   ))}
                 
-                {/* Student Prepayments */}
-                {balanceSheetData.summary.totalPrepayments > 0 && (
-                  <div className="flex justify-between text-xs">
+                {/* Student Prepayments - only show if it exists in balanceSheet.liabilities, otherwise use summary */}
+                {(balanceSheetData.balanceSheet.liabilities.find(l => l.code === 'STU-PREP') || balanceSheetData.summary.totalPrepayments > 0) && (
+                  <div 
+                    className="flex justify-between text-xs cursor-pointer hover:text-blue-600"
+                    onClick={() => navigate('/dashboard/reports/student-prepayments')}
+                  >
                     <span className="text-gray-600">Student Prepayments</span>
                     <span className="text-gray-900 font-medium">
-                      {formatCurrency(balanceSheetData.summary.totalPrepayments)}
+                      {formatCurrency(balanceSheetData.balanceSheet.liabilities.find(l => l.code === 'STU-PREP')?.creditBalance || balanceSheetData.summary.totalPrepayments)}
                     </span>
                   </div>
                 )}
@@ -253,7 +269,11 @@ const BalanceSheet = () => {
                 {balanceSheetData.balanceSheet.equity
                   .filter(equity => equity.debitBalance > 0 || equity.creditBalance > 0)
                   .map((equity, index) => (
-                    <div key={index} className="flex justify-between text-xs">
+                    <div 
+                      key={index} 
+                      className="flex justify-between text-xs cursor-pointer hover:text-blue-600"
+                      onClick={() => navigate(`/dashboard/account-transactions/${equity.account_id || equity.id}`)}
+                    >
                       <span className="text-gray-600">{equity.name}</span>
                       <span className="text-gray-900 font-medium">
                         {equity.creditBalance > 0 ? formatCurrency(equity.creditBalance) : 
@@ -264,7 +284,10 @@ const BalanceSheet = () => {
                   ))}
                 
                 {/* Current Period Profit/Loss */}
-                <div className="flex justify-between text-xs pt-2 mt-2 border-t">
+                <div 
+                  className="flex justify-between text-xs pt-2 mt-2 border-t cursor-pointer hover:text-blue-600"
+                  onClick={() => navigate('/dashboard/reports/income-statement')}
+                >
                   <span className="text-gray-600">Current Period Profit/(Loss)</span>
                   <span className={`font-medium ${balanceSheetData.summary.netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(balanceSheetData.summary.netIncome)}

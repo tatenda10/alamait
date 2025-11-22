@@ -13,6 +13,9 @@ import {
   ArrowTrendingDownIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
+  CurrencyDollarIcon,
+  ArrowUpCircleIcon,
+  ArrowDownCircleIcon,
 } from '@heroicons/react/24/outline';
 import {
   AreaChart,
@@ -46,11 +49,15 @@ const Dashboard = () => {
       totalStudents: 0,
       averageOccupancyRate: 0,
       totalMonthlyRevenue: 0,
+      totalMonthlyExpenses: 0,
+      totalMonthlyProfit: 0,
       pendingPayments: 0,
       overduePayments: 0,
     },
     houses: [],
     monthlyMetrics: [],
+    consolidatedMonthlyData: [],
+    expenseCategories: [],
     activities: [],
     pettyCash: {},
   });
@@ -67,7 +74,14 @@ const Dashboard = () => {
       };
 
       // Fetch all dashboard data in parallel
-      const [dashboardRes, kpisRes, pettyCashRes, activitiesRes] = await Promise.all([
+      const [
+        dashboardRes, 
+        kpisRes, 
+        pettyCashRes, 
+        activitiesRes,
+        consolidatedMonthlyRes,
+        expenseCategoriesRes
+      ] = await Promise.all([
         axios.get(`${BASE_URL}/dashboard/data`, { headers }).catch(err => {
           console.error('Error fetching dashboard data:', err);
           return { data: { summary: {}, houses: [], monthlyMetrics: [] } };
@@ -84,6 +98,14 @@ const Dashboard = () => {
           console.error('Error fetching activities:', err);
           return { data: [] };
         }),
+        axios.get(`${BASE_URL}/dashboard/consolidated-monthly-revenue-expenses`, { headers }).catch(err => {
+          console.error('Error fetching consolidated monthly data:', err);
+          return { data: [] };
+        }),
+        axios.get(`${BASE_URL}/dashboard/consolidated-expense-categories`, { headers }).catch(err => {
+          console.error('Error fetching expense categories:', err);
+          return { data: [] };
+        }),
       ]);
 
       console.log('📊 Dashboard Data Received:', {
@@ -91,11 +113,21 @@ const Dashboard = () => {
         summary: dashboardRes.data.summary,
       });
 
+      // Calculate current month totals from consolidated data
+      const currentMonth = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      const currentMonthData = consolidatedMonthlyRes.data?.find(m => m.month === currentMonth) || { revenue: 0, expenses: 0, profit: 0 };
+      
       setDashboardData({
         kpis: kpisRes.data || { cash: 0, cbzBank: 0, cbzVault: 0, totalPettyCash: 0 },
-        summary: dashboardRes.data.summary || {},
+        summary: {
+          ...(dashboardRes.data.summary || {}),
+          totalMonthlyExpenses: Math.round(currentMonthData.expenses || 0),
+          totalMonthlyProfit: Math.round(currentMonthData.profit || 0),
+        },
         houses: dashboardRes.data.houses || [],
         monthlyMetrics: dashboardRes.data.monthlyMetrics || [],
+        consolidatedMonthlyData: consolidatedMonthlyRes.data || [],
+        expenseCategories: expenseCategoriesRes.data || [],
         activities: activitiesRes.data || [],
         pettyCash: pettyCashRes.data || {},
       });
@@ -120,11 +152,20 @@ const Dashboard = () => {
   };
 
 
-  // Prepare chart data
-  const revenueExpenseData = dashboardData.monthlyMetrics.map((metric) => ({
+  // Prepare chart data - use consolidated monthly data if available, otherwise use monthlyMetrics
+  const revenueExpenseData = (dashboardData.consolidatedMonthlyData.length > 0 
+    ? dashboardData.consolidatedMonthlyData 
+    : dashboardData.monthlyMetrics.map((metric) => ({
+        month: metric.month,
+        revenue: metric.income || 0,
+        expenses: metric.expenses || 0,
+        profit: (metric.income || 0) - (metric.expenses || 0),
+      }))
+  ).map((metric) => ({
     month: metric.month,
-    revenue: metric.income || 0,
-    expenses: 0, // Placeholder - would need expenses data
+    revenue: metric.revenue || metric.income || 0,
+    expenses: metric.expenses || 0,
+    profit: metric.profit || ((metric.revenue || metric.income || 0) - (metric.expenses || 0)),
   }));
 
   const branchRevenueData = dashboardData.houses.map((house) => ({
@@ -236,6 +277,68 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Financial Overview - Revenue, Expenses, Profit */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <p className="text-xs font-medium text-gray-600">Monthly Revenue</p>
+                  <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">Current Month</span>
+                </div>
+                <p className="text-base font-bold text-green-600 mt-0.5">
+                  {formatCurrency(dashboardData.summary.totalMonthlyRevenue || 0)}
+                </p>
+              </div>
+              <ArrowUpCircleIcon className="h-5 w-5 text-green-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <p className="text-xs font-medium text-gray-600">Monthly Expenses</p>
+                  <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">Current Month</span>
+                </div>
+                <p className="text-base font-bold text-red-600 mt-0.5">
+                  {formatCurrency(dashboardData.summary.totalMonthlyExpenses || 0)}
+                </p>
+              </div>
+              <ArrowDownCircleIcon className="h-5 w-5 text-red-500" />
+            </div>
+          </div>
+
+          <div className="bg-white p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <p className="text-xs font-medium text-gray-600">Monthly Profit</p>
+                  <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">Current Month</span>
+                </div>
+                <p className={`text-base font-bold mt-0.5 ${
+                  (dashboardData.summary.totalMonthlyProfit || 0) >= 0 
+                    ? 'text-green-600' 
+                    : 'text-red-600'
+                }`}>
+                  {formatCurrency(dashboardData.summary.totalMonthlyProfit || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {dashboardData.summary.totalMonthlyRevenue > 0 
+                    ? `${Math.round(((dashboardData.summary.totalMonthlyProfit || 0) / dashboardData.summary.totalMonthlyRevenue) * 100)}% margin`
+                    : '0% margin'
+                  }
+                </p>
+              </div>
+              <CurrencyDollarIcon className={`h-5 w-5 ${
+                (dashboardData.summary.totalMonthlyProfit || 0) >= 0 
+                  ? 'text-green-500' 
+                  : 'text-red-500'
+              }`} />
+            </div>
+          </div>
+        </div>
+
         {/* Student Financials */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="bg-white p-3 border border-gray-200">
@@ -267,7 +370,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Monthly Revenue vs Expenses */}
           <div className="bg-white p-3 border border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Monthly Revenue Trend</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Revenue vs Expenses</h3>
             <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={revenueExpenseData}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -283,8 +386,71 @@ const Dashboard = () => {
                   fillOpacity={0.6}
                   name="Revenue"
                 />
+                <Area
+                  type="monotone"
+                  dataKey="expenses"
+                  stroke="#EF4444"
+                  fill="#EF4444"
+                  fillOpacity={0.6}
+                  name="Expenses"
+                />
               </AreaChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Profitability Trend */}
+          <div className="bg-white p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Profitability Trend</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={revenueExpenseData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="profit"
+                  stroke="#3B82F6"
+                  fill="#3B82F6"
+                  fillOpacity={0.6}
+                  name="Profit"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Second Charts Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {/* Expense Categories Breakdown */}
+          <div className="bg-white p-3 border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Expense Categories</h3>
+            {dashboardData.expenseCategories.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={dashboardData.expenseCategories}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {dashboardData.expenseCategories.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-64">
+                <p className="text-xs text-gray-500">No expense data available</p>
+              </div>
+            )}
           </div>
 
           {/* Branch Revenue Comparison */}

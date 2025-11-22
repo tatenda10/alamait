@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import * as XLSX from 'xlsx';
 import { 
   FiCalendar, 
   FiFilter, 
@@ -220,9 +221,105 @@ const AccountTransactions = () => {
     });
   };
 
-  const handleExport = () => {
-    // TODO: Implement export functionality
-    console.log('Export transactions');
+  const handleExport = async () => {
+    if (!account || transactions.length === 0) {
+      alert('No transactions to export');
+      return;
+    }
+
+    try {
+      // Fetch all transactions for export (without pagination limit)
+      const params = new URLSearchParams();
+      if (filters.start_date) params.append('start_date', filters.start_date);
+      if (filters.end_date) params.append('end_date', filters.end_date);
+      params.append('limit', 10000); // Large limit to get all transactions
+      params.append('offset', 0);
+
+      const response = await axios.get(
+        `${BASE_URL}/transactions/account/${accountId}/transactions?${params}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      const allTransactions = response.data.transactions || [];
+
+      // Prepare Excel data
+      const excelData = [];
+
+      // Header section
+      excelData.push(['ACCOUNT TRANSACTIONS REPORT']);
+      excelData.push([]);
+      excelData.push(['Account Code:', account.code || '']);
+      excelData.push(['Account Name:', account.name || '']);
+      excelData.push(['Account Type:', account.type || '']);
+      if (filters.start_date) excelData.push(['Start Date:', filters.start_date]);
+      if (filters.end_date) excelData.push(['End Date:', filters.end_date]);
+      excelData.push(['Generated:', new Date().toLocaleString()]);
+      excelData.push([]);
+
+      // Account Balance Summary
+      if (accountBalance) {
+        excelData.push(['ACCOUNT BALANCE SUMMARY']);
+        excelData.push(['Current Balance:', accountBalance.current_balance || 0]);
+        excelData.push(['Total Debits:', accountBalance.total_debits || 0]);
+        excelData.push(['Total Credits:', accountBalance.total_credits || 0]);
+        excelData.push(['Last Transaction Date:', accountBalance.last_transaction_date || 'N/A']);
+        excelData.push([]);
+      }
+
+      // Table headers
+      excelData.push(['Date', 'Reference', 'Description', 'Entry Description', 'Debit', 'Credit', 'Running Balance', 'Status']);
+
+      // Transaction data
+      allTransactions.forEach(transaction => {
+        excelData.push([
+          formatDate(transaction.transaction_date),
+          transaction.reference_no || '',
+          transaction.transaction_description || '',
+          transaction.entry_description || '',
+          transaction.debit > 0 ? parseFloat(transaction.debit) : '',
+          transaction.credit > 0 ? parseFloat(transaction.credit) : '',
+          parseFloat(transaction.running_balance || 0),
+          transaction.status || ''
+        ]);
+      });
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Account Transactions');
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 12 }, // Date
+        { wch: 15 }, // Reference
+        { wch: 30 }, // Description
+        { wch: 30 }, // Entry Description
+        { wch: 12 }, // Debit
+        { wch: 12 }, // Credit
+        { wch: 15 }, // Running Balance
+        { wch: 10 }  // Status
+      ];
+
+      // Generate filename
+      const accountCode = account.code || 'account';
+      const accountName = (account.name || 'transactions').replace(/[^a-z0-9]/gi, '_');
+      const dateRange = filters.start_date && filters.end_date 
+        ? `${filters.start_date}_to_${filters.end_date}`
+        : new Date().toISOString().split('T')[0];
+      const filename = `${accountCode}_${accountName}_${dateRange}.xlsx`;
+
+      // Download file
+      XLSX.writeFile(wb, filename);
+      
+      alert(`Exported ${allTransactions.length} transactions to ${filename}`);
+    } catch (error) {
+      console.error('Error exporting transactions:', error);
+      alert('Failed to export transactions. Please try again.');
+    }
   };
 
   const handleEdit = async (transaction) => {
